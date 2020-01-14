@@ -62,10 +62,11 @@ class BlockSymmetry:
             l = left_state_info
             r = MPS.site_blocks[n_sites - 1].ket_state_info
             big = tensor_product_target(l, r)
-            target_state_info = self.to_state_info([(target, 1)])
 
+            target_state_info = self.to_state_info([(target, 1)])
             wfn = Wavefunction()
             wfn.initialize(target_state_info.quanta, l, r, True)
+            wfn.onedot = True
 
             for (ib, ik), mat in wfn.non_zero_blocks:
                 sqs = [l.quanta[ib], r.quanta[ik]]
@@ -75,6 +76,7 @@ class BlockSymmetry:
                 else:
                     mat.ref[:, :] = 0
             
+            big.collect_quanta()
             return wfn, big
     
         # two dot case
@@ -91,19 +93,42 @@ class BlockSymmetry:
             ll_idl = ll.left_unmap_quanta
             ll_idr = ll.right_unmap_quanta
 
-            target_state_info = self.to_state_info([(target, 1)])
-            wfn = Wavefunction()
-            wfn.initialize(target_state_info.quanta, ll, rr, True)
+            ll_collected = ll.copy()
+            ll_collected.collect_quanta()
+            otn = ll_collected.old_to_new_state
 
-            for (ib, ik), mat in wfn.non_zero_blocks:
-                sqs = [l.quanta[ll_idl[ib]], r.quanta[ll_idr[ib]], rr.quanta[ik]]
-                q_labels = tuple(self.from_spin_quantum(sq) for sq in sqs)
-                if q_labels in map_last:
-                    mat.ref[:, :] = map_last[q_labels].reduced.reshape(mat.ref.shape)
+
+            qq = self.to_spin_quantum(target)
+
+            target_state_info = self.to_state_info([(target, 1)])
+
+            wfn = Wavefunction()
+            wfn.initialize(target_state_info.quanta, ll_collected, rr, False)
+            wfn.onedot = False
+            wfn.clear()
+
+            for (ibc, ik), mat in wfn.non_zero_blocks:
+                mats = []
+                for ib in otn[ibc]:
+                    sqs = [l.quanta[ll_idl[ib]], r.quanta[ll_idr[ib]], rr.quanta[ik]]
+                    q_labels = tuple(self.from_spin_quantum(sq) for sq in sqs)
+                    if q_labels in map_last:
+                        rd_shape = map_last[q_labels].reduced.shape
+                        shape = (rd_shape[0] * rd_shape[1], rd_shape[2])
+                        mats.append(map_last[q_labels].reduced.reshape(shape))
+                if mats != []:
+                    all_mat = np.concatenate(mats, axis=0)
+                    assert(all_mat.shape == mat.ref.shape)
+                    mat.ref[:, :] = all_mat
                 else:
                     mat.ref[:, :] = 0
             
-            return wfn, big
+            big.collect_quanta()
+            big.left_state_info = ll_collected
+            big.right_state_info.left_state_info = rr
+            # TODO: this should be empty state
+            big.right_state_info.right_state_info = self.to_state_info([(target, 1)])
+            return wfn, big, (target_state_info, ll_collected)
 
     # Translate a site in MPS to rotation matrix (block code) for that site
     # left_state_info: state_info to the left of site i
@@ -118,6 +143,9 @@ class BlockSymmetry:
         lr = tensor_product(l, r)
         lr_idl = lr.left_unmap_quanta
         lr_idr = lr.right_unmap_quanta
+
+        lr_collected = lr.copy()
+        lr_collected.collect_quanta()
 
         map_tensor = {block.q_labels: block for block in tensor.blocks}
         if tensor0 is not None:
@@ -144,16 +172,31 @@ class BlockSymmetry:
                     collected[q_labels[2]] = len(rot) - 1
                 else:
                     rot[collected[q_labels[2]]].append(reduced)
-                    rot.append(None)
+                    rot.append(())
             else:
-                rot.append(None)
+                if q_labels[2] not in collected:
+                    rot.append(None)
+                    collected[q_labels[2]] = len(rot) - 1
+                else:
+                    rot.append(())
 
-        rot = VectorMatrix(Matrix() if r is None else Matrix(
+        rot_uncollected = VectorMatrix(Matrix() if r is None or r is () else Matrix(
             np.concatenate(r, axis=0)) for r in rot)
+        
+        # order the quanta according to the order in lr_collected
+        rot_collected = []
+        for q in lr_collected.quanta:
+            m = rot[collected[self.from_spin_quantum(q)]]
+            rot_collected.append(Matrix() if m is None else Matrix(np.concatenate(m, axis=0)))
+        
+        rot_collected = VectorMatrix(rot_collected)
 
         lr_truncated = StateInfo()
-        StateInfo.transform_state(rot, lr, lr_truncated)
-        return rot, lr_truncated
+        StateInfo.transform_state(rot_uncollected, lr, lr_truncated)
+        lr_truncated.left_state_info = lr_collected.left_state_info
+        lr_truncated.right_state_info = lr_collected.right_state_info
+
+        return rot_collected, lr_truncated
 
 
 class BlockHamiltonian:
@@ -203,6 +246,11 @@ class BlockHamiltonian:
                     input['nelec'] = str(v)
                 elif k == 'spin':
                     input['spin'] = str(v)
+                elif k == 'dot':
+                    if v == 2:
+                        input['twodot'] = ''
+                    elif v == 1:
+                        input['onedot'] = ''
                 elif k == 'irrep':
                     input['irrep'] = str(v)
                 elif k == 'output_level':

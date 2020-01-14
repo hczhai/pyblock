@@ -1,7 +1,8 @@
 
 import block
 from block import VectorInt, VectorDouble, VectorBool, VectorMatrix, \
-    load_rotation_matrix, save_rotation_matrix, DiagonalMatrix
+    load_rotation_matrix, save_rotation_matrix, DiagonalMatrix, \
+    save_rotation_matrix
 from block.io import Global, AlgorithmTypes, Timer, read_input, \
     init_stack_memory, release_stack_memory
 from block.dmrg import SweepParams, block_and_decimate, do_one, dmrg, calldmrg, \
@@ -542,6 +543,8 @@ class DMRG(object):
         else:
             # read rot_mat from given dictionary
             rotation_matrix = rot_mats[tuple(new_system.sites)]
+            save_rotation_matrix(new_system.sites, rotation_matrix, 0)
+            save_rotation_matrix(new_system.sites, rotation_matrix, -1)
         
         new_system.transform_operators(rotation_matrix)
 

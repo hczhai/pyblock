@@ -49,7 +49,8 @@ void pybind_symmetry(py::module &m) {
     py::class_<SpinQuantum>(
         m, "SpinQuantum",
         "A collection of quantum numbers associated with a specific state"
-        " (irreducible representation). One such collection defines a specific sector in the state space.")
+        " (irreducible representation). One such collection defines a specific "
+        "sector in the state space.")
         .def(py::init<>())
         .def(py::init<const int, const SpinSpace, const IrrepSpace>())
         .def_readwrite("s", &SpinQuantum::totalSpin,
@@ -64,7 +65,7 @@ void pybind_symmetry(py::module &m) {
             ss << *self;
             return ss.str();
         });
-    
+
     py::bind_vector<vector<SpinQuantum>>(m, "VectorSpinQuantum");
 
     py::class_<StateInfo>(
@@ -73,7 +74,7 @@ void pybind_symmetry(py::module &m) {
         "internal states (which can no longer be differentiated by "
         "symmetries), the number of which is also stored.")
         .def(py::init<>())
-        .def(py::init([](const vector<SpinQuantum> &qs, const vector<int> &ms) {
+        .def(py::init([](const vector<SpinQuantum> &qs, const vector<int> &ms) -> StateInfo {
             StateInfo si((int)qs.size(), &qs[0], &ms[0]);
             return si;
         }))
@@ -85,9 +86,21 @@ void pybind_symmetry(py::module &m) {
                        "Index in left StateInfo, for each combined state.")
         .def_readwrite("right_unmap_quanta", &StateInfo::rightUnMapQuanta,
                        "Index in right StateInfo, for each combined state.")
+        .def_readwrite("old_to_new_state", &StateInfo::oldToNewState,
+                       "old_to_new_state[i] = [k1, k2, k3, ...] where i is the "
+                       "index in the collected StateInfo and k's are indices "
+                       "in the uncollected StateInfo.")
+        .def_readwrite("left_state_info", &StateInfo::leftStateInfo)
+        .def_readwrite("right_state_info", &StateInfo::rightStateInfo)
         .def_static(
             "transform_state", &StateInfo::transform_state,
             "Truncate state space based on dimension of rotation matrix.")
+        .def("collect_quanta", &StateInfo::CollectQuanta)
+        .def("copy",
+             [](StateInfo *self) {
+                 StateInfo x = *self;
+                 return x;
+             })
         .def("__repr__", [](StateInfo *self) {
             stringstream ss;
             ss << *self;
