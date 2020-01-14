@@ -1,0 +1,10 @@
+build/
+build-cmake/
+docs/build/
+my_test/
+MANIFEST
+.clang-format
+.vscode/
+
+__pycache__/
+*.py[cod]
