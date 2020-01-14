@@ -18,11 +18,11 @@ sys.path.insert(0, os.path.abspath('../../build-cmake'))
 # -- Project information -----------------------------------------------------
 
 project = 'PyBlock'
-copyright = '2019, Huanchen Zhai'
+copyright = '2020, Huanchen Zhai'
 author = 'Huanchen Zhai'
 
 # The full version, including alpha/beta/rc tags
-release = '1.0'
+release = '0.1'
 
 
 # -- General configuration ---------------------------------------------------
@@ -49,10 +49,16 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-# html_theme = 'alabaster'
-html_theme = 'bizstyle'
+import os
+on_rtd = os.environ.get('READTHEDOCS') == 'True'
+if on_rtd:
+    html_theme = 'default'
+else:
+    html_theme = 'bizstyle'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+master_doc = 'index'
