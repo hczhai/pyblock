@@ -1,4 +1,11 @@
+
 <img src="https://raw.githubusercontent.com/sanshar/Block/master/README_Examples/block_logo.jpg" width="60px" height="60px" />
+
+.. image:: https://readthedocs.org/projects/pyblock-dmrg/badge/?version=latest
+  :target: https://pyblock-dmrg.readthedocs.io/en/latest/?badge=latest
+  :alt: Documentation Status
+
+-------------------------------------------------
 
 `pyblock` is a python interface build upon `BLOCK 1.5.3` (https://github.com/sanshar/StackBlock).
 

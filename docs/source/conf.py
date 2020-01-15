@@ -13,7 +13,6 @@
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath('../../build-cmake'))
 
 # -- Project information -----------------------------------------------------
 
@@ -53,8 +52,12 @@ import os
 on_rtd = os.environ.get('READTHEDOCS') == 'True'
 if on_rtd:
     html_theme = 'default'
+    sys.path.insert(0, os.path.abspath('../etc'))
 else:
     html_theme = 'bizstyle'
+    # sys.path.insert(0, os.path.abspath('../etc'))
+    sys.path.insert(0, os.path.abspath('../../build-cmake'))
+
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
