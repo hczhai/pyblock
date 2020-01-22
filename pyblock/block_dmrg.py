@@ -121,7 +121,7 @@ class DMRG(object):
             self.system.store(forward, self.system.sites, cur_root, cur_root)
 
             dot_with_sys = get_dot_with_sys(
-                self.system, self.sweep_params, forward)
+                self.system, self.sweep_params.one_dot, forward)
 
             self.sweep_params.block_iter += 1
 
@@ -195,7 +195,7 @@ class DMRG(object):
                 print(self.system)
 
             dot_with_sys = get_dot_with_sys(
-                self.system, self.sweep_params, forward)
+                self.system, self.sweep_params.one_dot, forward)
 
             self.sweep_params.block_iter += 1
 

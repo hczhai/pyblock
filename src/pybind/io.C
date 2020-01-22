@@ -69,7 +69,8 @@ void pybind_io(py::module &m) {
                           self->setOutputlevel() = output_level;
                       })
         .def_property_readonly("sweep_tol", &Input::get_sweep_tol)
-        .def_property_readonly("spin_orbs_symmetry", &Input::spin_orbs_symmetry,
+        .def_property("spin_orbs_symmetry", &Input::spin_orbs_symmetry,
+            &Input::set_spin_orbs_symmetry, 
         "Spatial symmetry (irrep number) of each spin-orbital.")
         .def_property("molecule_quantum", &Input::molecule_quantum,
                       [](Input *self, const SpinQuantum &q) {
@@ -107,8 +108,9 @@ void pybind_io(py::module &m) {
                        "Timer for blocking.")
         .def_readwrite("timer_operrot", &Input::operrotT,
                        "Timer for operator rotation.")
-        .def_property_readonly(
-            "is_spin_adapted", &Input::spinAdapted,
+        .def_property(
+            "is_spin_adapted", &Input::spinAdapted, [](Input *self, bool sa) {
+                          self->spinAdapted() = sa; },
             "Indicates whether SU(2) symmetry is utilized. If SU(2) is not "
             "used, The Abelian subgroup of SU(2) (Sz symmetry) is used.")
         .def_property_readonly("hf_occupancy", &Input::hf_occupancy);

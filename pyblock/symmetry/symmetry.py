@@ -92,9 +92,34 @@ class SU2(HashIrrep):
     def to_multi(self):
         return self
 
+
+class SZ(HashIrrep):
+    def __init__(self, sz):
+        if isinstance(sz, Fraction) or isinstance(sz, float):
+            self.ir = int(sz * 2)
+        else:
+            self.ir = sz
+
+    # group multiplication
+    def __add__(self, o):
+        return self.__class__(self.ir + o.ir)
+
+    # inverse element
+    def __neg__(self):
+        return self.__class__(-self.ir)
+
+    def __repr__(self):
+        return "SZ=" + str(Fraction(self.ir, 2))
+
+    def __le__(self, o):
+        return True
+
+    @staticmethod
+    def clebsch_gordan(a, b, c):
+        return np.array([[[1 if a + b == c else 0]]], dtype=float)
+
+
 # SU2 irreducible repr with sz quantum number
-
-
 class SU2Proj(SU2):
     def __init__(self, s, sz):
         if isinstance(sz, Fraction) or isinstance(sz, float):

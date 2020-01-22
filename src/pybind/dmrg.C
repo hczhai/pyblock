@@ -124,17 +124,17 @@ void pybind_dmrg(py::module &m) {
           py::arg("use_slater"), py::arg("dot_with_sys"));
 
     m.def("get_dot_with_sys",
-          [](const StackSpinBlock &system, const SweepParams &sweepParams,
-             bool forward) {
+          [](const StackSpinBlock &system, bool one_dot, bool forward) {
               bool dot_with_sys = true;
-              Sweep::set_dot_with_sys(dot_with_sys, system, sweepParams,
-                                      forward);
+              SweepParams sp;
+              sp.set_onedot() = one_dot;
+              Sweep::set_dot_with_sys(dot_with_sys, system, sp, forward);
               return dot_with_sys;
           },
           "Return the `dot_with_sys` variable, determing whether the "
           "complementary operators should be defined based on system block "
           "indicies.",
-          py::arg("system"), py::arg("sweep_params"), py::arg("forward"));
+          py::arg("system"), py::arg("one_dot"), py::arg("forward"));
 
     m.def("do_one", &Sweep::do_one, "Perform one sweep procedure.",
           py::arg("sweep_params"), py::arg("warm_up"), py::arg("forward"),

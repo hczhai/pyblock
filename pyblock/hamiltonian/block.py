@@ -1,13 +1,18 @@
 
 from block import VectorInt, VectorMatrix, Matrix
-from block.io import Global, read_input, Input, \
-    init_stack_memory, release_stack_memory
-from block.dmrg import MPS_init, MPS
-from block.symmetry import tensor_product, SpinQuantum, VectorSpinQuantum, \
-    StateInfo, SpinSpace, IrrepSpace, tensor_product_target
-from block.operator import Wavefunction
+from block import save_rotation_matrix
+from block.io import Global, read_input, Input, AlgorithmTypes
+from block.io import init_stack_memory, release_stack_memory, AlgorithmTypes
+from block.dmrg import MPS_init, MPS, get_dot_with_sys
+from block.symmetry import tensor_product, SpinQuantum, VectorSpinQuantum
+from block.symmetry import StateInfo, SpinSpace, IrrepSpace, tensor_product_target
+from block.operator import Wavefunction, OpTypes
+from block.block import Block, StorageTypes
+from block.block import init_starting_block, init_new_system_block
+
 from ..symmetry.symmetry import ParticleN, SU2, PointGroup, point_group
 from ..tensor.tensor import Tensor
+from .qc import read_fcidump
 from fractions import Fraction
 import numpy as np
 
@@ -42,7 +47,7 @@ class BlockSymmetry:
         return StateInfo(qs, ns)
 
     @classmethod
-    def initial_state_info(self, i = 0):
+    def initial_state_info(self, i=0):
         return MPS.site_blocks[i].ket_state_info
 
     # Translate the last one or two mps tensors to Wavefunction (block code)
@@ -57,7 +62,8 @@ class BlockSymmetry:
         # one dot case
         if one_dot:
 
-            map_last = {block.q_labels[:2]: block for block in mps[n_sites - 1].blocks}
+            map_last = {
+                block.q_labels[:2]: block for block in mps[n_sites - 1].blocks}
 
             l = left_state_info
             r = MPS.site_blocks[n_sites - 1].ket_state_info
@@ -72,17 +78,19 @@ class BlockSymmetry:
                 sqs = [l.quanta[ib], r.quanta[ik]]
                 q_labels = tuple(self.from_spin_quantum(sq) for sq in sqs)
                 if q_labels in map_last:
-                    mat.ref[:, :] = map_last[q_labels].reduced.reshape(mat.ref.shape)
+                    mat.ref[:, :] = map_last[q_labels].reduced.reshape(
+                        mat.ref.shape)
                 else:
                     mat.ref[:, :] = 0
-            
+
             big.collect_quanta()
             return wfn, big
-    
+
         # two dot case
         else:
 
-            last_two = Tensor.contract(mps[n_sites - 2], mps[n_sites - 1], [2], [0])
+            last_two = Tensor.contract(
+                mps[n_sites - 2], mps[n_sites - 1], [2], [0])
             map_last = {block.q_labels[:3]: block for block in last_two.blocks}
 
             l = left_state_info
@@ -97,7 +105,6 @@ class BlockSymmetry:
             ll_collected.collect_quanta()
             otn = ll_collected.old_to_new_state
 
-
             qq = self.to_spin_quantum(target)
 
             target_state_info = self.to_state_info([(target, 1)])
@@ -110,7 +117,8 @@ class BlockSymmetry:
             for (ibc, ik), mat in wfn.non_zero_blocks:
                 mats = []
                 for ib in otn[ibc]:
-                    sqs = [l.quanta[ll_idl[ib]], r.quanta[ll_idr[ib]], rr.quanta[ik]]
+                    sqs = [l.quanta[ll_idl[ib]],
+                           r.quanta[ll_idr[ib]], rr.quanta[ik]]
                     q_labels = tuple(self.from_spin_quantum(sq) for sq in sqs)
                     if q_labels in map_last:
                         rd_shape = map_last[q_labels].reduced.shape
@@ -122,12 +130,13 @@ class BlockSymmetry:
                     mat.ref[:, :] = all_mat
                 else:
                     mat.ref[:, :] = 0
-            
+
             big.collect_quanta()
             big.left_state_info = ll_collected
             big.right_state_info.left_state_info = rr
             # TODO: this should be empty state
-            big.right_state_info.right_state_info = self.to_state_info([(target, 1)])
+            big.right_state_info.right_state_info = self.to_state_info([
+                                                                       (target, 1)])
             return wfn, big, (target_state_info, ll_collected)
 
     # Translate a site in MPS to rotation matrix (block code) for that site
@@ -149,8 +158,7 @@ class BlockSymmetry:
 
         map_tensor = {block.q_labels: block for block in tensor.blocks}
         if tensor0 is not None:
-            map_tensor0 = {block.q_labels[2]
-                : block for block in tensor0.blocks}
+            map_tensor0 = {block.q_labels[2]: block for block in tensor0.blocks}
 
         # if there are repeated q in lr.quanta,
         # current rot Matrix should be None and
@@ -182,13 +190,14 @@ class BlockSymmetry:
 
         rot_uncollected = VectorMatrix(Matrix() if r is None or r is () else Matrix(
             np.concatenate(r, axis=0)) for r in rot)
-        
+
         # order the quanta according to the order in lr_collected
         rot_collected = []
         for q in lr_collected.quanta:
             m = rot[collected[self.from_spin_quantum(q)]]
-            rot_collected.append(Matrix() if m is None else Matrix(np.concatenate(m, axis=0)))
-        
+            rot_collected.append(
+                Matrix() if m is None else Matrix(np.concatenate(m, axis=0)))
+
         rot_collected = VectorMatrix(rot_collected)
 
         lr_truncated = StateInfo()
@@ -231,7 +240,7 @@ class BlockHamiltonian:
 
             if 'orbitals' in kwargs or 'fcidump' in kwargs:
                 fd_name = kwargs['orbitals' if 'orbitals' in kwargs else 'fcidump']
-                opts = self.__class__.read_fcidump(fd_name)
+                opts, _ = read_fcidump(fd_name)
 
                 input['nelec'] = opts['nelec']
                 input['spin'] = opts['ms2']
@@ -261,6 +270,9 @@ class BlockHamiltonian:
                     input['maxiter'] = str(v)
                 elif k == 'max_m':
                     input['maxM'] = str(v)
+                elif k == 'spin_adapted':
+                    if v == False:
+                        input['nonspinadapted'] = ''
 
             Global.dmrginp = Input.read_input_contents(
                 '\n'.join([k + ' ' + v for k, v in input.items()]))
@@ -275,6 +287,9 @@ class BlockHamiltonian:
         self.target_s = Fraction(Global.dmrginp.molecule_quantum.s.irrep, 2)
         self.spatial_syms = Global.dmrginp.spin_orbs_symmetry[::2]
         self.target_spatial_sym = Global.dmrginp.molecule_quantum.symm.irrep
+        if Global.dmrginp.algorithm_type == AlgorithmTypes.TwoDotToOneDot:
+            raise BlockError('Currently two dot to one dot is not supported.')
+        self.dot = 1 if Global.dmrginp.algorithm_type == AlgorithmTypes.OneDot else 2
 
         if not self.__class__.memory_initialzed:
             init_stack_memory()
@@ -282,20 +297,102 @@ class BlockHamiltonian:
 
         MPS_init(True)
 
-    @staticmethod
-    def read_fcidump(filename):
-        with open(filename, 'r') as f:
-            cont = ' '.join(f.read().split('/')[0].split()[1:])
-            cont = cont.split(',')
-            cont_dict = {}
-            p_key = None
-            for c in cont:
-                if '=' in c or p_key is None:
-                    p_key, b = c.split('=')
-                    cont_dict[p_key.strip().lower()] = b.strip()
-                elif len(c.strip()) != 0:
-                    cont_dict[p_key.strip().lower()] += ',' + c.strip()
-        return cont_dict
+    def make_starting_block(self, forward):
+        system = Block()
+        init_starting_block(system, forward, -1, -1, 1, 1, 0, False, False, 0)
+        system.store(forward, system.sites, -1, -1)
+        return system
+
+    def make_big_block(self, system):
+
+        forward = system.sites[0] == 0
+
+        dot_with_sys = get_dot_with_sys(system, self.dot == 1, forward)
+
+        if forward:
+            sys_dot_site = system.sites[-1] + 1
+            env_dot_site = sys_dot_end + 1
+        else:
+            sys_dot_site = system.sites[0] - 1
+            env_dot_site = sys_dot_end - 1
+        
+        system_dot = Block(sys_dot_site, sys_dot_site, 0, True)
+        environment_dot = Block(env_dot_site, env_dot_site, 0, True)
+
+        sys_have_norm_ops = dot_with_sys
+        sys_have_comp_ops = not dot_with_sys
+
+        env_have_norm_ops = not sys_have_norm_ops
+        env_have_comp_ops = not sys_have_comp_ops
+
+        if sys_have_comp_ops and OpTypes.CreDesComp not in system.ops:
+            system.add_all_comp_ops()
+
+        system.add_additional_ops()
+
+        new_system = Block()
+
+        if not self.dot == 1 or dot_with_sys:
+            init_new_system_block(system, system_dot, new_system, -1, -1, 1, True, 0,
+                StorageTypes.DistributedStorage, sys_have_norm_ops, sys_have_comp_ops)
+        
+        environment = Block()
+        new_environment = Block()
+
+        init_new_environment_block(
+            environment,
+            system_dot if self.dot == 1 and not dot_with_sys else environment_dot,
+            new_environment, system, system_dot,
+            -1, -1, 1, 1, forward, True, self.dot == 1, False, 0,
+            env_have_norm_ops, env_have_comp_ops, dot_with_sys)
+        
+        new_system.loop_block = dot_with_sys
+        system.loop_block = dot_with_sys
+        new_environment.loop_block = not dot_with_sys
+        environment.loop_block = not dot_with_sys
+
+        if self.dot == 1 and not dot_with_sys:
+            left_block = system
+            right_block = new_environment
+        else:
+            left_block = new_system
+            right_block = new_environment
+        
+        big = Block()
+
+        init_big_block(left_block, right_block, big)
+
+        return system, system_dot, new_system, environment, big
+
+    def block_rotation(self, new_system, system, rot_mat):
+        save_rotation_matrix(new_system.sites, rot_mat, 0)
+        save_rotation_matrix(new_system.sites, rot_mat, -1)
+
+        new_system.transform_operators(rot_mat)
+        new_system.move_and_free_memory(system)
+
+        return new_system
+
+    def enlarge_block(self, forward, system, rot_mat):
+        dot_with_sys = get_dot_with_sys(system, self.dot == 1, forward)
+        if forward:
+            dot_site = system.sites[-1] + 1
+        else:
+            dot_site = system.sites[0] - 1
+        print(forward, system.sites, dot_site)
+        system_dot = Block(dot_site, dot_site, 0, True)
+
+        do_norms = dot_with_sys
+        do_comp = not dot_with_sys
+        if do_comp and OpTypes.CreDesComp not in system.ops:
+            system.add_all_comp_ops()
+        system.add_additional_ops()
+
+        new_system = Block()
+        init_new_system_block(system, system_dot, new_system, -1, -1, 1, True,
+                              0, StorageTypes.DistributedStorage, do_norms, do_comp)
+
+        return self.block_rotation(new_system, system, rot_mat)
 
 
 if __name__ == '__main__':

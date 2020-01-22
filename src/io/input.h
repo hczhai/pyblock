@@ -463,6 +463,9 @@ class Input {
     const std::vector<int> &spin_orbs_symmetry() const {
         return m_spin_orbs_symmetry;
     }
+    void set_spin_orbs_symmetry(const std::vector<int> &orbs_symm) {
+        m_spin_orbs_symmetry = orbs_symm;
+    }
     std::vector<double> weights(int sweep_iter) const; // { return m_weights; }
     std::vector<double> weights() const { return m_weights; }
     const std::vector<int> &sweep_iter_schedule() const {
@@ -643,7 +646,7 @@ class Input {
     const int &virt_size() const { return m_virt_size; }
     const int &total_size() const { return m_total_orbs; }
     const int &nevpt_state_num() const { return m_nevpt_state_num; }
-    bool spinAdapted() { return m_spinAdapted; }
+    bool &spinAdapted() { return m_spinAdapted; }
     bool &npdm_intermediate() { return m_npdm_intermediate; }
     const bool &npdm_intermediate() const { return m_npdm_intermediate; }
     bool &npdm_multinode() { return m_npdm_multinode; }

@@ -41,6 +41,18 @@ class SubTensor:
     def build_zero(self):
         self.reduced = np.zeros(self.reduced_shape)
 
+    # tranpose of operator
+    # (ket, op, bra) -> (bra, -op, ket)
+    @property
+    def T(self):
+        q_ket, q_op, q_bra = self.q_labels
+        return SubTensor(q_labels=(q_bra, -q_op, q_ket),
+                         reduced=np.transpose(self.reduced, (2, 1, 0)),
+                         cgs=[np.transpose(cg, (2, 1, 0)) for cg in self.cgs])
+
+    def __mul__(self, o):
+        return SubTensor(q_labels=self.q_labels, reduced=o * reduced, cgs=self.cgs)
+
     def __repr__(self):
         return "(Q=) %r (R=) %r" % (self.q_labels, self.reduced)
 
@@ -132,6 +144,37 @@ class Tensor:
                         block.reduced[i, j, k] = 1.0
                         k += 1
             cur_idx[q_labels_r] = k
+
+    # the indices in idx_l will be combined
+    # the indices in idx_r will also be combined
+    # then for each entry if q_label(idx_l) == q_label(idx_r), the term will be included
+    @staticmethod
+    def partial_trace(ts, idx_l, idx_r, target_q_labels=None):
+        out_idx = list(set(range(0, ts.rank)) - set(idx_l) - set(idx_r))
+
+        trace_scr = list(range(0, ts.rank))
+        for ia, ib in zip(idx_l, idx_r):
+            trace_scr[ib] = trace_scr[ia]
+
+        if target_q_labels is None:
+            map_idx_out = {}
+            for block in ts.blocks:
+                sub_l = tuple(block.q_labels[id] for id in idx_l)
+                sub_r = tuple(block.q_labels[id] for id in idx_r)
+                if sub_l != sub_r:
+                    continue
+                outg = tuple(block.q_labels[id] for id in out_idx)
+                mat = np.einsum(block.reduced, trace_scr)
+                if outg not in map_idx_out:
+                    cgs = [np.einsum(cg, trace_scr) for cg in block.cgs]
+                    map_idx_out[outg] = SubTensor(
+                        q_labels=outg, reduced=mat, cgs=cgs)
+                else:
+                    map_idx_out[outg].reduced += mat
+        else:
+            raise TensorNetworkError('not implemented yet!')
+        
+        return Tensor(tensors=map_idx_out.values(), tags=ts.tags, contractor=ts.contractor)
 
     # contract two tensor to form a new tensor
     # idxa, idxb are indices to be contracted in tensor a and b, respectively
@@ -249,6 +292,14 @@ class Tensor:
                     mats[q_labels_r], block.reduced, axes=([1], [0]))
                 block.reduced_shape = block.reduced.shape
 
+    def set_tags(self, tags):
+        self.tags = tags
+        return self
+
+    def set_contractor(self, contractor):
+        self.contractor = contractor
+        return self
+
     def __add__(self, o):
         assert self.rank == o.rank and self.ng == o.ng
         map_s = {tuple(b.q_labels): b for b in self.blocks}
@@ -260,6 +311,11 @@ class Tensor:
                     SubTensor(q, b.reduced + map_o[q].reduced, b.cgs))
             else:
                 blocks.append(b)
+        return Tensor(blocks=blocks, tags=self.tags, contractor=self.contractor)
+    
+    def __mul__(self, o):
+        return Tensor(blocks=[b * o for b in self.blocks], tags=self.tags.copy(),
+                      contractor=self.contractor)
 
     def __repr__(self):
         return "\n".join(
@@ -370,7 +426,7 @@ class TensorNetwork:
         else:
             raise TensorNetworkError(
                 'Unable to create the network using this object.')
-    
+
     @property
     def tags(self):
         return [ts.tags for ts in self.tensors]
