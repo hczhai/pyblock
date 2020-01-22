@@ -111,11 +111,11 @@ void pybind_symmetry(py::module &m) {
         StateInfo c;
         TensorProduct(a, b, c, NO_PARTICLE_SPIN_NUMBER_CONSTRAINT, 0);
         return c;
-    });
+    }, py::keep_alive<0, 1>(), py::keep_alive<0, 2>());
 
     m.def("tensor_product_target", [](StateInfo &a, StateInfo &b) {
         StateInfo c;
         TensorProduct(a, b, c, PARTICLE_SPIN_NUMBER_CONSTRAINT);
         return c;
-    });
+    }, py::keep_alive<0, 1>(), py::keep_alive<0, 2>());
 }
