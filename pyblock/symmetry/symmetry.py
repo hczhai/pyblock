@@ -36,7 +36,7 @@ class ParticleN(HashIrrep):
 
     # this checks whether rhs irrep is achievable from lhs irrep
     def __le__(self, o):
-        return self.ir <= o.ir
+        return self.ir <= o.ir and self.ir >= 0
 
     @staticmethod
     def clebsch_gordan(a, b, c):
@@ -248,6 +248,12 @@ class DirectProdGroup:
     # not a simple relation
     def __le__(self, o):
         return all(ir <= oir for ir, oir in zip(self.irs, o.irs))
+    
+    def __lt__(self, o):
+        for ir, oir in zip(self.irs, o.irs):
+            if ir != oir:
+                return ir < oir
+        return False
 
     def __hash__(self):
         return hash(tuple(self.irs))

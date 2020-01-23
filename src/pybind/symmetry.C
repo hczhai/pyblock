@@ -60,6 +60,10 @@ void pybind_symmetry(py::module &m) {
         .def_readwrite(
             "symm", &SpinQuantum::orbitalSymmetry,
             "Irreducible representation for molecular point group symmetry.")
+        .def(py::self == py::self)
+        .def(py::self < py::self)
+        .def(py::self + py::self)
+        .def(py::self - py::self)
         .def("__repr__", [](SpinQuantum *self) {
             stringstream ss;
             ss << *self;
@@ -74,7 +78,8 @@ void pybind_symmetry(py::module &m) {
         "internal states (which can no longer be differentiated by "
         "symmetries), the number of which is also stored.")
         .def(py::init<>())
-        .def(py::init([](const vector<SpinQuantum> &qs, const vector<int> &ms) -> StateInfo {
+        .def(py::init([](const vector<SpinQuantum> &qs,
+                         const vector<int> &ms) -> StateInfo {
             StateInfo si((int)qs.size(), &qs[0], &ms[0]);
             return si;
         }))
@@ -92,6 +97,23 @@ void pybind_symmetry(py::module &m) {
                        "in the uncollected StateInfo.")
         .def_readwrite("left_state_info", &StateInfo::leftStateInfo)
         .def_readwrite("right_state_info", &StateInfo::rightStateInfo)
+        .def_readwrite("uncollected_state_info",
+                       &StateInfo::unCollectedStateInfo)
+        .def("set_left_state_info",
+             [](StateInfo *self, StateInfo *other) {
+                 self->leftStateInfo = other;
+             },
+             py::keep_alive<1, 2>())
+        .def("set_right_state_info",
+             [](StateInfo *self, StateInfo *other) {
+                 self->rightStateInfo = other;
+             },
+             py::keep_alive<1, 2>())
+        .def("set_uncollected_state_info",
+             [](StateInfo *self, StateInfo *other) {
+                 self->AllocateUnCollectedStateInfo();
+                 *(self->unCollectedStateInfo) = *other;
+             })
         .def_static(
             "transform_state", &StateInfo::transform_state,
             "Truncate state space based on dimension of rotation matrix.")

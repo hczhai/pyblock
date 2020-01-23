@@ -15,10 +15,52 @@ from ..tensor.tensor import Tensor
 from .qc import read_fcidump
 from fractions import Fraction
 import numpy as np
+import bisect
 
 
 class BlockError(Exception):
     pass
+
+
+# collection of "StateInfo" at each site
+class MPSInfo:
+
+    def __init__(self, empty, basis, block_basis):
+        self.empty = empty
+        self.n_sites = len(basis)
+        self.basis = basis
+        self.block_basis = block_basis
+    
+    @staticmethod
+    def from_line_coupling(lcp):
+        info = MPSInfo(lcp.empty, [], [])
+        for i, post in enumerate(lcp.dims):
+            info.basis.append(sorted(lcp.basis[i].items(), , key=lambda x: x[0]))
+            info.block_basis.append([])
+            for k, v in sorted(post.items(), key=lambda x: x[0]):
+                info.block_basis[-1].append((k, v))
+        return info
+    
+    def get_left_state_info(i, left=None):
+        if left is None:
+            if i == 0:
+                left = BlockSymmetry.to_state_info([(self.empty, 1)])
+            else:
+                left = BlockSymmetry.to_state_info(self.block_basis[i - 1])
+        middle = BlockSymmetry.to_state_info(self.basis[i])
+        right = BlockSymmetry.to_state_info(self.block_basis[i])
+        right.set_left_state_info(left)
+        right.set_right_state_info(middle)
+        uncollected = tensor_product(left, middle)
+        right.left_unmap_quanta = uncollected.left_unmap_quanta
+        right.right_unmap_quanta = uncollected.right_unmap_quanta
+        right.set_uncollected_state_info(uncollected)
+        right.old_to_new_state = VectorVectorInt([VectorInt() for i in range(len(right.quanta))])
+        for i, q in enumerate(uncollected.quanta):
+            j = bisect.bisect_left(right.quanta, q)
+            if j != len(right.quanta) and right.quanta[j] == q:
+                right.old_to_new_state[j].append(i)
+        return right
 
 
 class BlockSymmetry:
@@ -36,7 +78,7 @@ class BlockSymmetry:
         PG = point_group(Global.point_group)
         return ParticleN(sq.n) * SU2(sq.s.irrep) * PG(sq.symm.irrep)
 
-    # translate a [(DirectProdGroup, int)] to SpinQuantum (block code)
+    # translate a [(DirectProdGroup, int)] to StateInfo (block code)
     @classmethod
     def to_state_info(self, states):
         qs = VectorSpinQuantum()
@@ -137,7 +179,7 @@ class BlockSymmetry:
             # TODO: this should be empty state
             big.right_state_info.right_state_info = self.to_state_info([
                                                                        (target, 1)])
-            return wfn, big, (target_state_info, ll_collected)
+            return wfn, big
 
     # Translate a site in MPS to rotation matrix (block code) for that site
     # left_state_info: state_info to the left of site i

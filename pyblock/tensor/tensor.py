@@ -87,11 +87,11 @@ class Tensor:
     @staticmethod
     def rank3_init(pre, basis, post):
         blocks = []
-        for kp, vp in pre.items():
-            for kb, vb in basis.items():
+        for kp, vp in sorted(pre.items(), key=lambda x:x[0]):
+            for kb, vb in sorted(basis.items(), key=lambda x:x[0]):
                 rs = kp + kb
                 for kr in (rs if isinstance(rs, list) else [rs]):
-                    if kr in post.keys():
+                    if kr in sorted(post.keys()):
                         blocks.append(SubTensor(q_labels=(kp, kb, kr)))
                         blocks[-1].reduced_shape = [vp, vb, post[kr]]
         return Tensor(blocks)
