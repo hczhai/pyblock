@@ -10,6 +10,9 @@ class HashIrrep:
 
     def __eq__(self, o):
         return self.ir == o.ir
+    
+    def __lt__(self, o):
+        return self.ir < o.ir
 
     def __hash__(self):
         return hash(self.ir)

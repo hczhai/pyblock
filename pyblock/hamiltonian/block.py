@@ -1,5 +1,5 @@
 
-from block import VectorInt, VectorMatrix, Matrix
+from block import VectorInt, VectorVectorInt, VectorMatrix, Matrix
 from block import save_rotation_matrix
 from block.io import Global, read_input, Input, AlgorithmTypes
 from block.io import init_stack_memory, release_stack_memory, AlgorithmTypes
@@ -35,13 +35,13 @@ class MPSInfo:
     def from_line_coupling(lcp):
         info = MPSInfo(lcp.empty, [], [])
         for i, post in enumerate(lcp.dims):
-            info.basis.append(sorted(lcp.basis[i].items(), , key=lambda x: x[0]))
+            info.basis.append(sorted(lcp.basis[i].items(), key=lambda x: x[0]))
             info.block_basis.append([])
             for k, v in sorted(post.items(), key=lambda x: x[0]):
                 info.block_basis[-1].append((k, v))
         return info
     
-    def get_left_state_info(i, left=None):
+    def get_left_state_info(self, i, left=None):
         if left is None:
             if i == 0:
                 left = BlockSymmetry.to_state_info([(self.empty, 1)])

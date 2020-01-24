@@ -44,6 +44,10 @@ void pybind_block(py::module &m) {
              py::arg("implicit_transpose"), py::arg("is_complement") = false)
         .def_property_readonly("name", &StackSpinBlock::get_name,
                                "A random integer.")
+        .def_property_readonly("left_block", &StackSpinBlock::get_leftBlock,
+                               "If this is a sum block, return left sub-block for building it.")
+        .def_property_readonly("right_block", &StackSpinBlock::get_rightBlock,
+                               "If this is a sum block, return right sub-block for building it.")
         .def_property("sites", &StackSpinBlock::get_sites,
                       [](StackSpinBlock *self, const vector<int> &sites) {
                           self->set_sites() = sites;

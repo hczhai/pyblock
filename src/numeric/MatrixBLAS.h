@@ -305,7 +305,7 @@ template <class T> void Clear(T &a) {
 }
 
 template <class T1, class T2>
-void MatrixRotate(T1 const &a, T2 &b, T1 const &c, T2 &d) {
+void MatrixRotate(T1 const &a, T2 const &b, T1 const &c, T2 &d) {
     try {
         assert(d.Nrows() == a.Ncols() && d.Ncols() == c.Ncols());
 #ifdef BLAS

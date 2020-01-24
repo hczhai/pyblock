@@ -13,6 +13,7 @@ void pybind_symmetry(py::module &m);
 void pybind_dmrg(py::module &m);
 void pybind_operator(py::module &m);
 void pybind_matrix(py::module &m);
+void pybind_rev(py::module &m);
 
 PYBIND11_MAKE_OPAQUE(vector<int>);
 PYBIND11_MAKE_OPAQUE(vector<bool>);
@@ -48,4 +49,7 @@ PYBIND11_MODULE(block, m) {
 
     py::module m_dmrg = m.def_submodule("dmrg", "DMRG calculations.");
     pybind_dmrg(m_dmrg);
+    
+    py::module m_rev = m.def_submodule("rev", "Revised Block functions.");
+    pybind_rev(m_rev);
 }

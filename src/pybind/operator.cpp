@@ -230,6 +230,15 @@ void pybind_operator(py::module &m) {
             },
             "A list of non zero blocks. Each element in the list is a pair of "
             "a pair of bra and ket indices, and :class:`StackMatrix`.")
+        .def("__repr__", [](StackSparseMatrix *self) {
+            stringstream ss;
+            for (auto &r: self->get_nonZeroBlocks()) {
+                ss << "[SP] (" << r.first.first << ", " << r.first.second << ") = " << endl;
+                ss << Map<Eigen::Matrix<double, Dynamic, Dynamic, RowMajor>>(
+                    r.second.Store(), r.second.Nrows(), r.second.Ncols()) << endl;
+            }
+            return ss.str();
+        })
         .def_property("map_to_non_zero_blocks",
                       [](StackSparseMatrix *self) {
                           return self->get_mapToNonZeroBlocks();

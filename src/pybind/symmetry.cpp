@@ -15,7 +15,10 @@ using namespace std;
 using namespace SpinAdapted;
 
 PYBIND11_MAKE_OPAQUE(vector<SpinQuantum>);
+PYBIND11_MAKE_OPAQUE(vector<boost::shared_ptr<StateInfo>>);
 PYBIND11_MAKE_OPAQUE(vector<int>);
+
+PYBIND11_DECLARE_HOLDER_TYPE(T, boost::shared_ptr<T>);
 
 void pybind_symmetry(py::module &m) {
 
@@ -72,7 +75,7 @@ void pybind_symmetry(py::module &m) {
 
     py::bind_vector<vector<SpinQuantum>>(m, "VectorSpinQuantum");
 
-    py::class_<StateInfo>(
+    py::class_<StateInfo, boost::shared_ptr<StateInfo>>(
         m, "StateInfo",
         "A collection of symmetry sectors. Each sector can contain several "
         "internal states (which can no longer be differentiated by "
@@ -128,6 +131,8 @@ void pybind_symmetry(py::module &m) {
             ss << *self;
             return ss.str();
         });
+    
+    py::bind_vector<vector<boost::shared_ptr<StateInfo>>>(m, "VectorStateInfo");
 
     m.def("tensor_product", [](StateInfo &a, StateInfo &b) {
         StateInfo c;

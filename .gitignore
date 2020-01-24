@@ -2,9 +2,12 @@ build/
 build-cmake/
 docs/build/
 my_test/
+tests/node0/
 MANIFEST
 .clang-format
 .vscode/
 
 __pycache__/
 *.py[cod]
+
+.ipynb_checkpoints/

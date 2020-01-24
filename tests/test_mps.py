@@ -48,7 +48,7 @@ mps.left_normalize()
 # translate mps to rotaion matrices
 # wavefunction has to be stored into disk to let block use it
 rot_mats, infos = translate_rotation_matrices(mps)
-wfn, info, wfn_sites = translate_wavefunction(ham, mpo, mps, infos, one_dot=False)
+wfn, info, wfn_sites = translate_wavefunction(ham, mpo, mps, infos, one_dot=True)
 Global.dmrginp.output_level = 1
 wfn.save_wavefunction_info(info, wfn_sites, 0)
 wfn.deallocate()
