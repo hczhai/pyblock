@@ -39,6 +39,16 @@ class Block:
         pass
 
     @property
+    def left_block(self):
+        """If this is a sum block, return left sub-block for building it."""
+        pass
+
+    @property
+    def right_block(self):
+        """If this is a sum block, return right sub-block for building it."""
+        pass
+
+    @property
     def sites(self):
         """List of indices of sites contained in the block."""
         pass

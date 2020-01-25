@@ -223,6 +223,11 @@ void pybind_operator(py::module &m) {
                 self->set_totalMemory() = m;
             })
         .def_property(
+            "initialized", &StackSparseMatrix::get_initialised,
+            [](StackSparseMatrix *self, bool i) {
+                self->set_initialised() = i;
+            })
+        .def_property(
             "non_zero_blocks",
             [](StackSparseMatrix *self) { return self->get_nonZeroBlocks(); },
             [](StackSparseMatrix *self, const nz_blocks &m) {

@@ -27,7 +27,7 @@ void TensorProductElement(const StackSparseMatrix &a, const StackSparseMatrix &b
                           StackMatrix &cel, int cq, int cqprime, double scale);
 
 // TENSOR PRODUCT A x B -> C
-void TensorProduct(const StackSparseMatrix &a, const StackSparseMatrix &b, const StackSparseMatrix &c,
+void TensorProduct(const StackSparseMatrix &a, const StackSparseMatrix &b, StackSparseMatrix &c,
                    const vector<boost::shared_ptr<StateInfo>> &state_info, double scale = 1.0);
 
 // TENSOR ROTATION A -> C = T^T A T

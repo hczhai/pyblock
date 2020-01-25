@@ -5,6 +5,7 @@
 #include "enumerator.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl_bind.h>
+#include <pybind11/iostream.h>
 #include <sstream>
 #include <string>
 
@@ -25,5 +26,7 @@ void pybind_rev(py::module &m) {
     
     m.def("tensor_rotate", &block2::TensorRotate, py::arg("a"), py::arg("c"),
           py::arg("state_info"), py::arg("rotate_matrix"));
+//           py::call_guard<py::scoped_ostream_redirect,
+//                      py::scoped_estream_redirect>());
 
 }

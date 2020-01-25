@@ -1024,6 +1024,10 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
         pass
 
     @property
+    def initialized(self):
+        pass
+
+    @property
     def non_zero_blocks(self):
         """A list of non zero blocks. Each element in the list is a pair of a pair of bra and ket indices, and :class:`StackMatrix`."""
         pass
@@ -1040,6 +1044,10 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
 
     def __init__(self, *args, **kwargs):
         """__init__(self: block.operator.StackSparseMatrix) -> None"""
+        pass
+
+    def __repr__(self, *args, **kwargs):
+        """__repr__(self: block.operator.StackSparseMatrix) -> str"""
         pass
 
     def clear(self, *args, **kwargs):

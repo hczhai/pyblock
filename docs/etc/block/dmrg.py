@@ -38,7 +38,7 @@ Perform one sweep procedure."""
 
 
 def get_dot_with_sys(*args, **kwargs):
-    """get_dot_with_sys(system: block.block.Block, sweep_params: block.dmrg.SweepParams, forward: bool) -> bool
+    """get_dot_with_sys(system: block.block.Block, one_dot: bool, forward: bool) -> bool
 
 Return the `dot_with_sys` variable, determing whether the complementary operators should be defined based on system block indicies."""
     pass

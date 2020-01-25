@@ -60,6 +60,22 @@ Overloaded function.
 2. __init__(self: block.symmetry.SpinQuantum, arg0: int, arg1: block.symmetry.SpinSpace, arg2: block.symmetry.IrrepSpace) -> None"""
         pass
 
+    def __eq__(self, *args, **kwargs):
+        """__eq__(self: block.symmetry.SpinQuantum, arg0: block.symmetry.SpinQuantum) -> bool"""
+        pass
+
+    def __lt__(self, *args, **kwargs):
+        """__lt__(self: block.symmetry.SpinQuantum, arg0: block.symmetry.SpinQuantum) -> bool"""
+        pass
+
+    def __add__(self, *args, **kwargs):
+        """__add__(self: block.symmetry.SpinQuantum, arg0: block.symmetry.SpinQuantum) -> std::vector<SpinAdapted::SpinQuantum, std::allocator<SpinAdapted::SpinQuantum> >"""
+        pass
+
+    def __sub__(self, *args, **kwargs):
+        """__sub__(self: block.symmetry.SpinQuantum, arg0: block.symmetry.SpinQuantum) -> std::vector<SpinAdapted::SpinQuantum, std::allocator<SpinAdapted::SpinQuantum> >"""
+        pass
+
     def __repr__(self, *args, **kwargs):
         """__repr__(self: block.symmetry.SpinQuantum) -> str"""
         pass
@@ -124,6 +140,10 @@ class StateInfo:
     def right_state_info(self):
         pass
 
+    @property
+    def uncollected_state_info(self):
+        pass
+
     def __init__(self, *args, **kwargs):
         """__init__(*args, **kwargs)
 Overloaded function.
@@ -131,6 +151,18 @@ Overloaded function.
 1. __init__(self: block.symmetry.StateInfo) -> None
 
 2. __init__(self: block.symmetry.StateInfo, arg0: block.symmetry.VectorSpinQuantum, arg1: block.VectorInt) -> None"""
+        pass
+
+    def set_left_state_info(self, *args, **kwargs):
+        """set_left_state_info(self: block.symmetry.StateInfo, arg0: block.symmetry.StateInfo) -> None"""
+        pass
+
+    def set_right_state_info(self, *args, **kwargs):
+        """set_right_state_info(self: block.symmetry.StateInfo, arg0: block.symmetry.StateInfo) -> None"""
+        pass
+
+    def set_uncollected_state_info(self, *args, **kwargs):
+        """set_uncollected_state_info(self: block.symmetry.StateInfo, arg0: block.symmetry.StateInfo) -> None"""
         pass
 
     def collect_quanta(self, *args, **kwargs):
@@ -278,5 +310,140 @@ Check whether the list is nonempty"""
 
     def __len__(self, *args, **kwargs):
         """__len__(self: block.symmetry.VectorSpinQuantum) -> int"""
+        pass
+
+
+class VectorStateInfo:
+
+    def __init__(self, *args, **kwargs):
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: block.symmetry.VectorStateInfo) -> None
+
+2. __init__(self: block.symmetry.VectorStateInfo, arg0: block.symmetry.VectorStateInfo) -> None
+
+Copy constructor
+
+3. __init__(self: block.symmetry.VectorStateInfo, arg0: iterable) -> None"""
+        pass
+
+    def __eq__(self, *args, **kwargs):
+        """__eq__(self: block.symmetry.VectorStateInfo, arg0: block.symmetry.VectorStateInfo) -> bool"""
+        pass
+
+    def __ne__(self, *args, **kwargs):
+        """__ne__(self: block.symmetry.VectorStateInfo, arg0: block.symmetry.VectorStateInfo) -> bool"""
+        pass
+
+    def count(self, *args, **kwargs):
+        """count(self: block.symmetry.VectorStateInfo, x: block.symmetry.StateInfo) -> int
+
+Return the number of times ``x`` appears in the list"""
+        pass
+
+    def remove(self, *args, **kwargs):
+        """remove(self: block.symmetry.VectorStateInfo, x: block.symmetry.StateInfo) -> None
+
+Remove the first item from the list whose value is x. It is an error if there is no such item."""
+        pass
+
+    def __contains__(self, *args, **kwargs):
+        """__contains__(self: block.symmetry.VectorStateInfo, x: block.symmetry.StateInfo) -> bool
+
+Return true the container contains ``x``"""
+        pass
+
+    def __repr__(self, *args, **kwargs):
+        """__repr__(self: block.symmetry.VectorStateInfo) -> str
+
+Return the canonical string representation of this list."""
+        pass
+
+    def append(self, *args, **kwargs):
+        """append(self: block.symmetry.VectorStateInfo, x: block.symmetry.StateInfo) -> None
+
+Add an item to the end of the list"""
+        pass
+
+    def extend(self, *args, **kwargs):
+        """extend(*args, **kwargs)
+Overloaded function.
+
+1. extend(self: block.symmetry.VectorStateInfo, L: block.symmetry.VectorStateInfo) -> None
+
+Extend the list by appending all the items in the given list
+
+2. extend(self: block.symmetry.VectorStateInfo, L: iterable) -> None
+
+Extend the list by appending all the items in the given list"""
+        pass
+
+    def insert(self, *args, **kwargs):
+        """insert(self: block.symmetry.VectorStateInfo, i: int, x: block.symmetry.StateInfo) -> None
+
+Insert an item at a given position."""
+        pass
+
+    def pop(self, *args, **kwargs):
+        """pop(*args, **kwargs)
+Overloaded function.
+
+1. pop(self: block.symmetry.VectorStateInfo) -> block.symmetry.StateInfo
+
+Remove and return the last item
+
+2. pop(self: block.symmetry.VectorStateInfo, i: int) -> block.symmetry.StateInfo
+
+Remove and return the item at index ``i``"""
+        pass
+
+    def __setitem__(self, *args, **kwargs):
+        """__setitem__(*args, **kwargs)
+Overloaded function.
+
+1. __setitem__(self: block.symmetry.VectorStateInfo, arg0: int, arg1: block.symmetry.StateInfo) -> None
+
+2. __setitem__(self: block.symmetry.VectorStateInfo, arg0: slice, arg1: block.symmetry.VectorStateInfo) -> None
+
+Assign list elements using a slice object"""
+        pass
+
+    def __getitem__(self, *args, **kwargs):
+        """__getitem__(*args, **kwargs)
+Overloaded function.
+
+1. __getitem__(self: block.symmetry.VectorStateInfo, s: slice) -> block.symmetry.VectorStateInfo
+
+Retrieve list elements using a slice object
+
+2. __getitem__(self: block.symmetry.VectorStateInfo, arg0: int) -> block.symmetry.StateInfo"""
+        pass
+
+    def __delitem__(self, *args, **kwargs):
+        """__delitem__(*args, **kwargs)
+Overloaded function.
+
+1. __delitem__(self: block.symmetry.VectorStateInfo, arg0: int) -> None
+
+Delete the list elements at index ``i``
+
+2. __delitem__(self: block.symmetry.VectorStateInfo, arg0: slice) -> None
+
+Delete list elements using a slice object"""
+        pass
+
+    def __iter__(self, *args, **kwargs):
+        """__iter__(self: block.symmetry.VectorStateInfo) -> iterator"""
+        pass
+
+    def __bool__(self, *args, **kwargs):
+        """__bool__(self: block.symmetry.VectorStateInfo) -> bool
+
+Check whether the list is nonempty"""
+        pass
+
+    def __len__(self, *args, **kwargs):
+        """__len__(self: block.symmetry.VectorStateInfo) -> int"""
         pass
 

@@ -295,6 +295,8 @@ class LineCoupling:
         self.basis = basis
         self.target = target
         self.empty = empty
+        self.both_dir = both_dir
+        self.bond_dim = -1
         assert l != 0
         dim_l = self.fill_from_left()
         if both_dir:
@@ -335,6 +337,7 @@ class LineCoupling:
         return dim_r
 
     def set_bond_dim(self, m):
+        self.bond_dim = m
         for i in range(self.l):
             x = sum(self.dims[i].values())
             if x > m:

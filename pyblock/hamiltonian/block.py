@@ -11,6 +11,7 @@ from block.block import Block, StorageTypes
 from block.block import init_starting_block, init_new_system_block
 
 from ..symmetry.symmetry import ParticleN, SU2, PointGroup, point_group
+from ..symmetry.symmetry import LineCoupling
 from ..tensor.tensor import Tensor
 from .qc import read_fcidump
 from fractions import Fraction
@@ -23,32 +24,65 @@ class BlockError(Exception):
 
 
 # collection of "StateInfo" at each site
+# this class also defines how to translate collection of python q numbers
+# to StateInfo in block
 class MPSInfo:
 
-    def __init__(self, empty, basis, block_basis):
+    def __init__(self, empty, n_sites, basis):
         self.empty = empty
-        self.n_sites = len(basis)
+        self.n_sites = n_sites
         self.basis = basis
-        self.block_basis = block_basis
+        self.left_block_basis = []
+        self.right_block_basis = []
+        self.left_state_info = None
+        self.right_state_info = None
+        self.left_state_info_no_trunc = None
+        self.right_state_info_no_trunc = None
     
     @staticmethod
     def from_line_coupling(lcp):
-        info = MPSInfo(lcp.empty, [], [])
+        info = MPSInfo(lcp.empty, lcp.l, [])
         for i, post in enumerate(lcp.dims):
             info.basis.append(sorted(lcp.basis[i].items(), key=lambda x: x[0]))
-            info.block_basis.append([])
+            info.left_block_basis.append([])
             for k, v in sorted(post.items(), key=lambda x: x[0]):
-                info.block_basis[-1].append((k, v))
+                info.left_block_basis[-1].append((k, v))
+        lcp_right = LineCoupling(lcp.l, lcp.basis[::-1], lcp.target, lcp.empty, lcp.both_dir)
+        if lcp.bond_dim != -1:
+            lcp_right.set_bond_dim(lcp.bond_dim)
+        for i, post in enumerate(lcp_right.dims[::-1]):
+            info.right_block_basis.append([])
+            for k, v in sorted(post.items(), key=lambda x: x[0]):
+                info.right_block_basis[-1].append((k, v))
         return info
+    
+    def init_state_info(self):
+        self.left_state_info = []
+        self.right_state_info = []
+        self.left_state_info_no_trunc = []
+        self.right_state_info_no_trunc = []
+        left = None
+        for i in range(self.n_sites):
+            right, no_truc = self.get_left_state_info(i, left=left)
+            self.left_state_info.append(right)
+            self.left_state_info_no_trunc.append(no_truc)
+            left = right
+        right = None
+        for i in range(self.n_sites - 1, -1, -1):
+            left, no_truc = self.get_right_state_info(i, right=right)
+            self.right_state_info.append(left)
+            self.right_state_info_no_trunc.append(no_truc)
+            right = left
+        self.right_state_info = self.right_state_info[::-1]
     
     def get_left_state_info(self, i, left=None):
         if left is None:
             if i == 0:
                 left = BlockSymmetry.to_state_info([(self.empty, 1)])
             else:
-                left = BlockSymmetry.to_state_info(self.block_basis[i - 1])
+                left = BlockSymmetry.to_state_info(self.left_block_basis[i - 1])
         middle = BlockSymmetry.to_state_info(self.basis[i])
-        right = BlockSymmetry.to_state_info(self.block_basis[i])
+        right = BlockSymmetry.to_state_info(self.left_block_basis[i])
         right.set_left_state_info(left)
         right.set_right_state_info(middle)
         uncollected = tensor_product(left, middle)
@@ -60,7 +94,64 @@ class MPSInfo:
             j = bisect.bisect_left(right.quanta, q)
             if j != len(right.quanta) and right.quanta[j] == q:
                 right.old_to_new_state[j].append(i)
-        return right
+        collected = uncollected.copy()
+        collected.collect_quanta()
+        return right, collected
+    
+    def get_right_state_info(self, i, right=None):
+        if right is None:
+            if i == self.n_sites - 1:
+                right = BlockSymmetry.to_state_info([(self.empty, 1)])
+            else:
+                right = BlockSymmetry.to_state_info(self.right_block_basis[i + 1])
+        middle = BlockSymmetry.to_state_info(self.basis[i])
+        left = BlockSymmetry.to_state_info(self.right_block_basis[i])
+        left.set_left_state_info(middle)
+        left.set_right_state_info(right)
+        uncollected = tensor_product(middle, right)
+        left.left_unmap_quanta = uncollected.left_unmap_quanta
+        left.right_unmap_quanta = uncollected.right_unmap_quanta
+        left.set_uncollected_state_info(uncollected)
+        left.old_to_new_state = VectorVectorInt([VectorInt() for i in range(len(left.quanta))])
+        for i, q in enumerate(uncollected.quanta):
+            j = bisect.bisect_left(left.quanta, q)
+            if j != len(left.quanta) and left.quanta[j] == q:
+                left.old_to_new_state[j].append(i)
+        collected = uncollected.copy()
+        collected.collect_quanta()
+        return left, collected
+    
+    def get_left_rotation_matrix(self, i, tensor):
+        collected = self.left_state_info_no_trunc[i]
+        l = self.left_state_info[i].left_state_info
+        r = self.left_state_info[i].right_state_info
+        lr = self.left_state_info[i].uncollected_state_info
+        
+        otn = collected.old_to_new_state
+        lr_idl = collected.left_unmap_quanta
+        lr_idr = collected.right_unmap_quanta
+        
+        map_tensor = {block.q_labels: block for block in tensor.blocks}
+        
+        rot = []
+        for i, js in enumerate(otn):
+            red = []
+            for j in js:
+                q = lr.quanta[j]
+                sqs = [l.quanta[lr_idl[j]], r.quanta[lr_idr[j]], q]
+                q_labels = tuple(BlockSymmetry.from_spin_quantum(sq) for sq in sqs)
+                if q_labels in map_tensor:
+                    block = map_tensor[q_labels]
+                    a = block.reduced.shape[0] * block.reduced.shape[1]
+                    b = block.reduced.shape[2]
+                    reduced = block.reduced.reshape((a, b))
+                    red.append(reduced)
+            if len(red) == 0:
+                rot.append(Matrix())
+            else:
+                rot.append(Matrix(np.concatenate(red, axis=0)))
+        
+        return VectorMatrix(rot)
 
 
 class BlockSymmetry:

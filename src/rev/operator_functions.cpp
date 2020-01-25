@@ -7,6 +7,7 @@
 #include "newmat.h"
 #include <cmath>
 #include <vector>
+#include <iostream>
 
 #define TINY 1.e-20
 
@@ -230,8 +231,7 @@ void TensorProductElement(const StackSparseMatrix &a, const StackSparseMatrix &b
 }
 
 void TensorProduct(const StackSparseMatrix &a, const StackSparseMatrix &b, StackSparseMatrix &c,
-                   const vector<boost::shared_ptr<StateInfo>> &state_info,
-                   bool trace_right, double scale) {
+                   const vector<boost::shared_ptr<StateInfo>> &state_info, double scale) {
     
     if (fabs(scale) < TINY)
         return;

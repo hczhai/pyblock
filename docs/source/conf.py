@@ -40,7 +40,7 @@ templates_path = ['_templates']
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = []
+exclude_patterns = ['**/.ipynb_checkpoints', '.ipynb_checkpoints']
 
 
 # -- Options for HTML output -------------------------------------------------
@@ -55,8 +55,7 @@ if on_rtd:
     sys.path.insert(0, os.path.abspath('../etc'))
 else:
     html_theme = 'bizstyle'
-    # sys.path.insert(0, os.path.abspath('../etc'))
-    sys.path.insert(0, os.path.abspath('../../build-cmake'))
+    sys.path.insert(0, os.path.abspath('../../build'))
 
 
 # Add any paths that contain custom static files (such as style sheets) here,
