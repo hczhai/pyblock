@@ -149,9 +149,8 @@ class StackSparseMatrix : public Baseoperator<StackMatrix>  // the sparse matrix
   std::vector<int>& getActiveCols(int i) {return rowCompressedForm[i];}
   std::vector<std::vector<int> >& getrowCompressedForm() {return rowCompressedForm;}
   std::vector<std::vector<int> >& getcolCompressedForm() {return colCompressedForm;}
-  const StackMatrix& operator_element(int i, int j) const { 
-    const int index = mapToNonZeroBlocks.at( make_pair(i,j) );
-    if (conj == 'n') return nonZeroBlocks[index].second;
+  const StackMatrix& operator_element(int i, int j) const {
+    if (conj == 'n') return nonZeroBlocks[mapToNonZeroBlocks.at(std::pair<int,int>(i,j))].second;
     else return nonZeroBlocks[mapToNonZeroBlocks.at(std::pair<int,int>(j,i))].second;
     //if (conj == 'n') return operatorMatrix(i, j); 
     //else return operatorMatrix(j, i);

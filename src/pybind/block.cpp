@@ -6,6 +6,7 @@
 #include <map>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl_bind.h>
+#include <pybind11/iostream.h>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -69,7 +70,8 @@ void pybind_block(py::module &m) {
             "Map from operator types to matrix representation of operators.")
         .def("print_operator_summary", &StackSpinBlock::printOperatorSummary,
              "Print operator summary when :attr:`block.io.Input.output_level` "
-             "at least = 2.")
+             "at least = 2.", py::call_guard<py::scoped_ostream_redirect,
+             py::scoped_estream_redirect>())
         .def("store",
              [](StackSpinBlock *self, bool forward, const vector<int> &sites,
                 int left, int right) {
@@ -83,12 +85,27 @@ void pybind_block(py::module &m) {
              "        List of indices of sites contained in the block. "
              "This is kind of redundant and can be obtained "
              "from :attr:`Block.sites`.\n"
-             "    block : :class:`Block`\n"
-             "        The block to store.\n"
              "    left : int\n"
-             "        Bra state.\n"
+             "        Bra state (-1 for normal case).\n"
              "    right : int\n"
-             "        Ket state.",
+             "        Ket state (-1 for normal case).",
+             py::arg("forward"), py::arg("sites"), py::arg("left"),
+             py::arg("right"))
+        .def("restore",
+             [](StackSpinBlock *self, bool forward, const vector<int> &sites,
+                int left, int right) {
+                 StackSpinBlock::restore(forward, sites, *self, left, right);
+             },
+             "Read a :class:`Block` from disk.\n\n"
+             "Args:\n"
+             "    forward : bool\n"
+             "        The direction of sweep.\n"
+             "    sites : :class:`block.VectorInt`\n"
+             "        List of indices of sites contained in the block. "
+             "    left : int\n"
+             "        Bra state (-1 for normal case).\n"
+             "    right : int\n"
+             "        Ket state (-1 for normal case).",
              py::arg("forward"), py::arg("sites"), py::arg("left"),
              py::arg("right"))
         .def("deallocate", &StackSpinBlock::deallocate)
@@ -120,6 +137,7 @@ void pybind_block(py::module &m) {
         .def("add_all_comp_ops", &StackSpinBlock::addAllCompOps)
         .def("multiply_overlap", &StackSpinBlock::multiplyOverlap, py::arg("c"),
              py::arg("v"), py::arg("num_threads") = 1)
+        .def("diagonal_h", &StackSpinBlock::diagonalH)
         .def("renormalize_from",
              [](StackSpinBlock *self, vector<double> &energies,
                 vector<double> &spins, double error,

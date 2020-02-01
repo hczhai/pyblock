@@ -5,19 +5,19 @@ class DMRGError(Exception):
     pass
 
 class MovingEnvironment:
-    def __init__(self, n_sites, dot, tn, forward):
+    def __init__(self, n_sites, dot, tn, forward, complete=False):
         self.dot = dot
         self.n_sites = n_sites
         self.forward = forward
         # contracted tensor network
         self.tnc = tn.copy()
 
-        self.init_environments(forward)
+        self.init_environments(forward, complete)
     
-    def init_environments(self, forward):
+    def init_environments(self, forward, complete):
 
-        self.tnc |= Tensor(blocks=None, tags='_LEFT')
-        self.tnc |= Tensor(blocks=None, tags='_RIGHT')
+        self.tnc |= Tensor(blocks=None, tags={'_LEFT', '_HAM'})
+        self.tnc |= Tensor(blocks=None, tags={'_RIGHT', '_HAM'})
 
         if forward:
             
@@ -33,7 +33,12 @@ class MovingEnvironment:
                 self.envs[i] |= self.tnc.select(i)
                 self.envs[i] ^= ('_RIGHT', i + self.dot)
             
-            self.envs[0] |= self.tnc['_LEFT']
+            if complete:
+                for i in range(1, self.dot + 1):
+                    self.envs[-i] = self.envs[-i + 1].copy()
+                    self.envs[-i] ^= ('_RIGHT', -i + self.dot)
+            
+            self.envs[0] |= self.tnc[{'_LEFT', '_HAM'}]
             self.pos = 0
         
         else:
@@ -48,8 +53,13 @@ class MovingEnvironment:
                 self.envs[i] = self.envs[i - 1].copy()
                 self.envs[i] |= self.tnc.select(i + self.dot - 1)
                 self.envs[i] ^= ('_LEFT', i - 1)
+                
+            if complete:
+                for i in range(1, self.dot + 1):
+                    self.envs[self.n_sites - self.dot + i] = self.envs[self.n_sites - self.dot + i - 1].copy()
+                    self.envs[self.n_sites - self.dot + i] ^= ('_LEFT', self.n_sites - self.dot + i - 1)
             
-            self.envs[self.n_sites - self.dot] |= self.tnc['_RIGHT']
+            self.envs[self.n_sites - self.dot] |= self.tnc[{'_RIGHT', '_HAM'}]
             self.pos = self.n_sites - self.dot
 
     def move_to(self, i):
@@ -57,10 +67,12 @@ class MovingEnvironment:
             # move right
             new_sys = self.envs[self.pos].select({'_LEFT', self.pos}, which='any')
             self.envs[self.pos + 1] |= new_sys ^ ('_LEFT', self.pos)
+            self.pos += 1
         elif i < self.pos:
             # move left
             new_sys = self.envs[self.pos].select({'_RIGHT', self.pos + self.dot - 1}, which='any')
-            self.envs[self.pos - 1] |= new_sys ^ ('_RIGHT', self.pos)
+            self.envs[self.pos - 1] |= new_sys ^ ('_RIGHT', self.pos + self.dot - 1)
+            self.pos -= 1
     
     def __call__(self):
         return self.envs[self.pos]
@@ -73,11 +85,11 @@ class DMRG:
             bond_dims, list) else [bond_dims]
 
         if mps is not None:
-            self._k = mps.copy()
+            self._k = mps.deep_copy()
         else:
-            self._k = mpo.rand_state(self.bond_dims[0])
+            self._k = mpo.rand_state()
 
-        self._b = self._k.copy()
+        self._b = self._k.deep_copy()
         self._h = mpo.copy()
 
         self._k.add_tags({'_KET'})
@@ -88,7 +100,7 @@ class DMRG:
 
         self.energies = []
     
-    def update_one_dot(self, i, bond_dim):
+    def update_one_dot(self, i, forward, bond_dim):
         
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
 
@@ -101,15 +113,40 @@ class DMRG:
         
         self._k[i].modify(data=gs)
         self._b[i].modify(data=gs)
+    
+    def update_two_dot(self, i, forward, bond_dim):
+        
+        h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
+        
+        gs_old = self._k.select({i, i + 1}, which='any')
+        
+        if h_eff.contractor is not None:
+            energy, gs = h_eff.contractor.exact_eigs(h_eff, gs_old)
+            
+            l_fused, r_fused, error = gs.split(absorb_right=forward, k=bond_dim)
+
+            h_eff.contractor.update_local_mps_info(i, l_fused)
+            l = h_eff.contractor.unfuse_left(i, l_fused)
+            r = h_eff.contractor.unfuse_right(i + 1, r_fused)
+
+        else:
+            raise DMRGError('general eigenvalue solver is not implemented!')
+        
+        self._k[i].modify(l)
+        self._b[i].modify(l)
+        self._k[i + 1].modify(r)
+        self._b[i + 1].modify(r)
+        
+        return energy, error
 
     def blocking(self, i, forward, bond_dim):
 
         self.eff_ham.move_to(i)
 
         if self.dot == 1:
-            return self.update_one_dot(i, bond_dim)
+            return self.update_one_dot(i, forward, bond_dim)
         else:
-            return self.update_two_dot(i, bond_dim)
+            return self.update_two_dot(i, forward, bond_dim)
 
     def sweep(self, forward, bond_dim):
         
@@ -125,14 +162,12 @@ class DMRG:
         sweep_energies = []
 
         for i in sweep_range:
-            print("\t Iteration = %4d ... " % i)
-            energy = self.blocking(i, forward=forward, bond_dim=bond_dim)
-            print("\t\t\t Energy = %15.8f " % energy)
+            print("\t Iteration = %4d %s ... " % (abs(i - sweep_range[0]), 'F' if forward else 'B'))
+            energy, error = self.blocking(i, forward=forward, bond_dim=bond_dim)
+            print("\t\t\t Energy = %15.8f Error = %15.8f" % (energy, error))
             sweep_energies.append(energy)
 
-        return sweep_energies[-1]
-
-        # TODO:: not implemented !!!
+        return sorted(sweep_energies)[0]
 
     def solve(self, n_sweeps, tol):
 
@@ -150,10 +185,12 @@ class DMRG:
             energy = self.sweep(forward=forward, bond_dim=self.bond_dims[iw])
             self.energies.append(energy)
 
-            converged = (len(self.energies) >= 2 and abs(
+            converged = (len(self.energies) >= 2 and tol is not None and abs(
                 self.energies[-1] - self.energies[-2]) < tol)
 
             if converged:
                 break
 
             forward = not forward
+        
+        return energy

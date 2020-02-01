@@ -87,7 +87,7 @@ class DMRG(object):
             print("\n\n\t\t\t BLOCK CPU  Time (seconds): %.3f" % cputime)
             print("\t\t\t BLOCK Wall Time (seconds): %.3f" % walltime)
 
-    def gen_block_do_one(self, rot_mats=None):
+    def gen_block_do_one(self, rot_mats=None, implicit_trans=True, do_norms=None, do_comp=None):
 
         self.system = Block()
         cur_root = self.sweep_params.current_root
@@ -116,7 +116,9 @@ class DMRG(object):
             else:
                 self.sweep_params.guess_type = GuessWaveTypes.Transform
 
-            self.system = self.gen_block_block_and_decimate(dot_with_sys, rot_mats=rot_mats)
+            self.system = self.gen_block_block_and_decimate(
+                dot_with_sys, rot_mats=rot_mats, implicit_trans=implicit_trans,
+                do_norms=do_norms, do_comp=do_comp)
 
             self.system.store(forward, self.system.sites, cur_root, cur_root)
 
@@ -504,7 +506,7 @@ class DMRG(object):
 
         return new_system
 
-    def gen_block_block_and_decimate(self, dot_with_sys, rot_mats=None):
+    def gen_block_block_and_decimate(self, dot_with_sys, rot_mats=None, implicit_trans=True, do_norms=None, do_comp=None):
         new_system = Block()
 
         forward = True
@@ -523,10 +525,12 @@ class DMRG(object):
             sys_dot_end = sys_dot_start - (self.sweep_params.sys_add - 1)
 
         system_dot = Block(sys_dot_start, sys_dot_end,
-                           self.integral_index, True)
-
-        do_norms = dot_with_sys
-        do_comp = not dot_with_sys
+                           self.integral_index, implicit_trans)
+        
+        if do_norms is None:
+            do_norms = dot_with_sys
+        if do_comp is None:
+            do_comp = not dot_with_sys
 
         if do_comp and OpTypes.CreDesComp not in self.system.ops:
             self.system.add_all_comp_ops()

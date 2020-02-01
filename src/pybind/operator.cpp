@@ -227,6 +227,8 @@ void pybind_operator(py::module &m) {
             [](StackSparseMatrix *self, bool i) {
                 self->set_initialised() = i;
             })
+        .def("operator_element", (StackMatrix& (StackSparseMatrix::*)(int i, int j))
+             &StackSparseMatrix::operator_element)
         .def_property(
             "non_zero_blocks",
             [](StackSparseMatrix *self) { return self->get_nonZeroBlocks(); },
@@ -260,7 +262,18 @@ void pybind_operator(py::module &m) {
                 self->set_deltaQuantum() = m;
             },
             "Allowed change of quantum numbers between states.")
+        .def_property_readonly(
+            "rows", (int (StackSparseMatrix::*)() const)(&StackSparseMatrix::nrows))
+        .def_property_readonly(
+            "cols", (int (StackSparseMatrix::*)() const)(&StackSparseMatrix::ncols))
+        .def_property(
+            "conjugacy", &StackSparseMatrix::conjugacy, &StackSparseMatrix::set_conjugacy)
+        .def("allowed", [](StackSparseMatrix *self, int i, int j) -> bool {
+            return (bool) self->allowed(i, j);
+        })
         .def("clear", &StackSparseMatrix::Clear)
+        .def("deep_copy", &StackSparseMatrix::deepCopy)
+        .def("deep_clear_copy", &StackSparseMatrix::deepClearCopy)
         .def("allocate", (void (StackSparseMatrix::*)(const StateInfo &)) &
                              StackSparseMatrix::allocate)
         .def("deallocate", &StackSparseMatrix::deallocate);
@@ -275,6 +288,9 @@ void pybind_operator(py::module &m) {
                                const vector<SpinQuantum> &, const StateInfo &,
                                const StateInfo &, const bool &)) &
                                StackWavefunction::initialise)
+        .def("initialize_from", (void (StackWavefunction::*)(const StackWavefunction&))
+             &StackWavefunction::initialise)
+        .def("copy_data", &StackWavefunction::copyData)
         .def("save_wavefunction_info",
              &StackWavefunction::SaveWavefunctionInfo);
 

@@ -41,8 +41,16 @@ Overloaded function.
 2. __init__(self: block.DiagonalMatrix, arg0: numpy.ndarray[float64[m, n], flags.writeable, flags.c_contiguous]) -> None"""
         pass
 
+    def __add__(self, *args, **kwargs):
+        """__add__(self: block.DiagonalMatrix, arg0: block.DiagonalMatrix) -> block.DiagonalMatrix"""
+        pass
+
+    def resize(self, *args, **kwargs):
+        """resize(self: block.DiagonalMatrix, nr: int) -> None"""
+        pass
+
     def __repr__(self, *args, **kwargs):
-        """__repr__(self: block.Matrix) -> str"""
+        """__repr__(self: block.DiagonalMatrix) -> str"""
         pass
 
 

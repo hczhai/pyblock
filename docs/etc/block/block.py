@@ -96,12 +96,25 @@ Args:
         The direction of sweep.
     sites : :class:`block.VectorInt`
         List of indices of sites contained in the block. This is kind of redundant and can be obtained from :attr:`Block.sites`.
-    block : :class:`Block`
-        The block to store.
     left : int
-        Bra state.
+        Bra state (-1 for normal case).
     right : int
-        Ket state."""
+        Ket state (-1 for normal case)."""
+        pass
+
+    def restore(self, *args, **kwargs):
+        """restore(self: block.block.Block, forward: bool, sites: block.VectorInt, left: int, right: int) -> None
+
+Read a :class:`Block` from disk.
+
+Args:
+    forward : bool
+        The direction of sweep.
+    sites : :class:`block.VectorInt`
+        List of indices of sites contained in the block.     left : int
+        Bra state (-1 for normal case).
+    right : int
+        Ket state (-1 for normal case)."""
         pass
 
     def deallocate(self, *args, **kwargs):
@@ -140,6 +153,10 @@ If the parameter ``system`` is allocated before ``this`` object, but we need to 
 
     def multiply_overlap(self, *args, **kwargs):
         """multiply_overlap(self: block.block.Block, c: block.operator.Wavefunction, v: block.operator.Wavefunction, num_threads: int = 1) -> None"""
+        pass
+
+    def diagonal_h(self, *args, **kwargs):
+        """diagonal_h(self: block.block.Block, arg0: block.DiagonalMatrix) -> None"""
         pass
 
     def renormalize_from(self, *args, **kwargs):

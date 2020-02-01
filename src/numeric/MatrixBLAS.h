@@ -332,6 +332,16 @@ template <class T> void MatrixDiagonalScale(double d, const T &a, double *b) {
 #endif
 }
 
+template <class T> void VectorScale(double d, const T &a, double *b) {
+    // assert (a.Nrows () == a.Ncols () && a.Nrows () == b.Ncols ());
+#ifdef BLAS
+    int n = a.Nrows();
+    DAXPY(n, d, a.Store(), 1, b, 1);
+#else
+    // b += d * a; Should add the non-blas analogue
+#endif
+}
+
 /*
 template<> void MatrixRotate<Matrix> (const Matrix& a, const Matrix& b, const
 Matrix& c, Matrix& d)

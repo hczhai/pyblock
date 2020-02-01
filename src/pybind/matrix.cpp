@@ -42,9 +42,9 @@ void pybind_matrix(py::module &m) {
             },
             "A numpy.ndarray reference.")
         .def_property_readonly(
-            "rows", (int &(::Matrix::*)() const)(&::Matrix::Nrows))
+            "rows", (int (::Matrix::*)() const)(&::Matrix::Nrows))
         .def_property_readonly(
-            "cols", (int &(::Matrix::*)() const)(&::Matrix::Ncols))
+            "cols", (int (::Matrix::*)() const)(&::Matrix::Ncols))
         .def("__repr__", [](::Matrix *self) {
             stringstream ss;
             ss << Map<Eigen::Matrix<double, Dynamic, Dynamic, RowMajor>>(
@@ -81,10 +81,14 @@ void pybind_matrix(py::module &m) {
             },
             "A numpy.ndarray reference.")
         .def_property_readonly(
-            "rows", (int &(::DiagonalMatrix::*)() const)(&::DiagonalMatrix::Nrows))
+            "rows", (int (::DiagonalMatrix::*)() const)(&::DiagonalMatrix::Nrows))
         .def_property_readonly(
-            "cols", (int &(::DiagonalMatrix::*)() const)(&::DiagonalMatrix::Ncols))
-        .def("__repr__", [](::Matrix *self) {
+            "cols", (int (::DiagonalMatrix::*)() const)(&::DiagonalMatrix::Ncols))
+        .def("__add__", [](::DiagonalMatrix *self, ::DiagonalMatrix *other) -> ::DiagonalMatrix {
+            return (*self) + (*other);
+        })
+        .def("resize", (void (::DiagonalMatrix::*)(int))&::DiagonalMatrix::ReSize, py::arg("nr"))
+        .def("__repr__", [](::DiagonalMatrix *self) {
             stringstream ss;
             ss << Map<Eigen::Matrix<double, Dynamic, Dynamic, RowMajor>>(
                 self->data(), 1, self->Ncols());

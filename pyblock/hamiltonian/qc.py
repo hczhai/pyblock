@@ -4,9 +4,8 @@ from fractions import Fraction
 from ..symmetry.symmetry import point_group, ParticleN, SU2
 from ..tensor.tensor import Tensor, SubTensor
 
+
 # one-electron integrals
-
-
 class TInt:
     def __init__(self, n):
         self.n = n
@@ -14,6 +13,8 @@ class TInt:
 
     @staticmethod
     def find_index(i, j):
+        if i < j:
+            i, j = j, i
         return i * (i + 1) // 2 + j
 
     def __getitem__(self, idx):
@@ -35,14 +36,8 @@ class VInt(TInt):
 
     @staticmethod
     def find_index(i, j, k, l):
-        if i < j:
-            i, j = j, i
-        if k < l:
-            k, l = l, k
         p = TInt.find_index(i, j)
         q = TInt.find_index(k, l)
-        if p < q:
-            p, q = q, p
         return TInt.find_index(p, q)
 
     def __repr__(self):
@@ -98,7 +93,7 @@ class QCHamiltonian:
 
     def __init__(self, fcidump, point_group):
         self.fcidump = fcidump
-        opts, (t, v, e) = read_fcidump('N2.STO3G.FCIDUMP')
+        opts, (t, v, e) = read_fcidump(fcidump)
 
         self.t = t
         self.v = v

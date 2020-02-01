@@ -1042,16 +1042,44 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
         """Allowed change of quantum numbers between states."""
         pass
 
+    @property
+    def rows(self):
+        pass
+
+    @property
+    def cols(self):
+        pass
+
+    @property
+    def conjugacy(self):
+        pass
+
     def __init__(self, *args, **kwargs):
         """__init__(self: block.operator.StackSparseMatrix) -> None"""
+        pass
+
+    def operator_element(self, *args, **kwargs):
+        """operator_element(self: block.operator.StackSparseMatrix, arg0: int, arg1: int) -> block.operator.StackMatrix"""
         pass
 
     def __repr__(self, *args, **kwargs):
         """__repr__(self: block.operator.StackSparseMatrix) -> str"""
         pass
 
+    def allowed(self, *args, **kwargs):
+        """allowed(self: block.operator.StackSparseMatrix, arg0: int, arg1: int) -> bool"""
+        pass
+
     def clear(self, *args, **kwargs):
         """clear(self: block.operator.StackSparseMatrix) -> None"""
+        pass
+
+    def deep_copy(self, *args, **kwargs):
+        """deep_copy(self: block.operator.StackSparseMatrix, arg0: block.operator.StackSparseMatrix) -> None"""
+        pass
+
+    def deep_clear_copy(self, *args, **kwargs):
+        """deep_clear_copy(self: block.operator.StackSparseMatrix, arg0: block.operator.StackSparseMatrix) -> None"""
         pass
 
     def allocate(self, *args, **kwargs):
@@ -3584,6 +3612,14 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
 
     def initialize(self, *args, **kwargs):
         """initialize(self: block.operator.Wavefunction, arg0: block.symmetry.VectorSpinQuantum, arg1: block.symmetry.StateInfo, arg2: block.symmetry.StateInfo, arg3: bool) -> None"""
+        pass
+
+    def initialize_from(self, *args, **kwargs):
+        """initialize_from(self: block.operator.Wavefunction, arg0: block.operator.Wavefunction) -> None"""
+        pass
+
+    def copy_data(self, *args, **kwargs):
+        """copy_data(self: block.operator.Wavefunction, arg0: block.operator.Wavefunction) -> None"""
         pass
 
     def save_wavefunction_info(self, *args, **kwargs):

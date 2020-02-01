@@ -67,6 +67,7 @@ void pybind_symmetry(py::module &m) {
         .def(py::self < py::self)
         .def(py::self + py::self)
         .def(py::self - py::self)
+        .def(-py::self)
         .def("__repr__", [](SpinQuantum *self) {
             stringstream ss;
             ss << *self;
@@ -121,6 +122,7 @@ void pybind_symmetry(py::module &m) {
             "transform_state", &StateInfo::transform_state,
             "Truncate state space based on dimension of rotation matrix.")
         .def("collect_quanta", &StateInfo::CollectQuanta)
+        .def_readwrite("n_total_states", &StateInfo::totalStates)
         .def("copy",
              [](StateInfo *self) {
                  StateInfo x = *self;
@@ -134,15 +136,17 @@ void pybind_symmetry(py::module &m) {
     
     py::bind_vector<vector<boost::shared_ptr<StateInfo>>>(m, "VectorStateInfo");
 
-    m.def("tensor_product", [](StateInfo &a, StateInfo &b) {
+    m.def("state_tensor_product", [](StateInfo &a, StateInfo &b) {
         StateInfo c;
         TensorProduct(a, b, c, NO_PARTICLE_SPIN_NUMBER_CONSTRAINT, 0);
         return c;
     }, py::keep_alive<0, 1>(), py::keep_alive<0, 2>());
 
-    m.def("tensor_product_target", [](StateInfo &a, StateInfo &b) {
+    m.def("state_tensor_product_target", [](StateInfo &a, StateInfo &b) {
         StateInfo c;
         TensorProduct(a, b, c, PARTICLE_SPIN_NUMBER_CONSTRAINT);
         return c;
     }, py::keep_alive<0, 1>(), py::keep_alive<0, 2>());
+    
+    m.def("get_commute_parity", &getCommuteParity, py::arg("a"), py::arg("b"), py::arg("c"));
 }

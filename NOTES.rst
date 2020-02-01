@@ -44,6 +44,7 @@ NOTES
 .. code:: bash
 
     for i in `ls *.C *.h include/*.C include/*.h`; do wc -l $i | awk '{print $1}' >> AA ; done
+    for i in `find . -name '*.py' -not -path '*/\.*'`; do wc -l $i | awk '{print $1}' >> AA ; done
     cat AA | awk '{n+=$1}; END {print n}'
 
 * Install using ``pip3``

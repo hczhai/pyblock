@@ -2,13 +2,18 @@
 """Classes for handling symmetries and quantum numbers."""
 
 
-def tensor_product(*args, **kwargs):
-    """tensor_product(arg0: block.symmetry.StateInfo, arg1: block.symmetry.StateInfo) -> block.symmetry.StateInfo"""
+def get_commute_parity(*args, **kwargs):
+    """get_commute_parity(a: block.symmetry.SpinQuantum, b: block.symmetry.SpinQuantum, c: block.symmetry.SpinQuantum) -> float"""
     pass
 
 
-def tensor_product_target(*args, **kwargs):
-    """tensor_product_target(arg0: block.symmetry.StateInfo, arg1: block.symmetry.StateInfo) -> block.symmetry.StateInfo"""
+def state_tensor_product(*args, **kwargs):
+    """state_tensor_product(arg0: block.symmetry.StateInfo, arg1: block.symmetry.StateInfo) -> block.symmetry.StateInfo"""
+    pass
+
+
+def state_tensor_product_target(*args, **kwargs):
+    """state_tensor_product_target(arg0: block.symmetry.StateInfo, arg1: block.symmetry.StateInfo) -> block.symmetry.StateInfo"""
     pass
 
 
@@ -74,6 +79,10 @@ Overloaded function.
 
     def __sub__(self, *args, **kwargs):
         """__sub__(self: block.symmetry.SpinQuantum, arg0: block.symmetry.SpinQuantum) -> std::vector<SpinAdapted::SpinQuantum, std::allocator<SpinAdapted::SpinQuantum> >"""
+        pass
+
+    def __neg__(self, *args, **kwargs):
+        """__neg__(self: block.symmetry.SpinQuantum) -> block.symmetry.SpinQuantum"""
         pass
 
     def __repr__(self, *args, **kwargs):
@@ -142,6 +151,10 @@ class StateInfo:
 
     @property
     def uncollected_state_info(self):
+        pass
+
+    @property
+    def n_total_states(self):
         pass
 
     def __init__(self, *args, **kwargs):

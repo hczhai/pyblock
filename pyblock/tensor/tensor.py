@@ -1,6 +1,6 @@
 
 import numpy as np
-from itertools import accumulate
+from itertools import accumulate, groupby
 
 
 class SubTensor:
@@ -52,6 +52,10 @@ class SubTensor:
 
     def __mul__(self, o):
         return SubTensor(q_labels=self.q_labels, reduced=o * reduced, cgs=self.cgs)
+    
+    def __eq__(self, o):
+        return self.q_labels == o.q_labels and np.allclose(self.reduced, o.reduced) \
+            and all(np.allclose(cgx, cgy) for cgx, cgy in zip(self.cgs, o.cgs))
 
     def __repr__(self):
         return "(Q=) %r (R=) %r" % (self.q_labels, self.reduced)
@@ -68,6 +72,10 @@ class Tensor:
         self.contractor = contractor
 
     def copy(self):
+        return Tensor(blocks=self.blocks, tags=self.tags.copy(),
+                      contractor=self.contractor)
+    
+    def deep_copy(self):
         return Tensor(blocks=self.blocks[:], tags=self.tags.copy(),
                       contractor=self.contractor)
 
@@ -82,6 +90,9 @@ class Tensor:
     @property
     def n_blocks(self):
         return len(self.blocks)
+    
+    def modify(self, other):
+        self.blocks[:] = other.blocks
 
     # build the tensor by coupling states in pre and basis into states in post
     @staticmethod
@@ -144,7 +155,7 @@ class Tensor:
                         block.reduced[i, j, k] = 1.0
                         k += 1
             cur_idx[q_labels_r] = k
-
+    
     # the indices in idx_l will be combined
     # the indices in idx_r will also be combined
     # then for each entry if q_label(idx_l) == q_label(idx_r), the term will be included
@@ -166,7 +177,8 @@ class Tensor:
                 outg = tuple(block.q_labels[id] for id in out_idx)
                 mat = np.einsum(block.reduced, trace_scr)
                 if outg not in map_idx_out:
-                    cgs = [np.einsum(cg, trace_scr) for cg in block.cgs]
+                    cgs = [np.einsum(cg, trace_scr) for cg in block.cgs] \
+                          if block.cgs is not None else None
                     map_idx_out[outg] = SubTensor(
                         q_labels=outg, reduced=mat, cgs=cgs)
                 else:
@@ -212,7 +224,8 @@ class Tensor:
                             block_a.reduced, block_b.reduced, axes=(idxa, idxb))
                         if outg not in map_idx_out:
                             cgs = [np.tensordot(cga, cgb, axes=(idxa, idxb))
-                                   for cga, cgb in zip(block_a.cgs, block_b.cgs)]
+                                   for cga, cgb in zip(block_a.cgs, block_b.cgs)] \
+                                   if block_a.cgs is not None and block_b.cgs is not None else None
                             map_idx_out[outg] = SubTensor(
                                 q_labels=outg, reduced=mat, cgs=cgs)
                         else:
@@ -254,7 +267,102 @@ class Tensor:
                                 else:
                                     map_idx_out[outg].reduced += mat
         return Tensor(map_idx_out.values())
-
+    
+    # Singular Value Decomposition of rank-2 block-diagonal Tensor
+    # k: maximal bond length; k == -1 -> no truncation
+    # return left_tensor, right_tensor, singular values (list), error
+    def svd(self, k=-1):
+        assert self.rank == 2
+        blocks_l = []
+        blocks_r = []
+        svd_s = []
+        total_k = 0
+        for block in self.blocks:
+            assert block.q_labels[0] == block.q_labels[1]
+            u, s, vh = np.linalg.svd(block.reduced, full_matrices=False)
+            blocks_l.append(SubTensor(block.q_labels, u))
+            blocks_r.append(SubTensor(block.q_labels, vh))
+            svd_s.append(s)
+            total_k += len(s)
+        
+        if k == -1 or total_k <= k:
+            # no truncation
+            return Tensor(blocks_l), Tensor(blocks_r), svd_s, 0.0
+        else:
+            error = 0.0
+            ss = [(i, j, v) for i, ps in enumerate(svd_s) for j, v in enumerate(ps)]
+            assert len(ss) == total_k
+            ss.sort(key=lambda x: -x[2])
+            ss_trunc = ss[:k]
+            ss_trunc.sort(key=lambda x: (x[0], x[1]))
+            blocks_covered = [False] * len(self.blocks)
+            for ik, g in groupby(ss_trunc, key=lambda x: x[0]):
+                gl = [ig[1] for ig in g]
+                gll = len(gl)
+                assert gll == abs(gl[-1] - gl[0]) + 1
+                glb, gle = sorted([gl[0], gl[-1]])
+                blocks_covered[ik] = True
+                if gll != len(svd_s[ik]):
+                    blocks_l[ik].reduced = blocks_l[ik].reduced[:, glb:gle + 1]
+                    blocks_l[ik].reduced_shape = blocks_l[ik].reduced.shape
+                    blocks_r[ik].reduced = blocks_r[ik].reduced[glb:gle + 1, :]
+                    blocks_r[ik].reduced_shape = blocks_r[ik].reduced.shape
+                    svd_s[ik] = svd_s[ik][glb:gle + 1]
+                    error += svd_s[ik][:glb].sum() + svd_s[ik][gle + 1:].sum()
+            blocks_l_trunc = []
+            blocks_r_trunc = []
+            svd_s_trunc = []
+            for ik, cov in enumerate(blocks_covered):
+                if cov:
+                    blocks_l_trunc.append(blocks_l[ik])
+                    blocks_r_trunc.append(blocks_r[ik])
+                    svd_s_trunc.append(svd_s[ik])
+                else:
+                    error += svd_s[ik].sum()
+            return Tensor(blocks_l_trunc), Tensor(blocks_r_trunc), svd_s_trunc, error
+    
+    # split rank-2 block-diagonal Tensor to two tensors
+    # using svd
+    # k: maximal bond length; k == -1 -> no truncation
+    # return left_tensor, right_tensor, error
+    # if absorb_right is Ture, singlular values will be multiplied into right Tensor
+    # otherwise, multiplied into right Tensor
+    def split(self, absorb_right, k=-1):
+        ts_l, ts_r, svd_s, error = self.svd(k=k)
+        assert ts_l.n_blocks == ts_r.n_blocks and ts_l.n_blocks == len(svd_s)
+        for l, r, s in zip(ts_l.blocks, ts_r.blocks, svd_s):
+            if absorb_right:
+                # np.diag(g).dot(x) == g[:, None] * x (faster)
+                r.reduced = s[:, None] * r.reduced
+            else:
+                # x.dot(np.diag(g)) == g[None, :] * x (faster)
+                l.reduced = s[None, :] * l.reduced
+        return ts_l, ts_r, error
+    
+    def right_normalize(self):
+        at = 1
+        collected_cols = {}
+        for block in self.blocks:
+            q_labels_l = tuple(block.q_labels[id]
+                               for id in range(0, at))
+            if q_labels_l not in collected_cols:
+                collected_cols[q_labels_l] = []
+            collected_cols[q_labels_l].append(block)
+        l_blocks = {}
+        for q_labels_l, blocks in collected_cols.items():
+            r_shapes = [np.prod([b.reduced.shape[id]
+                                 for id in range(at, self.rank)]) for b in blocks]
+            mat = np.concatenate([b.reduced.reshape((-1, sh)).T
+                                  for sh, b in zip(r_shapes, blocks)], axis=0)
+            q, r = np.linalg.qr(mat)
+            l_blocks[q_labels_l] = r.T
+            qs = np.split(q, list(accumulate(r_shapes[:-1])), axis=0)
+            assert(len(qs) == len(blocks))
+            for q, b in zip(qs, blocks):
+                b.reduced = q.T.reshape((r.shape[0], ) + b.reduced.shape[at:])
+                b.reduced_shape = b.reduced.shape
+        return l_blocks
+    
     # left normalization needs to collect all left indices for each specific right index
     # so that we will only have one R, but left dim of q is unchanged
     # at: where to divide the tensor into matrix => (0, at) x (at, n_ranks)
@@ -312,6 +420,19 @@ class Tensor:
             else:
                 blocks.append(b)
         return Tensor(blocks=blocks, tags=self.tags, contractor=self.contractor)
+    
+    def __eq__(self, o):
+        lb = sorted(self.blocks, key=lambda x: x.q_labels)
+        rb = sorted(o.blocks, key=lambda x: x.q_labels)
+        if len(lb) != len(rb):
+            return False
+        for l, r in zip(lb, rb):
+            if l != r:
+                return False
+        return True
+    
+    def sort(self):
+        self.blocks = sorted(self.blocks, key=lambda x: x.q_labels)
     
     def __mul__(self, o):
         return Tensor(blocks=[b * o for b in self.blocks], tags=self.tags.copy(),
@@ -371,12 +492,17 @@ class TensorNetwork:
 
     def copy(self):
         return self.__class__(tensors=[t.copy() for t in self.tensors])
+    
+    def deep_copy(self):
+        return self.__class__(tensors=[t.deep_copy() for t in self.tensors])
 
     def remove_tags(self, tags):
         for tensor in self.tensors:
             tensor.tags -= tags
 
     def contract(self, tags, in_place=False):
+        if isinstance(tags, str) or isinstance(tags, int):
+            tags = (tags, )
         cont_tn = self.select(set(tags), which='any')
         ctr = None
         for t in cont_tn.tensors:
