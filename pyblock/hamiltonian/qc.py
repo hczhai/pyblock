@@ -57,7 +57,11 @@ class VInt(TInt):
 # return : options, (1-e array, 2-e array, const energy term)
 def read_fcidump(filename):
     with open(filename, 'r') as f:
-        pars, ints = f.read().split('/')
+        ff = f.read().lower()
+        if '/' in ff:
+            pars, ints = ff.split('/')
+        elif '&end' in ff:
+            pars, ints = ff.split('&end')
         cont = ' '.join(pars.split()[1:])
         cont = cont.split(',')
         cont_dict = {}

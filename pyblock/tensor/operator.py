@@ -22,11 +22,12 @@ class OpExpression:
     pass
 
 class OpElement(OpExpression):
-    __slots__ = ['name', 'site_index', 'sign']
-    def __init__(self, name, site_index, sign=1):
+    __slots__ = ['name', 'site_index', 'sign', 'q_label']
+    def __init__(self, name, site_index, sign=1, q_label=None):
         self.name = name
         self.site_index = site_index
         self.sign = sign
+        self.q_label = q_label
     
     def __repr__(self):
         if self.sign == -1:
@@ -51,7 +52,7 @@ class OpElement(OpExpression):
             return OpString([other, self])
     
     def __neg__(self):
-        return OpElement(self.name, self.site_index, -self.sign)
+        return OpElement(self.name, self.site_index, -self.sign, self.q_label)
     
     def __abs__(self):
         return OpElement(self.name, self.site_index, 1)

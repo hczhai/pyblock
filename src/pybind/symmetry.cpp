@@ -4,6 +4,7 @@
 #include "SpinSpace.h"
 #include "StateInfo.h"
 #include "enumerator.h"
+#include "global.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl_bind.h>
 #include <sstream>
@@ -149,4 +150,8 @@ void pybind_symmetry(py::module &m) {
     }, py::keep_alive<0, 1>(), py::keep_alive<0, 2>());
     
     m.def("get_commute_parity", &getCommuteParity, py::arg("a"), py::arg("b"), py::arg("c"));
+    
+    m.def("wigner_9j", [](int ja, int jb, int jc, int jd, int je, int jf, int jg, int jh, int ji) {
+        return dmrginp.get_ninej()(ja, jb, jc, jd, je, jf, jg, jh, ji);
+    });
 }

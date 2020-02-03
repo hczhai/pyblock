@@ -11,6 +11,9 @@ from fractions import Fraction
 import copy
 import numpy as np
 
+class MPOError(Exception):
+    pass
+
 class MPO(TensorNetwork):
     pass
 
@@ -58,6 +61,9 @@ class BlockMPO(MPO):
         } for sp in self.spatial]
         self.target = ParticleN(self.hamil.n_electrons) \
             * SU2(self.hamil.target_s) * self.PG(self.hamil.target_spatial_sym)
+        
+        self.creation_q_labels = [ParticleN(1) * SU2(Fraction(1, 2)) * self.PG(sp)
+                                 for sp in self.spatial]
 
         self.n_sites = self.hamil.n_sites
         
@@ -97,18 +103,18 @@ class BlockMPO(MPO):
                     mat[2 + j * 2, 0] = -OpElement(OpNames.SD, (j, ))
             lop = np.zeros((mat.shape[0], ), dtype=object)
             rop = np.zeros((mat.shape[1], ), dtype=object)
-            lop[-1] = OpElement(OpNames.H, ())
+            lop[-1] = OpElement(OpNames.H, (), q_label=self.empty)
             if i != 0:
-                lop[0] = OpElement(OpNames.I, ())
+                lop[0] = OpElement(OpNames.I, (), q_label=self.empty)
                 for j in range(0, i):
-                    lop[1 + j * 2] = OpElement(OpNames.S, (j, ))
-                    lop[2 + j * 2] = -OpElement(OpNames.SD, (j, ))
-            rop[0] = OpElement(OpNames.H, ())
+                    lop[1 + j * 2] = OpElement(OpNames.S, (j, ), q_label=-self.creation_q_labels[j])
+                    lop[2 + j * 2] = -OpElement(OpNames.SD, (j, ), q_label=self.creation_q_labels[j])
+            rop[0] = OpElement(OpNames.H, (), q_label=self.empty)
             if i != self.n_sites - 1:
                 for j in range(i + 1):
-                    rop[1 + j * 2] = OpElement(OpNames.C, (j, ))
-                    rop[2 + j * 2] = OpElement(OpNames.D, (j, ))
-                rop[-1] = OpElement(OpNames.I, ())
+                    rop[1 + j * 2] = OpElement(OpNames.C, (j, ), q_label=self.creation_q_labels[j])
+                    rop[2 + j * 2] = OpElement(OpNames.D, (j, ), q_label=-self.creation_q_labels[j])
+                rop[-1] = OpElement(OpNames.I, (), q_label=self.empty)
             self.tensors.append(OperatorTensor(mat=mat, tags={i}, lop=lop, rop=rop,
                 ops=self.site_operators[i], contractor=self))
 
@@ -168,10 +174,11 @@ class BlockMPO(MPO):
             from block.symmetry import state_tensor_product_target
             st = state_tensor_product_target(hmpo.left_op_names, hmpo.right_op_names)
             st.collect_quanta()
-            direct = BlockEvaluation.expr_eval(hmpo.mat[0, 0], hmpo.ops[0], hmpo.ops[1], st)
+            direct = BlockEvaluation.expr_eval(hmpo.mat[0, 0], hmpo.ops[0], hmpo.ops[1], st, self.empty)
             evs = []
             for k, v in direct.non_zero_blocks:
                 p, pp = np.linalg.eigh(v.ref)
+                assert np.allclose(v.ref - v.ref.T, 0.0)
                 ppp = sorted(zip(p, pp.T), key=lambda x : x[0])
                 evs.append((ppp[0][0], ppp[0][1], k))
             evs.sort()
@@ -185,6 +192,13 @@ class BlockMPO(MPO):
                 wfn.operator_element(il, ir).ref[:, :] = evs[0][1][ig:ig + gnx].reshape(gn)
                 ig += gnx
             assert ig == len(evs[0][1])
+            
+            a = BlockMultiplyH(hmpo)
+            b = BlockWavefunction(wfn)
+            br = b.clear_copy()
+            a.apply(b, br)
+            br += (-evs[0][0]) * b
+            assert np.isclose(br.dot(br), 0.0)
             
             v = self.info.from_wavefunction_fused(self._tag_site(mps_tensors[0]), wfn)
             return evs[0][0] + self.hamil.e, v
@@ -200,9 +214,8 @@ class BlockMPO(MPO):
             es, vs = davidson(a, b, 1)
             
             if len(es) == 0:
-                print('danger!!!!!')
-                es = [0.0]
-                vs = b
+                raise MPOError('Davidson not converged!!')
+            
             e = es[0]
             v = self.info.from_wavefunction_fused(self._tag_site(mps_tensors[0]), vs[0].data)
             return e + self.hamil.e, v
@@ -268,4 +281,3 @@ class BlockMPO(MPO):
                 assert False
         else:
             assert False
-        

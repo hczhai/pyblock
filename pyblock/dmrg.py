@@ -121,7 +121,7 @@ class DMRG:
         gs_old = self._k.select({i, i + 1}, which='any')
         
         if h_eff.contractor is not None:
-            energy, gs = h_eff.contractor.exact_eigs(h_eff, gs_old)
+            energy, gs = h_eff.contractor.eigs(h_eff, gs_old)
             
             l_fused, r_fused, error = gs.split(absorb_right=forward, k=bond_dim)
 

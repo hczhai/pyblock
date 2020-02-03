@@ -68,6 +68,7 @@ void TensorTraceElement(const StackSparseMatrix &a, StackSparseMatrix &c,
             }
 
             if (a.allowed(aq, aqprime) && (bq == bqprime)) {
+                
                 DiagonalMatrix unitMatrix(bstates);
                 unitMatrix = 1.;
 
@@ -118,6 +119,7 @@ void TensorTraceElement(const StackSparseMatrix &a, StackSparseMatrix &c,
                     
                     // fermion check for trace left I(smaller site index) x A
                     
+                    
                     if (a.get_fermion() &&
                         
                         // defined in SpinQuantum
@@ -127,6 +129,7 @@ void TensorTraceElement(const StackSparseMatrix &a, StackSparseMatrix &c,
                     MatrixTensorProduct(
                         unity, 'n', scaleb, a.operator_element(aq, aqprime),
                         a.conjugacy(), scale, cel, rowstride, colstride);
+                    
                 }
             }
             colstride += cs->unCollectedStateInfo->quantaStates[oldToNewJ[oldj]];
@@ -296,7 +299,7 @@ void TensorProductElement(const StackSparseMatrix &a, const StackSparseMatrix &b
                 scaleA *= a.get_scaling(lbraS->quanta[aq],
                                         lketS->quanta[aqprime]);
                 if (b.get_fermion() &&
-                    IsFermion(lbraS->quanta[aqprime]))
+                    IsFermion(lketS->quanta[aqprime]))
                     scaleB *= -1;
                 
                 MatrixTensorProduct(
@@ -415,6 +418,61 @@ void TensorRotate(const StackSparseMatrix &a, StackSparseMatrix &c,
     
 }
 
+// void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &b,
+//                     const StackWavefunction &c, StackWavefunction &v,
+//                     const StateInfo &state_info, const SpinQuantum op_q, double scale) {
+    
+//     assert(op_q.get_s().getirrep() == 0);
+//     assert(op_q.get_symm().getirrep() == 0);
+    
+//     // cannot be used for situation with different bra and ket
+//     const int leftBraOpSz = state_info.leftStateInfo->quanta.size();
+//     const int leftKetOpSz = state_info.leftStateInfo->quanta.size();
+//     const int rightBraOpSz = state_info.rightStateInfo->quanta.size();
+//     const int rightKetOpSz = state_info.rightStateInfo->quanta.size();
+
+//     const StateInfo *lbraS = state_info.leftStateInfo,
+//                     *lketS = state_info.leftStateInfo;
+//     const StateInfo *rbraS = state_info.rightStateInfo,
+//                     *rketS = state_info.rightStateInfo;
+
+//         for (int lQ = 0; lQ < leftBraOpSz; ++lQ) {
+//             for (int lQPrime = 0; lQPrime < leftKetOpSz; ++lQPrime) {
+//                 if (a.allowed(lQ, lQPrime)) {
+//                     const StackMatrix &aop = a.operator_element(lQ, lQPrime);
+//                     for (int rQ = 0; rQ < rightKetOpSz; ++rQ)
+//                         if (c.allowed(lQPrime, rQ) && v.allowed(lQ, rQ)) {
+//                             double fac = scale;
+//                             fac *= dmrginp.get_ninej()(
+//                                 lketS->quanta[lQPrime].get_s().getirrep(),
+//                                 rketS->quanta[rQ].get_s().getirrep(),
+//                                 c.get_deltaQuantum(0).get_s().getirrep(),
+//                                 a.get_spin().getirrep(), 0,
+//                                 a.get_spin().getirrep(),
+//                                 lbraS->quanta[lQ].get_s().getirrep(),
+//                                 rketS->quanta[rQ].get_s().getirrep(),
+//                                 v.get_deltaQuantum(0).get_s().getirrep());
+//                             // fac *=
+//                             // Symmetry::spatial_ninej(lketS->quanta[lQPrime].get_symm().getirrep()
+//                             // , rketS->quanta[rQ].get_symm().getirrep(),
+//                             // c.get_symm().getirrep(), a.get_symm().getirrep(),
+//                             // 0, a.get_symm().getirrep(),
+//                             // lbraS->quanta[lQ].get_symm().getirrep() ,
+//                             // rketS->quanta[rQ].get_symm().getirrep(),
+//                             // v.get_symm().getirrep());
+//                             fac *= a.get_scaling(lbraS->quanta[lQ],
+//                                                  lketS->quanta[lQPrime]);
+//                             MatrixMultiply(aop, a.conjugacy(),
+//                                            c.operator_element(lQPrime, rQ),
+//                                            c.conjugacy(),
+//                                            v.operator_element(lQ, rQ), fac);
+//                         }
+//                 }
+//             }
+//         }
+    
+// }
+    
 // MPO (a x b) act on MPS (c) => MPS (v)
 // v = (lq) a(left) .(lq') c .(rq') b(right) (rq)
 // ket state info = c state info in lq' x rq'

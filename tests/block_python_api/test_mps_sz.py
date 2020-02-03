@@ -1,5 +1,11 @@
 
-from pyblock.hamiltonian.block import BlockHamiltonian, BlockSymmetry
+# This code is used to generate random initial MPS
+# for starting block code in non-spin-adapted mode
+# After finishing this code, run block code with fullrestart
+# to get the final energy.
+# E = -107.648250907901
+
+from pyblock.hamiltonian.block import BlockHamiltonian, BlockSymmetry, MPSInfo
 from pyblock.symmetry.symmetry import LineCoupling, ParticleN, SZ, PGC1, SU2
 from pyblock.tensor.mps import MPS
 from block import save_rotation_matrix
@@ -53,26 +59,17 @@ mps = MPS.from_line_coupling(lc)
 mps.randomize()
 mps.left_normalize()
 
-# initialize block program using some random parameters
-def block_init():
-    ham = BlockHamiltonian(fcidump=fcidump, point_group=point_group, dot=dot, spin_adapted=spin_adapted, output_level=0)
-    print("block site basis = ", BlockSymmetry.initial_state_info(0))
+# initialize block program
+ham = BlockHamiltonian(fcidump=fcidump, point_group=point_group, dot=dot, spin_adapted=spin_adapted, output_level=0)
+print("block site basis = ", BlockSymmetry.initial_state_info(0))
 
-def translate_rotation_matrices(mps):
-    rot_mats = {}
-    infos = {}
-    # current state_info
-    cur = BlockSymmetry.initial_state_info(0)
-    t0 = mps[0]
-    for i in range(1, n_sites):
-        rot, cur = BlockSymmetry.to_rotation_matrix(cur, mps[i], i, t0)
-        t0 = None
-        rot_mats[tuple(range(0, i + 1))] = rot
-        infos[tuple(range(0, i + 1))] = cur
-    return rot_mats, infos
+info = MPSInfo.from_line_coupling(lc)
+info.init_state_info()
 
-block_init()
-rot_mats, _ = translate_rotation_matrices(mps)
+rot_mats = {}
+for i in range(0, ham.n_sites):
+    rot_mats[tuple(range(0, i + 1))] = info.get_left_rotation_matrix(i, mps[i])
+
 for k, v in rot_mats.items():
     # translate the list of spatial orbitals to list of spin-orbitals
     if not spin_adapted:

@@ -15,6 +15,7 @@ Sandeep Sharma and Garnet K.-L. Chan
 #include <cassert>
 #include <cstdio>
 #include <fstream>
+#include <iostream>
 #include <map>
 #include <newmat.h>
 #include <newmatio.h>

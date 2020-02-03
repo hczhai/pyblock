@@ -255,6 +255,10 @@ void pybind_operator(py::module &m) {
                       },
                       "A map from pair of bra and ket indices, to the index in "
                       ":attr:`StackSparseMatrix.non_zero_blocks`.")
+        .def_property("fermion", &StackSparseMatrix::get_fermion,
+            [](StackSparseMatrix *self, bool f) {
+                self->set_fermion() = f;
+            })
         .def_property(
             "delta_quantum",
             [](StackSparseMatrix *self) { return self->set_deltaQuantum(); },

@@ -1,4 +1,9 @@
 
+# Example:
+# Block SU(2) DMRG with initial MPS genereated from one HF determinant
+# this is simply a wrapper for the "MPS" code defined inside Block code
+# Energy = -107.6482508192
+
 from pyblock.block_dmrg import DMRG as BLOCK_DMRG
 from block.dmrg import MPS as BLOCK_MPS, SweepParams, MPS_init
 from block import VectorBool

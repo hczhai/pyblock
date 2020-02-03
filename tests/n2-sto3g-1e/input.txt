@@ -1,0 +1,14 @@
+sym d2h 
+orbitals N2-1E.FCIDUMP
+
+nelec 14
+spin 0
+irrep 1
+
+outputlevel 1
+hf_occ integral
+schedule default
+maxM 500
+maxiter 30
+noreorder
+twodot
