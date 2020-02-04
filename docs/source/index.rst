@@ -10,7 +10,8 @@ Welcome to PyBlock's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   modules
+   API/modules-py
+   API/modules-block
 
 Indices and tables
 ==================

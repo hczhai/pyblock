@@ -1,10 +1,10 @@
 
-References
-==========
+Block API References
+====================
 
 .. toctree::
    :maxdepth: 2
-
+   
    block
    block-io
    block-dmrg

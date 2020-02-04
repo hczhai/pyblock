@@ -1,8 +1,32 @@
+#
+#    pyblock: Spin-adapted quantum chemistry DMRG in MPO language (based on Block C++ code)
+#    Copyright (C) 2019-2020 Huanchen Zhai
+#
+#    Block 1.5.3: density matrix renormalization group (DMRG) algorithm for quantum chemistry
+#    Developed by Sandeep Sharma and Garnet K.-L. Chan, 2012
+#    Copyright (C) 2012 Garnet K.-L. Chan
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+Davidson diagonalization algorithm.
+"""
 
 import numpy as np
 
-# general interface of Vector for Davidson algorithm
 class Vector:
+    """General interface of Vector for Davidson algorithm"""
     def __init__(self, arr, factor=1.0):
         self.data = arr
         self.factor = factor
@@ -20,48 +44,76 @@ class Vector:
         return self
     
     def copy(self):
+        """Return a deep copy of this object."""
         return Vector(self.data.copy(), self.factor)
     
     def clear_copy(self):
+        """Return a deep copy of this object, but all the matrix elements are set to zero."""
         return Vector(np.zeros_like(self.data), self.factor)
     
     def copy_data(self, other):
+        """Fill the matrix elements in this object with data
+        from another :class:`Vector` object."""
         self.data = other.data.copy()
         self.factor = other.factor
     
     def dot(self, other):
+        """Dot product."""
         return np.dot(self.data, other.data) * self.factor * other.factor
     
     def precondition(self, ld, diag):
+        """
+        Apply precondition on this object.
+        
+        Args:
+            ld : float
+                Eigenvalue.
+            diag : numpy.ndarray
+                Diagonal elements of Hamiltonian, stored in 1D array.
+        """
         assert len(diag) == len(self.data)
         for i in range(len(self.data)):
             if abs(ld - diag[i]) > 1E-12:
                 self.data[i] /= ld - diag[i]
     
     def normalize(self):
+        """Normalization."""
         self.data = self.data / np.sqrt(np.dot(self.data, self.data))
         self.factor = 1.0
     
     def deallocate(self):
+        """Deallocate the memory associated with this object.
+        This is no-op for numpy.ndarray backend used here."""
         assert self.data is not None
         self.data = None
     
     def __repr__(self):
         return repr(self.factor) + " * " + repr(self.data)
 
-# general interface of Matrix for Davidson algorithm
 class Matrix:
+    """General interface of Matrix for Davidson algorithm."""
     def __init__(self, arr):
         self.data = arr
     
     def diag(self):
+        """Diagonal elements."""
         return np.diag(self.data)
     
     def apply(self, other, result):
+        """
+        Perform :math:`\\hat{H}|\\psi\\rangle`.
+        
+        Args:
+            other : Vector
+                Input vector.
+            result : Vector
+                Output vector.
+        """
         result.data = np.dot(self.data, other.data)
         result.factor = other.factor
 
 def olsen_precondition(q, c, ld, diag):
+    """Olsen precondition."""
     t = c.copy()
     t.precondition(ld, diag)
     numerator = t.dot(q)
@@ -71,7 +123,34 @@ def olsen_precondition(q, c, ld, diag):
     t.deallocate()
 
 # E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
-def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, deflation_max_size=20):
+def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, deflation_max_size=20, iprint=True):
+    """
+    Davidson diagonalization.
+    
+    Args:
+        a : Matrix
+            The matrix to diagonalize.
+        b : list(Vector)
+            The initial guesses for eigenvectors.
+    
+    Kwargs:
+        max_iter : int
+            Maximal number of davidson iteration.
+        conv_thold : float
+            Convergence threshold for squared norm of eigenvector.
+        deflation_min_size : int
+            Sub-space size after deflation.
+        deflation_max_size : int
+            Maximal sub-space size before deflation.
+        iprint : bool
+            Indicate whether davidson iteration information should be printed.
+    
+    Returns:
+        ld : list(float)
+            List of eigenvalues.
+        b : list(Vector)
+            List of eigenvectors.
+    """
     assert len(b) == k
     if deflation_min_size < k:
         deflation_min_size = k
@@ -121,7 +200,8 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
         q.copy_data(sigma[ck])
         q += (-ld[ck]) * b[ck]
         qq = q.dot(q)
-#         print("%5d %5d %5d %15.8f %9.2e" % (xiter, m, ck, ld[ck], qq))
+        if iprint:
+            print("%5d %5d %5d %15.8f %9.2e" % (xiter, m, ck, ld[ck], qq))
         
         # precondition
         olsen_precondition(q, b[ck], ld[ck], aa)
@@ -132,7 +212,6 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
                 break
         else:
             if m >= deflation_max_size:
-#                 print("deflating block davidson...")
                 m = deflation_min_size
                 msig = deflation_min_size
             for j in range(m):

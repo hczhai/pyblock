@@ -1,8 +1,33 @@
+#
+#    pyblock: Spin-adapted quantum chemistry DMRG in MPO language (based on Block C++ code)
+#    Copyright (C) 2019-2020 Huanchen Zhai
+#
+#    Block 1.5.3: density matrix renormalization group (DMRG) algorithm for quantum chemistry
+#    Developed by Sandeep Sharma and Garnet K.-L. Chan, 2012
+#    Copyright (C) 2012 Garnet K.-L. Chan
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+Symbolic operators.
+"""
 
 import numpy as np
 from enum import Enum, auto
 
 class OpNames(Enum):
+    """Operator Names."""
     H = auto()
     S = auto()
     D = auto()
@@ -22,6 +47,19 @@ class OpExpression:
     pass
 
 class OpElement(OpExpression):
+    """
+    Single operator symbol.
+    
+    Attributes:
+        name : :class:`OpNames`
+            Type of the operator.
+        site_index : () or tuple(int..)
+            Site indices of the operator.
+        sign : int (1 or -1)
+            Sign factor.
+        q_label : DirectProdGroup
+            Quantum label of the operator.
+    """
     __slots__ = ['name', 'site_index', 'sign', 'q_label']
     def __init__(self, name, site_index, sign=1, q_label=None):
         self.name = name
@@ -78,11 +116,24 @@ class OpElement(OpExpression):
     
     @staticmethod
     def parse(expr):
+        """Parse a str to operator symbol."""
         for name, op in sorted(op_names, key=lambda x: -len(x[0])):
             if expr.startswith(name):
                 return OpElement(op, OpElement.parse_site_index(expr[len(name):].strip()))
     
 class OpString(OpExpression):
+    """
+    String of operator symbols representing direct product of single operator symbols.
+    
+    Attributes:
+        ops : list(:class:`OpElement`)
+            A list of single operator symbols.
+        sign : int (1 or -1)
+            Sign factor. Currently this is used to indicate whether the order
+            of fermionic operators has been changed (which gives a fermionic sign factor).
+            Other factors (such as SU(2)) for exchange two operators are not considered here
+            and should be added later by checking this sign.
+    """
     __slots__ = ['ops', 'sign']
     def __init__(self, ops, sign=1):
         self.sign = np.prod([x.sign for x in ops]) * sign
@@ -119,6 +170,12 @@ class OpString(OpExpression):
             return OpSum([other, self])
 
 class OpSum(OpExpression):
+    """
+    Sum of direct product of single operator symbols.
+    
+    Attributes:
+        strings : list(:class:`OpString`)
+    """
     __slots__ = ['strings']
     def __init__(self, strings):
         self.strings = strings

@@ -1,3 +1,27 @@
+#
+#    pyblock: Spin-adapted quantum chemistry DMRG in MPO language (based on Block C++ code)
+#    Copyright (C) 2019-2020 Huanchen Zhai
+#
+#    Block 1.5.3: density matrix renormalization group (DMRG) algorithm for quantum chemistry
+#    Developed by Sandeep Sharma and Garnet K.-L. Chan, 2012
+#    Copyright (C) 2012 Garnet K.-L. Chan
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+DMRG algorithm.
+"""
 
 from .tensor.tensor import Tensor
 
@@ -5,6 +29,23 @@ class DMRGError(Exception):
     pass
 
 class MovingEnvironment:
+    """
+    Environment blocks in DMRG.
+    
+    Attributes:
+        n_sites : int
+            Number of sites/orbitals.
+        dot : int
+            Two-dot (2) or one-dot (1) scheme.
+        forward : bool
+            Direction of current sweep. If True, sweep is performed from left to right.
+        tnc : TensorNetwork
+            The tensor network <bra|H|ket> before contraction.
+        pos : int
+            Current site position of left dot.
+        envs : dict(int -> TensorNetwork)
+            DMRG Environment for different positions of left dot.
+    """
     def __init__(self, n_sites, dot, tn, forward, complete=False):
         self.dot = dot
         self.n_sites = n_sites
@@ -15,6 +56,15 @@ class MovingEnvironment:
         self.init_environments(forward, complete)
     
     def init_environments(self, forward, complete):
+        """
+        Initialize DMRG Environment blocks by contraction.
+        
+        Args:
+            forward : bool
+                Direction of current sweep. If True, sweep is performed from left to right.
+            complete : bool
+                Whether extra edge environments (not used in DMRG algorithm) should be generated.
+        """
 
         self.tnc |= Tensor(blocks=None, tags={'_LEFT', '_HAM'})
         self.tnc |= Tensor(blocks=None, tags={'_RIGHT', '_HAM'})
@@ -63,6 +113,9 @@ class MovingEnvironment:
             self.pos = self.n_sites - self.dot
 
     def move_to(self, i):
+        """
+        Change the current left dot site to ``i`` (by zero or one site).
+        """
         if i > self.pos:
             # move right
             new_sys = self.envs[self.pos].select({'_LEFT', self.pos}, which='any')
@@ -78,7 +131,22 @@ class MovingEnvironment:
         return self.envs[self.pos]
 
 class DMRG:
-    def __init__(self, mpo, bond_dims, cut_offs=1E-9, dot=2, mps=None):
+    """
+    DMRG algorithm.
+    
+    Attributes:
+        n_sites : int
+            Number of sites/orbitals
+        dot : int
+            Two-dot (2) or one-dot (1) scheme.
+        bond_dims : list(int) or int
+            Bond dimension for each sweep.
+        tn : TensorNetwork
+            The tensor network <bra|H|ket> before contraction.
+        energies : list(float)
+            Energies collected for all sweeps.
+    """
+    def __init__(self, mpo, bond_dims, dot=2, mps=None):
         self.n_sites = mpo.n_sites
         self.dot = dot
         self.bond_dims = bond_dims if isinstance(
@@ -101,6 +169,7 @@ class DMRG:
         self.energies = []
     
     def update_one_dot(self, i, forward, bond_dim):
+        """Update local site in one-dot scheme. Not implemented."""
         
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
 
@@ -111,11 +180,27 @@ class DMRG:
         else:
             raise DMRGError('general eigenvalue solver is not defined!')
         
-        self._k[i].modify(data=gs)
-        self._b[i].modify(data=gs)
+        self._k[i].modify(gs)
+        self._b[i].modify(gs)
     
     def update_two_dot(self, i, forward, bond_dim):
+        """
+        Update local site in two-dot scheme.
         
+        Args:
+            i : int
+                Site index of left dot
+            forward : bool
+                Direction of current sweep. If True, sweep is performed from left to right.
+            bond_dims : int
+                Bond dimension of current sweep.
+        
+        Returns:
+            energy : float
+                Ground state energy.
+            error : float
+                Sum of discarded weights.
+        """
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         
         gs_old = self._k.select({i, i + 1}, which='any')
@@ -140,7 +225,23 @@ class DMRG:
         return energy, error
 
     def blocking(self, i, forward, bond_dim):
-
+        """
+        Perform one blocking iteration.
+        
+        Args:
+            i : int
+                Site index of left dot
+            forward : bool
+                Direction of current sweep. If True, sweep is performed from left to right.
+            bond_dims : int
+                Bond dimension of current sweep.
+        
+        Returns:
+            energy : float
+                Ground state energy.
+            error : float
+                Sum of discarded weights.
+        """
         self.eff_ham.move_to(i)
 
         if self.dot == 1:
@@ -149,7 +250,19 @@ class DMRG:
             return self.update_two_dot(i, forward, bond_dim)
 
     def sweep(self, forward, bond_dim):
+        """
+        Perform one sweep iteration.
         
+        Args:
+            forward : bool
+                Direction of current sweep. If True, sweep is performed from left to right.
+            bond_dims : int
+                Bond dimension of current sweep.
+        
+        Returns:
+            energy : float
+                Ground state energy.
+        """
         self.eff_ham = MovingEnvironment(self.n_sites, self.dot, self.tn, forward)
 
         # if forward/backward, i is the first dot site
@@ -170,7 +283,19 @@ class DMRG:
         return sorted(sweep_energies)[0]
 
     def solve(self, n_sweeps, tol):
-
+        """
+        Perform DMRG algorithm.
+        
+        Args:
+            n_sweeps : int
+                Maximum number of sweeps.
+            tol : float
+                Energy convergence threshold.
+        
+        Returns:
+            energy : float
+                Final ground state energy.
+        """
         forward = False
         converged = False
 

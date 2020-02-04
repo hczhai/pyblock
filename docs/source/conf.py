@@ -57,6 +57,7 @@ else:
     html_theme = 'bizstyle'
     sys.path.insert(0, os.path.abspath('../../build'))
 
+sys.path.insert(0, os.path.abspath('../..'))
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

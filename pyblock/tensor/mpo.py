@@ -1,3 +1,27 @@
+#
+#    pyblock: Spin-adapted quantum chemistry DMRG in MPO language (based on Block C++ code)
+#    Copyright (C) 2019-2020 Huanchen Zhai
+#
+#    Block 1.5.3: density matrix renormalization group (DMRG) algorithm for quantum chemistry
+#    Developed by Sandeep Sharma and Garnet K.-L. Chan, 2012
+#    Copyright (C) 2012 Garnet K.-L. Chan
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+Matrix Product Operator.
+"""
 
 from ..symmetry.symmetry import ParticleN, SU2, LineCoupling
 from ..symmetry.symmetry import point_group
@@ -18,6 +42,23 @@ class MPO(TensorNetwork):
     pass
 
 class OperatorTensor(Tensor):
+    """
+    MPO tensor.
+    
+    Attributes:
+        mat : numpy.ndarray(dtype=OpExpression)
+            2-D array of Symbolic operator expressions.
+        ops : dict(OpElement -> StackSparseMatrix)
+            Numeric representation of operator symbols.
+            When the object is the super block MPO, :attr:`ops` is a pair of dicts representing
+            operator symbols for left and right blocks, respectively.
+        left_op_names : numpy.ndarray(dtype=OpExpression)
+            1-D array of operator symbols, for naming the result Symbolically from left-block blocking.
+            When the object is the super block MPO, :attr:`left_op_names` is the left block StateInfo.
+        right_op_names : numpy.ndarray(dtype=OpExpression)
+            1-D array of operator symbols, for naming the result Symbolically from right-block blocking.
+            When the object is the super block MPO, :attr:`right_op_names` is the right block StateInfo.
+    """
     def __init__(self, mat, ops, tags=None, contractor=None, lop=None, rop=None):
         self.mat = mat
         self.ops = ops
@@ -37,12 +78,42 @@ class OperatorTensor(Tensor):
             assert False
     
     def copy(self):
+        """Return shallow copy of this object."""
         assert isinstance(self.ops, dict)
         return OperatorTensor(mat=self.mat.copy(), ops=self.ops.copy(),
             lop=self.left_op_names.copy(), rop=self.right_op_names.copy(),
             tags=self.tags.copy(), contractor=self.contractor)
 
 class BlockMPO(MPO):
+    """
+    MPO chain for interfacing block code.
+    
+    Attributes:
+        hamil : BlockHamiltonian
+            Hamiltonian.
+        PG : type(PointGroup)
+            The class for PointGroup (type object).
+        empty : DirectProdGroup
+            Vaccum state.
+        target : DirectProdGroup
+            Target state.
+        spatial : list(str)
+            Name of irreducible representation of point group for each site.
+        site_basis : list(dict(DirectProdGroup -> int))
+            Site basis.
+        creation_q_labels : list(DirectProdGroup)
+            The quantum label of creation operator for each site.
+        n_sites : int
+            Number of sites/orbitals.
+        lcp : LineCoupling
+            LineCoupling object.
+        info : MPSInfo
+            MPSInfo object.
+        site_operators : list(dict(OpElement -> StackSparseMatrix))
+            Numeric representation of operator symbols for each site.
+        tensors : OperatorTensor
+            MPO tensor for each site.
+    """
 
     def __init__(self, hamiltonian):
 
@@ -73,11 +144,13 @@ class BlockMPO(MPO):
         super().__init__()
     
     def init_site_operators(self):
+        """Generate :attr:`site_operators`."""
         self.site_operators = []
         for i in range(self.n_sites):
             self.site_operators.append(self.hamil.get_site_operators(i))
     
     def init_mpo_tensors(self):
+        """Generate :attr:`tensors`."""
         self.tensors = []
         op_h = OpElement(OpNames.H, ())
         op_i = OpElement(OpNames.I, ())
@@ -119,11 +192,14 @@ class BlockMPO(MPO):
                 ops=self.site_operators[i], contractor=self))
 
     def copy(self):
+        """Return shallow copy of this object."""
         cp = copy.copy(self)
         cp.tensors = [t.copy() for t in self.tensors]
         return cp
     
     def get_line_coupling(self, bond_dim=-1):
+        """Generate LineCoupling using default scheme, with given maximal bond dimension.
+        The LineCoupling object defines the quantum numbers in MPS and the bond dimension for each quantum number."""
         lcp = LineCoupling(
             self.n_sites, self.site_basis, self.target, self.empty, both_dir=True)
 
@@ -133,23 +209,30 @@ class BlockMPO(MPO):
         return lcp
     
     def set_line_coupling(self, lcp):
+        """Apply the given LineCoupling to generate :attr:`info`."""
         self.lcp = lcp
         self.info = MPSInfo.from_line_coupling(lcp)
         self.info.init_state_info()
 
     def rand_state(self):
+        """Return a MPS filled with random reduced matrices.
+        A LineCoupling must be set before calling this method."""
         assert self.lcp is not None
         mps = MPS.from_line_coupling(self.lcp)
         mps.randomize()
         return mps
     
     def identity_state(self):
+        """Return a MPS filled with identity matrices (whenever possible).
+        A LineCoupling must be set before calling this method."""
         assert self.lcp is not None
         mps = MPS.from_line_coupling(self.lcp)
         mps.build_identity()
         return mps
 
     def hf_state(self, occ):
+        """Return a MPS corresponding to the determinant with given occupation number.
+        Not implemented."""
         pass
     
     def _tag_site(self, tensor):
@@ -166,6 +249,23 @@ class BlockMPO(MPO):
             return None
     
     def exact_eigs(self, hmpo, mps):
+        """
+        Exact diagonalization.
+        
+        Args:
+            hmpo : OperatorTensor
+                Super block MPO.
+            mps : MPS
+                MPS including tensors in dot blocks.
+        
+        Returns:
+            energy : float
+                Ground state energy.
+            v : class:`Tensor`
+                In two-dot scheme, the rank-2 tensor representing two-dot object.
+                Both left and right rank indices are fused. No CG factor are generated.
+                One-dot scheme is not implemented.
+        """
         if len(mps) == 2:
             mps_tensors = sorted(mps.tensors, key=self._tag_site)
             wfn = self.info.get_wavefunction(self._tag_site(mps_tensors[0]), mps_tensors)
@@ -206,6 +306,23 @@ class BlockMPO(MPO):
             assert False
     
     def eigs(self, hmpo, mps):
+        """
+        Davidson diagonalization.
+        
+        Args:
+            hmpo : OperatorTensor
+                Super block MPO.
+            mps : MPS
+                MPS including tensors in dot blocks.
+        
+        Returns:
+            energy : float
+                Ground state energy.
+            v : class:`Tensor`
+                In two-dot scheme, the rank-2 tensor representing two-dot object.
+                Both left and right rank indices are fused. No CG factor are generated.
+                One-dot scheme is not implemented.
+        """
         if len(mps) == 2:
             mps_tensors = sorted(mps.tensors, key=self._tag_site)
             wfn = self.info.get_wavefunction(self._tag_site(mps_tensors[0]), mps_tensors)
@@ -222,18 +339,39 @@ class BlockMPO(MPO):
         else:
             assert False
     
-    # input: the left tensor from svd
     def update_local_mps_info(self, i, l_fused):
+        """Update :attr:`info` for site i using the left tensor from SVD."""
         block_basis = [(b.q_labels[1], b.reduced.shape[1]) for b in l_fused.blocks]
         self.info.update_local_block_basis(i, block_basis)
     
     def unfuse_left(self, i, tensor):
+        __doc__ = self.info.unfuse_left.__doc__
         return self.info.unfuse_left(i, tensor)
     
     def unfuse_right(self, i, tensor):
+        __doc__ = self.info.unfuse_right.__doc__
         return self.info.unfuse_right(i, tensor)
     
     def contract(self, tn, tags):
+        """
+        Tensor network contraction.
+        
+        Args:
+            tn : TensorNetwork
+                Part of tensor network to be contracted.
+            tags : (str, int) or (str, )
+                Tags of the tensor network to be contracted.
+                If tags = ('_LEFT', i), the contraction is corresponding to
+                blocking and renormalizing left block at site i.
+                If tags = ('_RIGHT', i), the contraction is corresponding to
+                blocking and renormalizing right block at site i.
+                If tags = ('_HAM'), the contraction is corresponding to
+                blocking both left and right block and forming the super block hamiltonian.
+        
+        Returns:
+            mpo : OperatorTensor
+                The contracted MPO tensor.
+        """
         assert isinstance(tags, tuple)
         if len(tags) == 2:
             dir, i = tags

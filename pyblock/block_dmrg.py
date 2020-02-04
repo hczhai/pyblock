@@ -1,3 +1,27 @@
+#
+#    pyblock: Spin-adapted quantum chemistry DMRG in MPO language (based on Block C++ code)
+#    Copyright (C) 2019-2020 Huanchen Zhai
+#
+#    Block 1.5.3: density matrix renormalization group (DMRG) algorithm for quantum chemistry
+#    Developed by Sandeep Sharma and Garnet K.-L. Chan, 2012
+#    Copyright (C) 2012 Garnet K.-L. Chan
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+Python wrapper for high-level DMRG algorithm in block code.
+"""
 
 import block
 from block import VectorInt, VectorDouble, VectorBool, VectorMatrix, \
@@ -15,8 +39,10 @@ from block.operator import OperatorCre, OpTypes, Wavefunction, VectorWavefunctio
 
 print(block.__doc__)
 
-# block DMRG in its original workflow
 class DMRG(object):
+    """
+    Block DMRG in its original workflow.
+    """
 
     sweep_params = None
     system = None
@@ -35,9 +61,11 @@ class DMRG(object):
         self.output_level = output_level
 
     def finalize(self):
+        """Release stack memory."""
         release_stack_memory()
 
     def dmrg(self, gen_block=False, rot_mats=None):
+        """Perform DMRG."""
 
         global_timer = Timer()
 
@@ -88,6 +116,7 @@ class DMRG(object):
             print("\t\t\t BLOCK Wall Time (seconds): %.3f" % walltime)
 
     def gen_block_do_one(self, rot_mats=None, implicit_trans=True, do_norms=None, do_comp=None):
+        """Perform one sweep for generating blocks from rotation matrices."""
 
         self.system = Block()
         cur_root = self.sweep_params.current_root
@@ -133,6 +162,7 @@ class DMRG(object):
         self.sweep_params.sweep_iter += 1
 
     def do_one(self, warm_up, forward, restart=False, restart_size=0):
+        """Perform one sweep."""
         sweep_timer = Timer()
 
         self.system = Block()
@@ -232,6 +262,7 @@ class DMRG(object):
         return sum(final_energies) / len(final_energies)
 
     def block_and_decimate(self, warm_up, dot_with_sys):
+        """Block and renormalize operators in Block."""
 
         if self.output_level >= 2:
             print("\t\t\t dot with system %r" % dot_with_sys)
@@ -507,6 +538,7 @@ class DMRG(object):
         return new_system
 
     def gen_block_block_and_decimate(self, dot_with_sys, rot_mats=None, implicit_trans=True, do_norms=None, do_comp=None):
+        """Blocking and renormalization step for generating operators from rotation matrix."""
         new_system = Block()
 
         forward = True
@@ -556,46 +588,3 @@ class DMRG(object):
         new_system.move_and_free_memory(self.system)
 
         return new_system
-
-
-def test_block():
-    DMRG('input.txt', output_level=0)
-    n_orbs = Global.dmrginp.slater_size // 2
-    for i in range(0, 2):
-        print("======== i = %d ========" % i)
-        b = Block(0, i, 0, True)
-        print(b.ket_state_info.quanta)
-        print(b.ket_state_info.n_states)
-        print([k for k, v in b.ops.items()])
-        print([i for i in b.ops[OpTypes.DesDesComp].local_indices],
-              b.ops[OpTypes.DesDesComp].n_local_nz)
-        if i == 1:
-            print(len(b.ops[OpTypes.DesDesComp].local_element(2, 2)))
-            print([i for i in b.ops[OpTypes.DesDesComp].local_element(
-                7, 7)[0].non_zero_blocks])
-        # if i == 3:
-        #     print([x for x in b.ops[OpTypes.DesDesComp].local_element_linear(0)[0].non_zero_blocks])
-
-
-def test_mps():
-    DMRG('input.txt', output_level=0)
-    MPS_init(True)
-    occ = VectorBool(Global.dmrginp.hf_occupancy)
-    print(occ)
-    print(MPS.n_sweep_iters)
-    mps = MPS(occ)
-    mps.write_to_disk(0, True)
-    swp = SweepParams()
-    swp.save_state(False, 1)
-
-
-def test_restart():
-    dmrg = DMRG('input2.txt', output_level=5)
-    dmrg.dmrg()
-    dmrg.finalize()
-
-
-def test_gen_block():
-    dmrg = DMRG('input.txt', output_level=0)
-    dmrg.dmrg(gen_block=True)
-    dmrg.finalize()

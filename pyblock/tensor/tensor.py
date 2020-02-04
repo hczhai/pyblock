@@ -1,17 +1,53 @@
+#
+#    pyblock: Spin-adapted quantum chemistry DMRG in MPO language (based on Block C++ code)
+#    Copyright (C) 2019-2020 Huanchen Zhai
+#
+#    Block 1.5.3: density matrix renormalization group (DMRG) algorithm for quantum chemistry
+#    Developed by Sandeep Sharma and Garnet K.-L. Chan, 2012
+#    Copyright (C) 2012 Garnet K.-L. Chan
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+Block-sparse tensor and tensor network.
+"""
 
 import numpy as np
 from itertools import accumulate, groupby
 
 
 class SubTensor:
-    # -- q_labels is tuple([direct product of irreps])
-    # for example, qlabels = [ParticleN(0) * SU2(0) * PGD2H(0),]
-    # each element represent one rank of the reduced matrix/tensor
-    # if rank == 2, then tensor = matrix
-    # -- rank r = len(q_labels)
-    # -- reduced is rank r dense tensor (numpy array)
-    # -- cgs is [rank r dense tensor for rotating proj q numbers (Sz etc)]
-    # -- ng is number of ir symmetry sub-groups
+    """
+    A block in block-sparse tensor.
+    
+    Attributes:
+        q_labels : tuple(DirectProdGroup..)
+            Quantum labels for this sub-tensor block.
+            Each element in the tuple corresponds one rank of the tensor.
+        rank : int
+            Rank of the tensor. ``rank == len(q_labels)``.
+        ng : int
+            Number of sub-symmetry groups. ``ng == q_labels[0].ng``.
+        reduced : numpy.ndarray
+            Rank-:attr:`rank` dense reduced matrix.
+        reduced_shape : tuple(int..)
+            Shape of :attr:`reduced`
+        cgs : list(numpy.ndarray)
+            A list of CG factors of length :attr:`ng` with each element being
+            Rank-:attr:`rank` dense reduced matrix representing
+            CG coefficients for projected quantum numbers in each sub-symmetry group.
+    """
     def __init__(self, q_labels=None, reduced=None, cgs=None):
         self.q_labels = q_labels if q_labels is not None else []
         # assuming that q_labels must be set at the beginning
@@ -30,21 +66,25 @@ class SubTensor:
                 assert all(len(cg.shape) == self.rank for cg in cgs)
 
     def build_rank3_cg(self):
+        """Generate :attr:`cgs` for rank-3 tensor."""
         assert self.rank == 3
         syms = [ir.__class__ for ir in self.q_labels[0].irs]
         self.cgs = [syms[ig].clebsch_gordan(*[q.irs[ig] for q in self.q_labels])
                     for ig in range(self.ng)]
 
     def build_random(self):
+        """Set reduced matrix with random numbers in [0, 1)."""
         self.reduced = np.random.random(self.reduced_shape)
 
     def build_zero(self):
+        """Set reduced matrix to zero."""
         self.reduced = np.zeros(self.reduced_shape)
 
     # tranpose of operator
     # (ket, op, bra) -> (bra, -op, ket)
     @property
     def T(self):
+        """Transpose."""
         q_ket, q_op, q_bra = self.q_labels
         return SubTensor(q_labels=(q_bra, -q_op, q_ket),
                          reduced=np.transpose(self.reduced, (2, 1, 0)),
@@ -62,6 +102,19 @@ class SubTensor:
 
 
 class Tensor:
+    """
+    Block-sparse tensor.
+    
+    Attributes:
+        blocks : list(SubTensor)
+            A list of (non-zero) blocks.
+        tags : set(str or int)
+            Tags of the tensor for labeling
+            the type or site index of the tensor.
+        contractor :
+            If not None, this is used to perform specialized tensor contraction
+            and diagonalization.
+    """
     # blocks: list of (non-zero) TensorBlock's
     # tags: list of tags for each rank
     def __init__(self, blocks=None, tags=None, contractor=None):
@@ -72,31 +125,54 @@ class Tensor:
         self.contractor = contractor
 
     def copy(self):
+        """Shallow copy."""
         return Tensor(blocks=self.blocks, tags=self.tags.copy(),
                       contractor=self.contractor)
     
     def deep_copy(self):
+        """Deep copy."""
         return Tensor(blocks=self.blocks[:], tags=self.tags.copy(),
                       contractor=self.contractor)
 
     @property
     def rank(self):
+        """Rank of the tensor."""
         return 0 if len(self.blocks) == 0 else self.blocks[0].rank
 
     @property
     def ng(self):
+        """Number of sub-symmetry groups."""
         return 0 if len(self.blocks) == 0 else self.blocks[0].ng
 
     @property
     def n_blocks(self):
+        """Number of (non-zero) blocks."""
         return len(self.blocks)
     
     def modify(self, other):
+        """Modify the blocks according to another Tensor's blocks."""
         self.blocks[:] = other.blocks
 
     # build the tensor by coupling states in pre and basis into states in post
     @staticmethod
     def rank3_init(pre, basis, post):
+        """
+        Build the MPS rank-3 tensor by coupling states
+        in ``pre`` and ``basis`` into states in ``post``.
+        :attr:`cgs` and :attr:`reduced` will not be calculated.
+        
+        Args:
+            pre : dict(DirectProdGroup -> int)
+                Left basis.
+            basis : dict(DirectProdGroup -> int)
+                Site basis.
+            post : dict(DirectProdGroup -> int)
+                Right basis. Right basis should be obtained from
+                truncating the direct product of left and site basis.
+        
+        Returns:
+            tensor : Tensor
+        """
         blocks = []
         for kp, vp in sorted(pre.items(), key=lambda x:x[0]):
             for kb, vb in sorted(basis.items(), key=lambda x:x[0]):
@@ -111,6 +187,24 @@ class Tensor:
     # op_q_labels is a list of operator quantum numbers
     @staticmethod
     def operator_init(basis, repr, op_q_labels):
+        """
+        Build tensor for single-site primiary operator.
+        When this is a tensor operator, ``repr`` and ``op_q_labels``
+        will contain multiple items.
+        :attr:`cgs` and :attr:`reduced` will be calculated.
+        
+        Args:
+            basis : dict(DirectProdGroup -> int)
+                Site basis.
+            repr : list(numpy.ndarray)
+                A list of dense matrices for different ``op_q_label`` s.
+            op_q_labels : list(DirectProdGroup)
+                A list of operator quantum labels.
+        
+        Returns:
+            tensor : Tensor
+                Operator Tensor.
+        """
         blocks = []
         for q in range(len(repr.shape)):
             for i in range(repr[q].shape[0]):
@@ -124,20 +218,22 @@ class Tensor:
         return t
 
     def build_rank3_cg(self):
+        """Generate CG coefficients for rank-3 tensor."""
         for block in self.blocks:
             block.build_rank3_cg()
 
     def build_random(self):
+        """Fill the reduced matrix with random numbers in [0, 1)."""
         for block in self.blocks:
             block.build_random()
 
     def build_zero(self):
+        """Fill the reduced matrix with zero."""
         for block in self.blocks:
             block.build_zero()
 
-    # set the internal reduced matrix to identity
-    # not work for general situations
     def build_identity(self):
+        """Set the reduced matrix to identity. Not work for general situations."""
         assert self.rank == 3
         cur_idx = {}
         for block in self.blocks:
@@ -161,6 +257,27 @@ class Tensor:
     # then for each entry if q_label(idx_l) == q_label(idx_r), the term will be included
     @staticmethod
     def partial_trace(ts, idx_l, idx_r, target_q_labels=None):
+        """
+        Partial trace of a tensor.
+        The indices in ``idx_l`` will be combined.
+        The indices in ``idx_r`` will also be combined.
+        Then for each tensor block with q_label[idx_l] == q_label[idx_r],
+        the term will be included, with its reduced matrix traced in corresponding indices.
+        
+        Args:
+            ts : Tensor
+                Tensor to be traced.
+            idx_l : list(int)
+                Left traced indices.
+            idx_r : list(int)
+                Right traced indices.
+            target_q_labels : None
+                Defaults to None. Currently only the default is implemented.
+        
+        Returns:
+            tensor : Tensor
+                The resulting Tensor with indices ``idx_l`` and ``idx_r`` are traced.
+        """
         out_idx = list(set(range(0, ts.rank)) - set(idx_l) - set(idx_r))
 
         trace_scr = list(range(0, ts.rank))
@@ -188,12 +305,32 @@ class Tensor:
         
         return Tensor(tensors=map_idx_out.values(), tags=ts.tags, contractor=ts.contractor)
 
-    # contract two tensor to form a new tensor
-    # idxa, idxb are indices to be contracted in tensor a and b, respectively
-    # if target_q_labels is a DirectProdGroup, then target only one specific S
-    # elif target_q_labels is a list, then target multiple S
     @staticmethod
     def contract(tsa, tsb, idxa, idxb, target_q_labels=None):
+        """
+        Contract two Tensor to form a new Tensor.
+        
+        Args:
+            tsa : Tensor
+                Tensor a, as left operand.
+            tsb : Tensor
+                Tensor b, as right operand.
+            idxa : list(int)
+                Indices to be contracted in tensor a.
+            idxb : list(int)
+                Indices to be contracted in tensor b.
+            target_q_labels : None or DirectProdGroup or [DirectProdGroup]
+                If None, this is contraction of states. For all other cases,
+                this is contraction of operators.
+                If DirectProdGroup, the resulting direct product operator
+                will have the specific quantum label.
+                If [DirectProdGroup], the resulting direct product operator
+                will have mixed quantum labels (not very useful).
+        
+        Returns:
+            tensor : Tensor
+                The contracted Tensor.
+        """
         out_idx_a = list(set(range(0, tsa.rank)) - set(idxa))
         out_idx_b = list(set(range(0, tsb.rank)) - set(idxb))
 
@@ -268,10 +405,24 @@ class Tensor:
                                     map_idx_out[outg].reduced += mat
         return Tensor(map_idx_out.values())
     
-    # Singular Value Decomposition of rank-2 block-diagonal Tensor
-    # k: maximal bond length; k == -1 -> no truncation
-    # return left_tensor, right_tensor, singular values (list), error
     def svd(self, k=-1):
+        """
+        Singular Value Decomposition of rank-2 block-diagonal Tensor.
+        
+        Args:
+            k : int
+                Maximal bond length. Defaults to -1 (no truncation).
+        
+        Returns:
+            left_tensor : Tensor
+                Left tensor.
+            right_tensor : Tensor
+                Right tensor.
+            svd_s : list(numpy.ndarray)
+                A list including singular values for each tensor block.
+            error : float
+                Sum of Discarded weights.
+        """
         assert self.rank == 2
         blocks_l = []
         blocks_r = []
@@ -328,6 +479,24 @@ class Tensor:
     # if absorb_right is Ture, singlular values will be multiplied into right Tensor
     # otherwise, multiplied into right Tensor
     def split(self, absorb_right, k=-1):
+        """
+        Split rank-2 block-diagonal Tensor to two tensors (using SVD).
+        
+        Args:
+            absorb_right : bool
+                If absorb_right is True, singlular values will be multiplied into right Tensor.
+                Otherwise, They will be multiplied into left Tensor.
+            k : int
+                Maximal bond length. Defaults to -1 (no truncation).
+        
+        Returns:
+            left_tensor : Tensor
+                Left tensor.
+            right_tensor : Tensor
+                Right tensor.
+            error : float
+                Sum of Discarded weights.
+        """
         ts_l, ts_r, svd_s, error = self.svd(k=k)
         assert ts_l.n_blocks == ts_r.n_blocks and ts_l.n_blocks == len(svd_s)
         for l, r, s in zip(ts_l.blocks, ts_r.blocks, svd_s):
@@ -339,34 +508,17 @@ class Tensor:
                 l.reduced = s[None, :] * l.reduced
         return ts_l, ts_r, error
     
-    def right_normalize(self):
-        at = 1
-        collected_cols = {}
-        for block in self.blocks:
-            q_labels_l = tuple(block.q_labels[id]
-                               for id in range(0, at))
-            if q_labels_l not in collected_cols:
-                collected_cols[q_labels_l] = []
-            collected_cols[q_labels_l].append(block)
-        l_blocks = {}
-        for q_labels_l, blocks in collected_cols.items():
-            r_shapes = [np.prod([b.reduced.shape[id]
-                                 for id in range(at, self.rank)]) for b in blocks]
-            mat = np.concatenate([b.reduced.reshape((-1, sh)).T
-                                  for sh, b in zip(r_shapes, blocks)], axis=0)
-            q, r = np.linalg.qr(mat)
-            l_blocks[q_labels_l] = r.T
-            qs = np.split(q, list(accumulate(r_shapes[:-1])), axis=0)
-            assert(len(qs) == len(blocks))
-            for q, b in zip(qs, blocks):
-                b.reduced = q.T.reshape((r.shape[0], ) + b.reduced.shape[at:])
-                b.reduced_shape = b.reduced.shape
-        return l_blocks
-    
     # left normalization needs to collect all left indices for each specific right index
     # so that we will only have one R, but left dim of q is unchanged
     # at: where to divide the tensor into matrix => (0, at) x (at, n_ranks)
     def left_normalize(self):
+        """
+        Left normalization (using QR factorization).
+        
+        Returns:
+            r_blocks : dict((DirectProdGroup, ) -> numpy.ndarray)
+                The R matrix for each right-index quantum label.
+        """
         at = self.rank - 1
         collected_rows = {}
         for block in self.blocks:
@@ -390,9 +542,46 @@ class Tensor:
                 b.reduced_shape = b.reduced.shape
         return r_blocks
 
-    # mats: dict {partial q_labels: matrix}
-    # currently only used for multiply r from left-normalization
+    def right_normalize(self):
+        """
+        Right normalization (using LQ factorization).
+        
+        Returns:
+            l_blocks : dict((DirectProdGroup, ) -> numpy.ndarray)
+                The L matrix for each left-index quantum label.
+        """
+        at = 1
+        collected_cols = {}
+        for block in self.blocks:
+            q_labels_l = tuple(block.q_labels[id]
+                               for id in range(0, at))
+            if q_labels_l not in collected_cols:
+                collected_cols[q_labels_l] = []
+            collected_cols[q_labels_l].append(block)
+        l_blocks = {}
+        for q_labels_l, blocks in collected_cols.items():
+            r_shapes = [np.prod([b.reduced.shape[id]
+                                 for id in range(at, self.rank)]) for b in blocks]
+            mat = np.concatenate([b.reduced.reshape((-1, sh)).T
+                                  for sh, b in zip(r_shapes, blocks)], axis=0)
+            q, r = np.linalg.qr(mat)
+            l_blocks[q_labels_l] = r.T
+            qs = np.split(q, list(accumulate(r_shapes[:-1])), axis=0)
+            assert(len(qs) == len(blocks))
+            for q, b in zip(qs, blocks):
+                b.reduced = q.T.reshape((r.shape[0], ) + b.reduced.shape[at:])
+                b.reduced_shape = b.reduced.shape
+        return l_blocks
+    
     def left_multiply(self, mats):
+        """
+        Left Multiplication.
+        Currently only used for multiplying R obtained from Left-normalization.
+        
+        Args:
+            mats : dict((DirectProdGroup, ) -> numpy.ndarray)
+                The R matrix for each right-index quantum label.
+        """
         for block in self.blocks:
             q_labels_r = (block.q_labels[0], )
             if q_labels_r in mats:
@@ -401,10 +590,12 @@ class Tensor:
                 block.reduced_shape = block.reduced.shape
 
     def set_tags(self, tags):
+        """Change the tags, return ``self`` for chain notation."""
         self.tags = tags
         return self
 
     def set_contractor(self, contractor):
+        """Change the contractor, return ``self`` for chain notation."""
         self.contractor = contractor
         return self
 
@@ -432,6 +623,7 @@ class Tensor:
         return True
     
     def sort(self):
+        """Sort non-zero blocks in increasing order of quantum labels."""
         self.blocks = sorted(self.blocks, key=lambda x: x.q_labels)
     
     def __mul__(self, o):
@@ -447,12 +639,35 @@ class TensorNetworkError(Exception):
     pass
 
 
-# an inefficient implementation for Quimb TensorNetwork
 class TensorNetwork:
+    """
+    An inefficient implementation for Quimb TensorNetwork.
+    
+    Attributes:
+        tensors : list(Tensor)
+            List of tensors in the network.
+    """
     def __init__(self, tensors=None):
         self.tensors = list(tensors) if tensors is not None else []
 
     def select(self, tags, which='all', inverse=False):
+        """
+        Extract a sub tensor network specified by tags.
+        
+        Args:
+            tags : set(str or int)
+                Tags of sub tensor network.
+        
+        Kwargs:
+            which : 'all' or 'any' or 'exact'
+                Defaults to 'all'. Indicating how the ``tags`` should be applied for selection.
+            inverse : bool
+                Defaults to False. Indicating whether the selection should be inversed.
+        
+        Returns:
+            tn : TensorNetwork
+                The selected tensor network.
+        """
         r = []
         if not isinstance(tags, set):
             tags = {tags}
@@ -470,6 +685,23 @@ class TensorNetwork:
         return self.__class__(tensors=r)
 
     def remove(self, tags, which='all', in_place=False):
+        """
+        Remove a sub tensor network specified by tags.
+        
+        Args:
+            tags : set(str or int)
+                Tags of sub tensor network.
+        
+        Kwargs:
+            which : 'all' or 'any' or 'exact'
+                Defaults to 'all'. Indicating how the ``tags`` should be applied for selection.
+            in_place : bool
+                Defaults to False. Indicating whether the current tensor network should be changed.
+        
+        Returns:
+            tn : TensorNetwork
+                The remaining tensor network.
+        """
         if not in_place:
             return self.select(tags, which, inverse=True)
         else:
@@ -477,6 +709,7 @@ class TensorNetwork:
             return self
 
     def add(self, tn):
+        """Add a Tensor or TensorNetwork to the tensor network."""
         if isinstance(tn, Tensor):
             self.tensors.append(tn)
         elif isinstance(tn, TensorNetwork):
@@ -487,20 +720,42 @@ class TensorNetwork:
                 'Unable to add this object to the network.')
 
     def add_tags(self, tags):
+        """Add tags to all tensors in the tensor network."""
         for tensor in self.tensors:
             tensor.tags |= tags
 
+    def remove_tags(self, tags):
+        """Remove tags from all tensors in the tensor network."""
+        for tensor in self.tensors:
+            tensor.tags -= tags
+    
     def copy(self):
+        """Shallow copy."""
         return self.__class__(tensors=[t.copy() for t in self.tensors])
     
     def deep_copy(self):
+        """Deep copy."""
         return self.__class__(tensors=[t.deep_copy() for t in self.tensors])
 
-    def remove_tags(self, tags):
-        for tensor in self.tensors:
-            tensor.tags -= tags
-
     def contract(self, tags, in_place=False):
+        """
+        Contract a sub tensor network specified by tags.
+        If any Tensor in the sub tensor network has a ``contractor``,
+        the specialized contraction will be used.
+        Currently the general contraction is not implemented.
+        
+        Args:
+            tags : tuple(str or int..)
+                Tags of sub tensor network.
+        
+        Kwargs:
+            in_place : bool
+                Defaults to False. Indicating whether the current tensor network should be changed.
+        
+        Returns:
+            tn : TensorNetwork
+                The tensor network with selected sub tensor network replaced by its contraction.
+        """
         if isinstance(tags, str) or isinstance(tags, int):
             tags = (tags, )
         cont_tn = self.select(set(tags), which='any')
@@ -555,4 +810,5 @@ class TensorNetwork:
 
     @property
     def tags(self):
+        """Return a list of tags collected from all tensors in the tensor network."""
         return [ts.tags for ts in self.tensors]

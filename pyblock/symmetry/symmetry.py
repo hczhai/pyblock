@@ -1,3 +1,27 @@
+#
+#    pyblock: Spin-adapted quantum chemistry DMRG in MPO language (based on Block C++ code)
+#    Copyright (C) 2019-2020 Huanchen Zhai
+#
+#    Block 1.5.3: density matrix renormalization group (DMRG) algorithm for quantum chemistry
+#    Developed by Sandeep Sharma and Garnet K.-L. Chan, 2012
+#    Copyright (C) 2012 Garnet K.-L. Chan
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+Symmetry related data structures.
+"""
 
 import numpy as np
 from fractions import Fraction
@@ -5,6 +29,7 @@ from .cg import SU2CG
 
 
 class HashIrrep:
+    """Base class for irreducible representation, supporting hashing."""
     def __init__(self, ir):
         self.ir = ir
 
@@ -23,6 +48,7 @@ class HashIrrep:
 
 
 class ParticleN(HashIrrep):
+    """Irreducible representation for particle number symmetry."""
     def __init__(self, n):
         self.ir = n
 
@@ -47,6 +73,7 @@ class ParticleN(HashIrrep):
 
 
 class SU2(HashIrrep):
+    """Irreducible representation for SU(2) spin symmetry."""
     def __init__(self, s):
         if isinstance(s, Fraction) or isinstance(s, float):
             self.ir = int(s * 2)
@@ -68,6 +95,7 @@ class SU2(HashIrrep):
 
     @staticmethod
     def clebsch_gordan(a, b, c):
+        """Return rank-3 numpy.ndarray for CG coefficients with all possible projected quantum numbers."""
         if c not in a + b:
             return np.array([[0]], dtype=float)
         else:
@@ -90,6 +118,7 @@ class SU2(HashIrrep):
 
     @property
     def j(self):
+        """SU(2) spin quantum number."""
         return Fraction(self.ir, 2)
 
     def to_multi(self):
@@ -97,6 +126,7 @@ class SU2(HashIrrep):
 
 
 class SZ(HashIrrep):
+    """Irreducible representation for projected spin symmetry."""
     def __init__(self, sz):
         if isinstance(sz, Fraction) or isinstance(sz, float):
             self.ir = int(sz * 2)
@@ -124,6 +154,7 @@ class SZ(HashIrrep):
 
 # SU2 irreducible repr with sz quantum number
 class SU2Proj(SU2):
+    """Irreducible representation for SU(2) spin symmetry with extra projected spin label."""
     def __init__(self, s, sz):
         if isinstance(sz, Fraction) or isinstance(sz, float):
             self.pir = int(sz * 2)
@@ -157,6 +188,7 @@ class SU2Proj(SU2):
 
     @property
     def jz(self):
+        """SU(2) projected spin quantum number."""
         return Fraction(self.pir, 2)
 
     @jz.setter
@@ -168,6 +200,17 @@ class SU2Proj(SU2):
 
 
 class PointGroup(HashIrrep):
+    """
+    Base class for irreducible representation for point group symmetry.
+    
+    Attributes:
+        Table : rank-2 numpy.ndarray
+            Mutiplication table of the group.
+        InverseElem : rank-1 numpy.ndarray
+            Inverse Element of each element in the group.
+        IrrepNames : list(str)
+            Name of each irreducible representation in the group.
+    """
     Table = np.zeros((0, 0), dtype=int)
     InverseElem = np.zeros((0,), dtype=int)
     IrrepNames = []
@@ -196,6 +239,7 @@ class PointGroup(HashIrrep):
 
 
 class PGD2H(PointGroup):
+    """:math:`D_{2h}` point group."""
     Table = np.array(
         [[0, 1, 2, 3, 4, 5, 6, 7],
          [1, 0, 3, 2, 5, 4, 7, 6],
@@ -210,16 +254,27 @@ class PGD2H(PointGroup):
 
 
 class PGC1(PointGroup):
+    """:math:`C_1` point group."""
     Table = np.array([[0]], dtype=int)
     InverseElem = np.array(range(0, 1), dtype=int)
     IrrepNames = ["A"]
 
 
 def point_group(pg_name):
+    """Return point group class corresponding to the point group name."""
     return {'c1': PGC1, 'd2h': PGD2H}[pg_name]
 
 
 class DirectProdGroup:
+    """
+    Irreducible representation for symmetry formed by direct product of sub-symmetries.
+    
+    Attributes:
+        irs : list(Group)
+            A list of irreducible representations for sub-symmetries.
+        ng : int
+            Number of sub-symmetries.
+    """
     def __init__(self, *args):
         self.irs = args
         self.ng = len(args)
@@ -268,11 +323,14 @@ class DirectProdGroup:
             return self.__class__(*(self.irs + (o,)))
 
     def sub_group(self, idx):
+        """Return a subgroup of this object, given a list of indices."""
         return DirectProdGroup(*[self.irs[id] for id in idx])
 
 
 class CounterDict(dict):
+    """Dictionary for counting number of objects."""
     def adjust(self, k, v):
+        """Add v (int) to the item with key k."""
         if k in self:
             self[k] += v
         else:
@@ -280,6 +338,8 @@ class CounterDict(dict):
 
     @staticmethod
     def intersect(a, b):
+        """Return the intersection of two :class:`CounterDict`.
+        If a key appears in both dicts, the lesser value will be retained."""
         r = CounterDict()
         if len(a) > len(b):
             a, b = b, a
@@ -290,6 +350,28 @@ class CounterDict(dict):
 
 
 class LineCoupling:
+    """
+    Couple adjacent site tensor basis to form basis for renomalized tensor.
+    
+    Attributes:
+        l : int
+            Number of sites/orbitals.
+        basis : [dict(DirectProdGroup -> int)]
+            Site basis.
+        empty : DirectProdGroup
+            Vaccum state.
+        target : DirectProdGroup
+            target state.
+        both_dir : bool
+            If True, coupling will be calcuated from both left and right, and
+            the intersection will be used.
+            If False, coupling will only be calcuated from left.
+        bond_dim : int
+            Bond dimension. If -1, no basis truncation has been performed.
+            This is defined with respect to the total number of states.
+        dims : [CounterDict(DirectProdGroup -> int)]
+            Renormalized basis.
+    """
     def __init__(self, l, basis, target=None, empty=None, both_dir=True):
         self.l = l
         self.basis = basis
@@ -337,7 +419,14 @@ class LineCoupling:
         return dim_r
 
     def set_bond_dim(self, m):
+        """
+        Truncate the renormalized basis, using the given bond dimension.
+        Note that the ceiling is used for rounding for each quantum number,
+        so the actual bond dimension is often larger than the given value.
+        """
         self.bond_dim = m
+        if m == -1:
+            return
         for i in range(self.l):
             x = sum(self.dims[i].values())
             if x > m:

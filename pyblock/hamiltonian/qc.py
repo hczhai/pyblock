@@ -1,18 +1,49 @@
+#
+#    pyblock: Spin-adapted quantum chemistry DMRG in MPO language (based on Block C++ code)
+#    Copyright (C) 2019-2020 Huanchen Zhai
+#
+#    Block 1.5.3: density matrix renormalization group (DMRG) algorithm for quantum chemistry
+#    Developed by Sandeep Sharma and Garnet K.-L. Chan, 2012
+#    Copyright (C) 2012 Garnet K.-L. Chan
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""
+FCIDUMP file and storage of integrals.
+"""
 
 import numpy as np
-from fractions import Fraction
-from ..symmetry.symmetry import point_group, ParticleN, SU2
-from ..tensor.tensor import Tensor, SubTensor
 
 
 # one-electron integrals
 class TInt:
+    """
+    Symmetric rank-2 array (:math:`T_{ij} = T_{ji}`) for one-electron integral storage.
+    
+    Attributes:
+        n : int
+            Number of orbitals.
+        data : numpy.ndarray
+            1D flat array of size :math:`n(n+1)/2`.
+    """
     def __init__(self, n):
         self.n = n
         self.data = np.zeros((n * (n + 1) // 2, ))
 
     @staticmethod
     def find_index(i, j):
+        """Find linear index from full indices (i, j)."""
         if i < j:
             i, j = j, i
         return i * (i + 1) // 2 + j
@@ -29,6 +60,15 @@ class TInt:
 
 # two-electron integrals
 class VInt(TInt):
+    """
+    Symmetric rank-4 array (:math:`T_{ijkl} = T_{jikl} = T_{ijlk} = T_{klij}`) for two-electron integral storage.
+    
+    Attributes:
+        n : int
+            Number of orbitals.
+        data : numpy.ndarray
+            1D flat array of size :math:`m(m+1)/2` where :math:`m=n(n+1)/2`.
+    """
     def __init__(self, n):
         self.n = n
         m = n * (n + 1) // 2
@@ -36,6 +76,7 @@ class VInt(TInt):
 
     @staticmethod
     def find_index(i, j, k, l):
+        """Find linear index from full indices (i, j, k, l)."""
         p = TInt.find_index(i, j)
         q = TInt.find_index(k, l)
         return TInt.find_index(p, q)
@@ -56,6 +97,18 @@ class VInt(TInt):
 # read FCIDUMP file
 # return : options, (1-e array, 2-e array, const energy term)
 def read_fcidump(filename):
+    """
+    Read FCI options and integrals from FCIDUMP file.
+    
+    Args:
+        filename : str
+    
+    Returns:
+        cont_dict : dict
+            FCI options or input parameters.
+        (t, v, e) : (TInt, VInt, float)
+            One- and two-electron integrals and const energy.
+    """
     with open(filename, 'r') as f:
         ff = f.read().lower()
         if '/' in ff:
@@ -91,49 +144,6 @@ def read_fcidump(filename):
             else:
                 v[i - 1, j - 1, k - 1, l - 1] = d
     return cont_dict, (t, v, e)
-
-
-class QCHamiltonian:
-
-    def __init__(self, fcidump, point_group):
-        self.fcidump = fcidump
-        opts, (t, v, e) = read_fcidump(fcidump)
-
-        self.t = t
-        self.v = v
-        self.e = e
-
-        self.n_sites = int(opts['norb'])
-
-        self.n_electrons = int(opts['nelec'])
-        self.target_s = Fraction(int(opts['ms2']), 2)
-        self.target_spatial_sym = int(opts['isym'])
-
-        self.spatial_syms = [int(i) - 1 for i in opts['isym'].split(',')]
-        self.point_group = point_group
-        self.PG = point_group(self.point_group)
-
-        self.empty = ParticleN(0) * SU2(0) * self.PG(0)
-        self.spatial = [self.PG.IrrepNames[ir] for ir in self.spatial_syms]
-        self.site_basis = [[
-            ParticleN(0) * SU2(0) * self.PG(0),
-            ParticleN(1) * SU2(Fraction(1, 2)) * self.PG(sp),
-            ParticleN(2) * SU2(0) * self.PG(0)
-        ] for sp in self.spatial]
-        self.target = ParticleN(self.n_electrons) \
-            * SU2(self.target_s) * self.PG(self.target_spatial_sym)
-
-    # q_labels = (ket, operator, bra)
-    # quantum number: ket + operator = bra
-    def operator_cre(self, i_site):
-        repr = np.array([[0, 0, 0], [1, 0, 0], [0, np.sqrt(2), 0]], dtype=float)
-        return Tensor.operator_init(self.site_basis[i_site], [repr], [self.site_basis[i_site][1]])
-    
-    def operator_des(self, i_site):
-        return self.operator_cre(i_site).T
-    
-    def operator_identity(self, i_site):
-        return Tensor.operator_init(self.site_basis[i_site], [np.identity(3)], [self.site_basis[i_site][0]])
 
 
 if __name__ == "__main__":
