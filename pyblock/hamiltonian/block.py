@@ -27,6 +27,7 @@ from block import VectorInt, VectorVectorInt, VectorMatrix, Matrix
 from block import save_rotation_matrix, DiagonalMatrix
 from block.io import Global, read_input, Input, AlgorithmTypes
 from block.io import init_stack_memory, release_stack_memory, AlgorithmTypes
+from block.io import get_current_stack_memory, set_current_stack_memory
 from block.dmrg import MPS_init, MPS, get_dot_with_sys
 from block.symmetry import VectorStateInfo, get_commute_parity
 from block.symmetry import state_tensor_product, SpinQuantum, VectorSpinQuantum
@@ -1360,6 +1361,16 @@ class BlockHamiltonian:
         
         # TODO :: need to store Block to deallocate it later
         return ops
+    
+    @staticmethod
+    def get_current_memory():
+        """Return current stack memory position."""
+        return get_current_stack_memory()
+    
+    @staticmethod
+    def set_current_memory(m):
+        """Reset current stack memory to given position."""
+        return set_current_stack_memory(m)
     
     @staticmethod
     def block_operator_summary(block):

@@ -39,7 +39,10 @@ class MPOError(Exception):
     pass
 
 class MPO(TensorNetwork):
-    pass
+    def pre_sweep(self):
+        pass
+    def post_sweep(self):
+        pass
 
 class OperatorTensor(Tensor):
     """
@@ -113,6 +116,8 @@ class BlockMPO(MPO):
             Numeric representation of operator symbols for each site.
         tensors : OperatorTensor
             MPO tensor for each site.
+        mem_ptr : int
+            Stack memory pointer.
     """
 
     def __init__(self, hamiltonian):
@@ -140,8 +145,18 @@ class BlockMPO(MPO):
         
         self.lcp = None
         self.info = None
+        self.mem_ptr = 0
         
         super().__init__()
+    
+    def pre_sweep(self):
+        """Operations performed at the beginning of each DMRG sweep."""
+        self.mem_ptr = self.hamil.get_current_memory()
+    
+    def post_sweep(self):
+        """Operations performed at the end of each DMRG sweep."""
+        self.hamil.set_current_memory(self.mem_ptr)
+        pass
     
     def init_site_operators(self):
         """Generate :attr:`site_operators`."""
@@ -265,6 +280,8 @@ class BlockMPO(MPO):
                 In two-dot scheme, the rank-2 tensor representing two-dot object.
                 Both left and right rank indices are fused. No CG factor are generated.
                 One-dot scheme is not implemented.
+            ndav : 0
+                Number of Davidson iterations.
         """
         if len(mps) == 2:
             mps_tensors = sorted(mps.tensors, key=self._tag_site)
@@ -301,7 +318,7 @@ class BlockMPO(MPO):
             assert np.isclose(br.dot(br), 0.0)
             
             v = self.info.from_wavefunction_fused(self._tag_site(mps_tensors[0]), wfn)
-            return evs[0][0] + self.hamil.e, v
+            return evs[0][0] + self.hamil.e, v, 0
         else:
             assert False
     
@@ -322,20 +339,22 @@ class BlockMPO(MPO):
                 In two-dot scheme, the rank-2 tensor representing two-dot object.
                 Both left and right rank indices are fused. No CG factor are generated.
                 One-dot scheme is not implemented.
+            ndav : int
+                Number of Davidson iterations.
         """
         if len(mps) == 2:
             mps_tensors = sorted(mps.tensors, key=self._tag_site)
             wfn = self.info.get_wavefunction(self._tag_site(mps_tensors[0]), mps_tensors)
             b = [BlockWavefunction(wfn)]
             a = BlockMultiplyH(hmpo)
-            es, vs = davidson(a, b, 1)
+            es, vs, ndav = davidson(a, b, 1)
             
             if len(es) == 0:
                 raise MPOError('Davidson not converged!!')
             
             e = es[0]
             v = self.info.from_wavefunction_fused(self._tag_site(mps_tensors[0]), vs[0].data)
-            return e + self.hamil.e, v
+            return e + self.hamil.e, v, ndav
         else:
             assert False
     

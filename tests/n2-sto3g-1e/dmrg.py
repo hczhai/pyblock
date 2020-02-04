@@ -1,6 +1,7 @@
 
 # PYTHONPATH=../..:../../build python dmrg.py
-# E(rand init) = -170.186268309451
+# E(rand init) = -170.186268309451 (without noise)
+# E(rand init) = -171.27683359988384 (with noise)
 # E(FCI) = -171.276833655391
 
 from pyblock.dmrg import DMRG
@@ -20,6 +21,6 @@ mpo.set_line_coupling(lcp)
 mps = mpo.rand_state()
 mps.left_normalize()
 
-dmrg = DMRG(mpo, bond_dim, mps=mps)
-ener = dmrg.solve(10, 1E-6)
+dmrg = DMRG(mpo, bond_dim=[50, 80, 100, 200, 500], noise=[1E-3, 1E-4, 1E-5, 0], mps=mps)
+ener = dmrg.solve(5, 1E-6)
 print('final energy = ', ener)

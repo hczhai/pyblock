@@ -75,6 +75,16 @@ class SubTensor:
     def build_random(self):
         """Set reduced matrix with random numbers in [0, 1)."""
         self.reduced = np.random.random(self.reduced_shape)
+    
+    def add_noise(self, noise):
+        """
+        Add noise to reduced matrix by random numbers in [-0.5 * noise, 0.5 * noise).
+        
+        Args:
+            noise : float
+                prefactor for the noise.
+        """
+        self.reduced += (np.random.random(self.reduced_shape) - 0.5) * noise
 
     def build_zero(self):
         """Set reduced matrix to zero."""
@@ -226,6 +236,17 @@ class Tensor:
         """Fill the reduced matrix with random numbers in [0, 1)."""
         for block in self.blocks:
             block.build_random()
+    
+    def add_noise(self, noise):
+        """
+        Add noise to reduced matrix by random numbers in [-0.5 * noise, 0.5 * noise).
+        
+        Args:
+            noise : float
+                prefactor for the noise.
+        """
+        for block in self.blocks:
+            block.add_noise(noise)
 
     def build_zero(self):
         """Fill the reduced matrix with zero."""

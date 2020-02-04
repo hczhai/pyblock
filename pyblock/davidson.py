@@ -123,7 +123,7 @@ def olsen_precondition(q, c, ld, diag):
     t.deallocate()
 
 # E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
-def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, deflation_max_size=20, iprint=True):
+def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, deflation_max_size=50, iprint=False):
     """
     Davidson diagonalization.
     
@@ -235,7 +235,7 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
     for i in range(0, k):
         sigma[i].deallocate()
     
-    return ld[:ck], b[:ck]
+    return ld[:ck], b[:ck], xiter
 
 if __name__ == "__main__":
     
@@ -253,7 +253,7 @@ if __name__ == "__main__":
         e = np.array([-16.24341216, -7.16254184, -5.12344007, -3.41825462, 0.68226548,
                       4.63978769, 26.62559552])
 
-        ld, nb = davidson(Matrix(a), [Vector(b[0]), Vector(b[1])], 2)
+        ld, nb, _ = davidson(Matrix(a), [Vector(b[0]), Vector(b[1])], 2)
         print(ld, e)
     
     def test_rand(n, k):
@@ -266,7 +266,7 @@ if __name__ == "__main__":
         
         b = [Vector(ib) for ib in np.eye(k, n)]
         
-        ld, nb = davidson(Matrix(a), b, k, deflation_max_size=max(5, k + 10))
+        ld, nb, _ = davidson(Matrix(a), b, k, deflation_max_size=max(5, k + 10))
         print('std = ', ee[:k])
         print('dav = ', ld)
         print('std = ', vv[:, 0])

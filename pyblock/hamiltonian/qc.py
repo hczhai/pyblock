@@ -61,7 +61,7 @@ class TInt:
 # two-electron integrals
 class VInt(TInt):
     """
-    Symmetric rank-4 array (:math:`T_{ijkl} = T_{jikl} = T_{ijlk} = T_{klij}`) for two-electron integral storage.
+    Symmetric rank-4 array (:math:`V_{ijkl} = V_{jikl} = V_{ijlk} = V_{klij}`) for two-electron integral storage.
     
     Attributes:
         n : int

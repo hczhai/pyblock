@@ -139,18 +139,21 @@ class DMRG:
             Number of sites/orbitals
         dot : int
             Two-dot (2) or one-dot (1) scheme.
-        bond_dims : list(int) or int
+        bond_dim : list(int) or int
             Bond dimension for each sweep.
+        noise : list(float) or float
+            Noise prefactor for each sweep.
         tn : TensorNetwork
             The tensor network <bra|H|ket> before contraction.
         energies : list(float)
             Energies collected for all sweeps.
     """
-    def __init__(self, mpo, bond_dims, dot=2, mps=None):
+    def __init__(self, mpo, bond_dim, noise=0.0, dot=2, mps=None):
         self.n_sites = mpo.n_sites
         self.dot = dot
-        self.bond_dims = bond_dims if isinstance(
-            bond_dims, list) else [bond_dims]
+        self.bond_dims = bond_dim if isinstance(
+            bond_dim, list) else [bond_dim]
+        self.noise = noise if isinstance(noise, list) else [noise]
 
         if mps is not None:
             self._k = mps.deep_copy()
@@ -167,8 +170,11 @@ class DMRG:
         self.tn = self._b | self._h | self._k
 
         self.energies = []
+        
+        self._pre_sweep = mpo.pre_sweep
+        self._post_sweep = mpo.post_sweep
     
-    def update_one_dot(self, i, forward, bond_dim):
+    def update_one_dot(self, i, forward, bond_dim, noise):
         """Update local site in one-dot scheme. Not implemented."""
         
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
@@ -183,7 +189,7 @@ class DMRG:
         self._k[i].modify(gs)
         self._b[i].modify(gs)
     
-    def update_two_dot(self, i, forward, bond_dim):
+    def update_two_dot(self, i, forward, bond_dim, noise):
         """
         Update local site in two-dot scheme.
         
@@ -194,19 +200,26 @@ class DMRG:
                 Direction of current sweep. If True, sweep is performed from left to right.
             bond_dims : int
                 Bond dimension of current sweep.
+            noise : float
+                Noise prefactor of current sweep.
         
         Returns:
             energy : float
                 Ground state energy.
             error : float
                 Sum of discarded weights.
+            ndav : int
+                Number of Davidson iterations.
         """
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         
         gs_old = self._k.select({i, i + 1}, which='any')
         
         if h_eff.contractor is not None:
-            energy, gs = h_eff.contractor.eigs(h_eff, gs_old)
+            energy, gs, ndav = h_eff.contractor.eigs(h_eff, gs_old)
+            
+            if noise != 0.0:
+                gs.add_noise(noise)
             
             l_fused, r_fused, error = gs.split(absorb_right=forward, k=bond_dim)
 
@@ -222,9 +235,9 @@ class DMRG:
         self._k[i + 1].modify(r)
         self._b[i + 1].modify(r)
         
-        return energy, error
+        return energy, error, ndav
 
-    def blocking(self, i, forward, bond_dim):
+    def blocking(self, i, forward, bond_dim, noise):
         """
         Perform one blocking iteration.
         
@@ -235,21 +248,25 @@ class DMRG:
                 Direction of current sweep. If True, sweep is performed from left to right.
             bond_dims : int
                 Bond dimension of current sweep.
+            noise : float
+                Noise prefactor of current sweep.
         
         Returns:
             energy : float
                 Ground state energy.
             error : float
                 Sum of discarded weights.
+            ndav : int
+                Number of Davidson iterations.
         """
         self.eff_ham.move_to(i)
 
         if self.dot == 1:
-            return self.update_one_dot(i, forward, bond_dim)
+            return self.update_one_dot(i, forward, bond_dim, noise)
         else:
-            return self.update_two_dot(i, forward, bond_dim)
+            return self.update_two_dot(i, forward, bond_dim, noise)
 
-    def sweep(self, forward, bond_dim):
+    def sweep(self, forward, bond_dim, noise):
         """
         Perform one sweep iteration.
         
@@ -258,11 +275,15 @@ class DMRG:
                 Direction of current sweep. If True, sweep is performed from left to right.
             bond_dims : int
                 Bond dimension of current sweep.
+            noise : float
+                Noise prefactor of current sweep.
         
         Returns:
             energy : float
                 Ground state energy.
         """
+        self._pre_sweep()
+        
         self.eff_ham = MovingEnvironment(self.n_sites, self.dot, self.tn, forward)
 
         # if forward/backward, i is the first dot site
@@ -275,10 +296,12 @@ class DMRG:
         sweep_energies = []
 
         for i in sweep_range:
-            print("\t Iteration = %4d %s ... " % (abs(i - sweep_range[0]), 'F' if forward else 'B'))
-            energy, error = self.blocking(i, forward=forward, bond_dim=bond_dim)
-            print("\t\t\t Energy = %15.8f Error = %15.8f" % (energy, error))
+            print(" %3s Iter = %4d .. " % ('==>' if forward else '<==', abs(i - sweep_range[0]),), end='', flush=True)
+            energy, error, ndav = self.blocking(i, forward=forward, bond_dim=bond_dim, noise=noise)
+            print("NDAV = %4d E = %15.8f Error = %15.8f" % (ndav, energy, error))
             sweep_energies.append(energy)
+        
+        self._post_sweep()
 
         return sorted(sweep_energies)[0]
 
@@ -301,17 +324,21 @@ class DMRG:
 
         if len(self.bond_dims) < n_sweeps:
             self.bond_dims.extend([self.bond_dims[-1]] * (n_sweeps - len(self.bond_dims)))
+            
+        if len(self.noise) < n_sweeps:
+            self.noise.extend([self.noise[-1]] * (n_sweeps - len(self.noise)))
 
         for iw in range(n_sweeps):
 
-            print("Sweep = %4d | Direction = %8s | Bond dimension = %4d"
-                % (iw, "forward" if forward else "backward", self.bond_dims[iw]))
+            print("Sweep = %4d | Direction = %8s | Bond dimension = %4d | Noise = %9.2g"
+                % (iw, "forward" if forward else "backward", self.bond_dims[iw], self.noise[iw]))
 
-            energy = self.sweep(forward=forward, bond_dim=self.bond_dims[iw])
+            energy = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], noise=self.noise[iw])
             self.energies.append(energy)
 
-            converged = (len(self.energies) >= 2 and tol is not None and abs(
-                self.energies[-1] - self.energies[-2]) < tol)
+            converged = (len(self.energies) >= 2 and tol is not None
+                and abs(self.energies[-1] - self.energies[-2]) < tol
+                and self.noise[iw] == self.noise[-1] and self.bond_dims[iw] == self.bond_dims[-1])
 
             if converged:
                 break
