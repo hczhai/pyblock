@@ -1,0 +1,27 @@
+
+language: python
+
+python:
+  - "3.5"
+  - "3.6"
+  - "3.7"
+
+before_install:
+  - apt-get update
+  - apt-get install -qq git cmake g++ libboost-all-dev libblas-dev liblapack-dev libeigen3-dev
+  - apt-get install -qq python-dev python3-pip
+  - pip3 install pybind11 sphinx numpy
+  - pip3 install pytest-cov pytest codecov
+
+install:
+  - mkdir build
+  - cd build &&
+    cmake -DBUILD_LIB=ON &&
+    make -j 4 &&
+    cd ..
+
+script:
+  - PYTHONPATH=.:./build py.test unit_test --cov-report term --cov=pyblock
+
+after_success:
+  - codecov

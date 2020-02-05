@@ -33,7 +33,7 @@ from block.symmetry import VectorStateInfo, get_commute_parity
 from block.symmetry import state_tensor_product, SpinQuantum, VectorSpinQuantum
 from block.symmetry import StateInfo, SpinSpace, IrrepSpace, state_tensor_product_target
 from block.operator import Wavefunction, OpTypes, StackSparseMatrix
-from block.block import Block, StorageTypes
+from block.block import Block, StorageTypes, VectorBlock
 from block.block import init_starting_block, init_new_system_block
 from block.rev import tensor_scale, tensor_trace, tensor_rotate, tensor_product
 from block.rev import tensor_scale_add, tensor_scale_add_no_trans, tensor_precondition
@@ -1194,8 +1194,6 @@ class BlockHamiltonian:
     Initialization of block code.
     
     Attributes:
-        memory_initialzed : bool
-            Whether stack memory has been allocated.
         output_level : int
             Output level of block code.
         point_group : str
@@ -1219,7 +1217,6 @@ class BlockHamiltonian:
         e : float
             Const term in energy.
     """
-    memory_initialzed = False
 
     def __init__(self, *args, **kwargs):
 
@@ -1305,10 +1302,9 @@ class BlockHamiltonian:
             raise BlockError('Currently two dot to one dot is not supported.')
         self.dot = 1 if Global.dmrginp.algorithm_type == AlgorithmTypes.OneDot else 2
 
-        if not self.__class__.memory_initialzed:
-            init_stack_memory()
-            self.__class__.memory_initialzed = True
-
+        init_stack_memory()
+        
+        MPS.site_blocks = VectorBlock([])
         MPS_init(True)
     
     def get_site_operators(self, i):
@@ -1371,6 +1367,10 @@ class BlockHamiltonian:
     def set_current_memory(m):
         """Reset current stack memory to given position."""
         return set_current_stack_memory(m)
+    
+    @staticmethod
+    def release_memory():
+        release_stack_memory()
     
     @staticmethod
     def block_operator_summary(block):

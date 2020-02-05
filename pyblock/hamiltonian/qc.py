@@ -125,6 +125,10 @@ def read_fcidump(filename):
                 cont_dict[p_key.strip().lower()] = b.strip()
             elif len(c.strip()) != 0:
                 cont_dict[p_key.strip().lower()] += ',' + c.strip()
+        
+        for k, v in cont_dict.items():
+            if ',' in v:
+                v = cont_dict[k] = v.split(',')
 
         n = int(cont_dict['norb'])
         t = TInt(n)
@@ -144,9 +148,3 @@ def read_fcidump(filename):
             else:
                 v[i - 1, j - 1, k - 1, l - 1] = d
     return cont_dict, (t, v, e)
-
-
-if __name__ == "__main__":
-    opts, (t, v, e) = read_fcidump('N2.STO3G.FCIDUMP')
-    print(e)
-    print(v)

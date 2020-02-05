@@ -53,7 +53,9 @@ FILE(GLOB_RECURSE SRCS src/array/*.C src/block/*.C src/csf/*.C src/dmrg/*.C src/
 FILE(GLOB_RECURSE EXC_SRCS *-checkpoint.C *-checkpoint.cpp)
 FILE(GLOB_RECURSE RM_PYBIND_SRCS src/pybind/*.cpp)
 
-LIST(REMOVE_ITEM SRCS ${EXC_SRCS})
+IF (${EXC_SRCS})
+    LIST(REMOVE_ITEM SRCS ${EXC_SRCS})
+ENDIF()
 
 MESSAGE(STATUS "BUILD_LIB = ${BUILD_LIB}")
 
@@ -90,7 +92,9 @@ ENDIF()
 IF (${BUILD_LIB})
     FILE(GLOB_RECURSE PYBIND_SRCS src/pybind/*.cpp src/rev/*.cpp)
     SET(SRCS ${PYBIND_SRCS} ${SRCS})
-    LIST(REMOVE_ITEM SRCS ${EXC_SRCS})
+    IF (${EXC_SRCS})
+        LIST(REMOVE_ITEM SRCS ${EXC_SRCS})
+    ENDIF()
 
     IF (${NO_PYBIND})
         MESSAGE(STATUS "NO_PYBIND")

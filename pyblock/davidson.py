@@ -25,6 +25,9 @@ Davidson diagonalization algorithm.
 
 import numpy as np
 
+class DavidsonError:
+    pass
+
 class Vector:
     """General interface of Vector for Davidson algorithm"""
     def __init__(self, arr, factor=1.0):
@@ -225,7 +228,7 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
             m += 1
         
         if xiter == max_iter:
-            print("only %d converged" % ck)
+            raise DavidsonError("Only %d converged!" % ck)
     
     for i in range(len(b) - 1, k - 1, -1):
         sigma[i].deallocate()
@@ -236,40 +239,3 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
         sigma[i].deallocate()
     
     return ld[:ck], b[:ck], xiter
-
-if __name__ == "__main__":
-    
-    def test_7():
-        a = np.array([[0,  2,  9,  2,  0,  4,  5],
-                      [2,  0,  6,  5,  2,  5,  9],
-                      [9,  6,  0,  4,  5,  8,  1],
-                      [2,  5,  4,  0,  0,  3,  5],
-                      [0,  2,  5,  0,  0,  2,  9],
-                      [4,  5,  8,  3,  2,  0,  4],
-                      [5,  9,  1,  5,  9,  4,  0]], dtype=float)
-
-        b = np.identity(7, dtype=float)
-
-        e = np.array([-16.24341216, -7.16254184, -5.12344007, -3.41825462, 0.68226548,
-                      4.63978769, 26.62559552])
-
-        ld, nb, _ = davidson(Matrix(a), [Vector(b[0]), Vector(b[1])], 2)
-        print(ld, e)
-    
-    def test_rand(n, k):
-        a = np.zeros((n, n))
-        for i in range(n):
-            for j in range(i, n):
-                a[i, j] = np.random.random()
-                a[j, i] = a[i, j]
-        ee, vv = np.linalg.eigh(a)
-        
-        b = [Vector(ib) for ib in np.eye(k, n)]
-        
-        ld, nb, _ = davidson(Matrix(a), b, k, deflation_max_size=max(5, k + 10))
-        print('std = ', ee[:k])
-        print('dav = ', ld)
-        print('std = ', vv[:, 0])
-        print('dav = ', nb[0])
-    
-    test_rand(2000, 5)

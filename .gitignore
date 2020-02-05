@@ -2,7 +2,7 @@ build/
 build-cmake/
 docs/build/
 my_test/
-tests/node0/
+node0/
 MANIFEST
 .clang-format
 .vscode/
