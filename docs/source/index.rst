@@ -10,6 +10,7 @@ Welcome to PyBlock's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   DMRG/main
    API/modules-py
    API/modules-block
 
