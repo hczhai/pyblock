@@ -4,7 +4,7 @@
 # this is simply a wrapper for the "MPS" code defined inside Block code
 # Energy = -107.6482508192
 
-from pyblock.block_dmrg import DMRG as BLOCK_DMRG
+from pyblock.legacy.block_dmrg import DMRG as BLOCK_DMRG
 from block.dmrg import MPS as BLOCK_MPS, SweepParams, MPS_init
 from block import VectorBool
 from block.io import Global

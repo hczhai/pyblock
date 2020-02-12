@@ -3,24 +3,20 @@
 # E(rand init) = -170.1862673967
 # E(FCI) = -171.276833655391
 
-from pyblock.hamiltonian.block import BlockHamiltonian
-from pyblock.tensor.mpo import BlockMPO
-from pyblock.block_dmrg import DMRG as BLOCK_DMRG
+from pyblock.qchem import BlockHamiltonian, MPS, MPSInfo, LineCoupling
+from pyblock.legacy.block_dmrg import DMRG as BLOCK_DMRG
 
-ham = BlockHamiltonian(fcidump='N2-1E.FCIDUMP', point_group='d2h', dot=2, output_level=0)
-mpo = BlockMPO(ham)
-mpo.init_site_operators()
-mpo.init_mpo_tensors()
-
-bond_dim = 500
-
-lcp = mpo.get_line_coupling(bond_dim)
-mpo.set_line_coupling(lcp)
-mps = mpo.identity_state()
-# mps = mpo.rand_state()
-mps.left_normalize()
-
-rot_mats = {tuple(range(0, i + 1)): mpo.info.get_left_rotation_matrix(i, mps[i]) for i in range(0, ham.n_sites)}
-dmrg_bl = BLOCK_DMRG("")
-dmrg_bl.dmrg(gen_block=True, rot_mats=rot_mats)
-dmrg_bl.finalize()
+with BlockHamiltonian.get(fcidump='N2-1E.FCIDUMP', pg='d2h', su2=True) as hamil:
+    
+    lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
+    mps = MPS(lcp, center=hamil.n_sites, dot=0)
+    mps.randomize()
+    mps.canonicalize()
+    mps_info = MPSInfo(lcp)
+    
+    rot_mats = {}
+    for i in range(0, hamil.n_sites):
+        rot_mats[tuple(range(0, i + 1))] = mps_info.get_left_rotation_matrix(i, mps[i])
+    
+    dmrg_block = BLOCK_DMRG("")
+    dmrg_block.dmrg(gen_block=True, rot_mats=rot_mats)

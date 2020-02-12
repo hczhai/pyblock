@@ -23,7 +23,7 @@
 DMRG algorithm.
 """
 
-from .tensor.tensor import Tensor
+from .tensor.tensor import Tensor, TensorNetwork
 
 class DMRGError(Exception):
     pass
@@ -37,8 +37,6 @@ class MovingEnvironment:
             Number of sites/orbitals.
         dot : int
             Two-dot (2) or one-dot (1) scheme.
-        forward : bool
-            Direction of current sweep. If True, sweep is performed from left to right.
         tnc : TensorNetwork
             The tensor network <bra|H|ket> before contraction.
         pos : int
@@ -46,72 +44,55 @@ class MovingEnvironment:
         envs : dict(int -> TensorNetwork)
             DMRG Environment for different positions of left dot.
     """
-    def __init__(self, n_sites, dot, tn, forward, complete=False):
+    def __init__(self, n_sites, center, dot, tn):
+        self.pos = center
         self.dot = dot
         self.n_sites = n_sites
-        self.forward = forward
-        # contracted tensor network
         self.tnc = tn.copy()
-
-        self.init_environments(forward, complete)
+        self.init_environments()
     
-    def init_environments(self, forward, complete):
-        """
-        Initialize DMRG Environment blocks by contraction.
-        
-        Args:
-            forward : bool
-                Direction of current sweep. If True, sweep is performed from left to right.
-            complete : bool
-                Whether extra edge environments (not used in DMRG algorithm) should be generated.
-        """
+    def init_environments(self):
+        """Initialize DMRG Environment blocks by contraction."""
 
         self.tnc |= Tensor(blocks=None, tags={'_LEFT', '_HAM'})
         self.tnc |= Tensor(blocks=None, tags={'_RIGHT', '_HAM'})
-
-        if forward:
-            
-            tags_initial = {'_RIGHT'} | set(range(self.n_sites - self.dot, self.n_sites))
-            self.envs = {self.n_sites - self.dot: self.tnc.select(tags_initial, which='any')}
-
-            # sites inside [env=] are contracted. there is extra one dot site not contracted
-            # i = 0, dot = 1 :: [sys=][sdot=0][env=1,2..]
-            # i = 0, dot = 2 :: [sys=][sdot=0][edot=1][env=2,3..]
-            for i in range(self.n_sites - self.dot - 1, -1, -1):
-                # add a new site to previous env, and contract one site
-                self.envs[i] = self.envs[i + 1].copy()
-                self.envs[i] |= self.tnc.select(i)
-                self.envs[i] ^= ('_RIGHT', i + self.dot)
-            
-            if complete:
-                for i in range(1, self.dot + 1):
-                    self.envs[-i] = self.envs[-i + 1].copy()
-                    self.envs[-i] ^= ('_RIGHT', -i + self.dot)
-            
-            self.envs[0] |= self.tnc[{'_LEFT', '_HAM'}]
-            self.pos = 0
         
-        else:
-
-            tags_initial = {'_LEFT'} | set(range(0, self.dot))
-            self.envs = {0: self.tnc.select(tags_initial, which='any')}
-
-            # i = n - 1, dot = 1 :: [env=..n-2][sdot=n-1][sys=]
-            # i = n - 2, dot = 2 :: [env=..n-3][edot=n-2][sdot=n-1][sys=]
-            for i in range(1, self.n_sites - (self.dot - 1)):
-                # add a new site to previous env, and contract one site
-                self.envs[i] = self.envs[i - 1].copy()
-                self.envs[i] |= self.tnc.select(i + self.dot - 1)
-                self.envs[i] ^= ('_LEFT', i - 1)
-                
-            if complete:
-                for i in range(1, self.dot + 1):
-                    self.envs[self.n_sites - self.dot + i] = self.envs[self.n_sites - self.dot + i - 1].copy()
-                    self.envs[self.n_sites - self.dot + i] ^= ('_LEFT', self.n_sites - self.dot + i - 1)
-            
-            self.envs[self.n_sites - self.dot] |= self.tnc[{'_RIGHT', '_HAM'}]
-            self.pos = self.n_sites - self.dot
-
+        tags_initial = {'_RIGHT'} | set(range(self.n_sites - self.dot, self.n_sites))
+        self.envs = {self.n_sites - self.dot: self.tnc.select(tags_initial, which='any')}
+        
+        # sites inside [env=] are contracted. there is extra one dot site not contracted
+        # i = 0, dot = 1 :: [sys=][sdot=0][env=1,2..]
+        # i = 0, dot = 2 :: [sys=][sdot=0][edot=1][env=2,3..]
+        for i in range(self.n_sites - self.dot - 1, self.pos - 1, -1):
+            # add a new site to previous env, and contract one site
+            self.envs[i] = self.envs[i + 1].copy()
+            self.envs[i].remove({i}, in_place=True)
+            self.envs[i] |= self.tnc.select(i)
+            self.envs[i] ^= ('_RIGHT', i + self.dot)
+        
+        tags_initial = {'_LEFT'} | set(range(0, self.dot - 1))
+        self.envs[-1] = self.tnc.select(tags_initial, which='any')
+        
+        # i = n - 1, dot = 1 :: [env=..n-2][sdot=n-1][sys=]
+        # i = n - 2, dot = 2 :: [env=..n-3][edot=n-2][sdot=n-1][sys=]
+        for i in range(0, self.pos):
+            # add a new site to previous env, and contract one site
+            self.envs[i] = self.envs[i - 1].copy()
+            self.envs[i].remove({i + self.dot - 1}, in_place=True)
+            self.envs[i] |= self.tnc.select(i + self.dot - 1)
+            self.envs[i] ^= ('_LEFT', i - 1)
+        
+        self.envs[self.pos] |= (self.envs[self.pos - 1].copy() ^ ('_LEFT', self.pos - 1)).select('_LEFT')
+    
+    def prepare_sweep(self):
+        """Prepare environment for next sweep."""
+        
+        for i in range(self.n_sites - self.dot, self.pos, -1):
+            self.envs[i].remove({'_LEFT'}, in_place=True)
+        
+        for i in range(0, self.pos):
+            self.envs[i].remove({'_RIGHT'}, in_place=True)
+    
     def move_to(self, i):
         """
         Change the current left dot site to ``i`` (by zero or one site).
@@ -119,12 +100,18 @@ class MovingEnvironment:
         if i > self.pos:
             # move right
             new_sys = self.envs[self.pos].select({'_LEFT', self.pos}, which='any')
-            self.envs[self.pos + 1] |= new_sys ^ ('_LEFT', self.pos)
+            self.envs[self.pos + 1] |= new_sys.copy() ^ ('_LEFT', self.pos)
+            if self.dot == 2:
+                self.envs[self.pos + 1].remove({self.pos + 1}, in_place=True)
+                self.envs[self.pos + 1] |= self.envs[self.pos].select({self.pos + 1})
             self.pos += 1
         elif i < self.pos:
             # move left
             new_sys = self.envs[self.pos].select({'_RIGHT', self.pos + self.dot - 1}, which='any')
-            self.envs[self.pos - 1] |= new_sys ^ ('_RIGHT', self.pos + self.dot - 1)
+            self.envs[self.pos - 1] |= new_sys.copy() ^ ('_RIGHT', self.pos + self.dot - 1)
+            if self.dot == 2:
+                self.envs[self.pos - 1].remove({self.pos}, in_place=True)
+                self.envs[self.pos - 1] |= self.envs[self.pos].select({self.pos})
             self.pos -= 1
     
     def __call__(self):
@@ -139,40 +126,36 @@ class DMRG:
             Number of sites/orbitals
         dot : int
             Two-dot (2) or one-dot (1) scheme.
-        bond_dim : list(int) or int
+        bond_dims : list(int) or int
             Bond dimension for each sweep.
         noise : list(float) or float
             Noise prefactor for each sweep.
-        tn : TensorNetwork
-            The tensor network <bra|H|ket> before contraction.
         energies : list(float)
             Energies collected for all sweeps.
     """
-    def __init__(self, mpo, bond_dim, noise=0.0, dot=2, mps=None):
-        self.n_sites = mpo.n_sites
-        self.dot = dot
-        self.bond_dims = bond_dim if isinstance(
-            bond_dim, list) else [bond_dim]
+    def __init__(self, mpo, mps, bond_dim, noise=0.0, contractor=None, rebuild=True):
+        self.n_sites = len(mpo)
+        self.dot = mps.dot
+        self.center = mps.center
+        self.bond_dims = bond_dim if isinstance(bond_dim, list) else [bond_dim]
         self.noise = noise if isinstance(noise, list) else [noise]
 
-        if mps is not None:
-            self._k = mps.deep_copy()
-        else:
-            self._k = mpo.rand_state()
-
-        self._b = self._k.deep_copy()
-        self._h = mpo.copy()
-
-        self._k.add_tags({'_KET'})
-        self._b.add_tags({'_BRA'})
-        self._h.add_tags({'_HAM'})
-
-        self.tn = self._b | self._h | self._k
+        self._k = mps.deep_copy().add_tags({'_KET'})
+        self._b = mps.deep_copy().add_tags({'_BRA'})
+        self._h = mpo.copy().add_tags({'_HAM'})
+        
+        self._h.set_contractor(contractor)
+        self._k.set_contractor(contractor)
 
         self.energies = []
         
-        self._pre_sweep = mpo.pre_sweep
-        self._post_sweep = mpo.post_sweep
+        self._pre_sweep = contractor.pre_sweep if contractor is not None and rebuild else lambda: None
+        self._post_sweep = contractor.post_sweep if contractor is not None and rebuild else lambda: None
+        
+        self.rebuild = rebuild
+        
+        if not rebuild:
+            self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
     
     def update_one_dot(self, i, forward, bond_dim, noise):
         """Update local site in one-dot scheme. Not implemented."""
@@ -213,27 +196,35 @@ class DMRG:
         """
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         
-        gs_old = self._k.select({i, i + 1}, which='any')
+        gs_old = self.eff_ham()[{i, i + 1, '_KET'}]
         
         if h_eff.contractor is not None:
             energy, gs, ndav = h_eff.contractor.eigs(h_eff, gs_old)
             
-            if noise != 0.0:
-                gs.add_noise(noise)
             
-            l_fused, r_fused, error = gs.split(absorb_right=forward, k=bond_dim)
-
-            h_eff.contractor.update_local_mps_info(i, l_fused)
+            dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
+            
+            l_fused, r_fused, error = \
+                gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim)
+            
+            if forward:
+                h_eff.contractor.update_local_left_mps_info(i, l_fused)
+            else:
+                h_eff.contractor.update_local_right_mps_info(i, r_fused)
+            
             l = h_eff.contractor.unfuse_left(i, l_fused)
             r = h_eff.contractor.unfuse_right(i + 1, r_fused)
 
         else:
             raise DMRGError('general eigenvalue solver is not implemented!')
         
-        self._k[i].modify(l)
-        self._b[i].modify(l)
-        self._k[i + 1].modify(r)
-        self._b[i + 1].modify(r)
+        tn_lr = TensorNetwork(tensors=[l, r])
+        tn_lr_ket = tn_lr.copy().add_tags({'_KET'})
+        tn_lr_bra = tn_lr.copy().add_tags({'_BRA'})
+        
+        self._k.replace({i, i + 1}, tn_lr_ket)
+        self._b.replace({i, i + 1}, tn_lr_bra)
+        self.eff_ham().replace({i, i + 1}, tn_lr_ket | tn_lr_bra)
         
         return energy, error, ndav
 
@@ -246,7 +237,7 @@ class DMRG:
                 Site index of left dot
             forward : bool
                 Direction of current sweep. If True, sweep is performed from left to right.
-            bond_dims : int
+            bond_dim : int
                 Bond dimension of current sweep.
             noise : float
                 Noise prefactor of current sweep.
@@ -260,10 +251,21 @@ class DMRG:
                 Number of Davidson iterations.
         """
         self.eff_ham.move_to(i)
+        self.center = i
 
         if self.dot == 1:
             return self.update_one_dot(i, forward, bond_dim, noise)
         else:
+            
+            if len(self._k.select({i, i + 1, '_KET'}, which='exact')) == 0:
+                self._k[{i, '_KET'}].contractor = self._h[{i, '_HAM'}].contractor
+                twod_ket = self._k.select({i, i + 1}, which='any') ^ ('_KET', i, i + 1)
+                twod_bra = twod_ket.copy().remove_tags({'_KET'}).add_tags({'_BRA'})
+                self._k.replace({i, i + 1}, twod_ket, which='any')
+                self._b.replace({i, i + 1}, twod_bra, which='any')
+                [self.eff_ham().remove({j, t}, in_place=True) for j in [i, i + 1] for t in ['_KET', '_BRA']]
+                self.eff_ham().add(twod_ket | twod_bra)
+            
             return self.update_two_dot(i, forward, bond_dim, noise)
 
     def sweep(self, forward, bond_dim, noise):
@@ -284,19 +286,25 @@ class DMRG:
         """
         self._pre_sweep()
         
-        self.eff_ham = MovingEnvironment(self.n_sites, self.dot, self.tn, forward)
+        if self.rebuild:
+            self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
+        else:
+            self.eff_ham.prepare_sweep()
 
         # if forward/backward, i is the first dot site
 
         if forward:
-            sweep_range = range(0, self.n_sites - self.dot + 1)
+            sweep_range = range(self.center, self.n_sites - self.dot + 1)
         else:
-            sweep_range = range(self.n_sites - self.dot, -1, -1)
+            sweep_range = range(self.center, -1, -1)
         
         sweep_energies = []
 
         for i in sweep_range:
-            print(" %3s Iter = %4d .. " % ('==>' if forward else '<==', abs(i - sweep_range[0]),), end='', flush=True)
+            if self.dot == 2:
+                print(" %3s Iter = %4d-%4d .. " % ('==>' if forward else '<==', i, i + 1), end='', flush=True)
+            else:
+                print(" %3s Iter = %4d .. " % ('==>' if forward else '<==', i), end='', flush=True)
             energy, error, ndav = self.blocking(i, forward=forward, bond_dim=bond_dim, noise=noise)
             print("NDAV = %4d E = %15.8f Error = %15.8f" % (ndav, energy, error))
             sweep_energies.append(energy)
@@ -305,7 +313,7 @@ class DMRG:
 
         return sorted(sweep_energies)[0]
 
-    def solve(self, n_sweeps, tol):
+    def solve(self, n_sweeps, tol, forward=True):
         """
         Perform DMRG algorithm.
         
@@ -314,12 +322,13 @@ class DMRG:
                 Maximum number of sweeps.
             tol : float
                 Energy convergence threshold.
+            forward : bool
+                Direction of first sweep. If True, sweep is performed from left to right.
         
         Returns:
             energy : float
                 Final ground state energy.
         """
-        forward = False
         converged = False
 
         if len(self.bond_dims) < n_sweeps:

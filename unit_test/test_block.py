@@ -1,5 +1,5 @@
 
-from pyblock.hamiltonian.block import BlockSymmetry, BlockHamiltonian, BlockError
+from pyblock.qchem.core import BlockSymmetry, BlockHamiltonian, BlockError
 from pyblock.symmetry.symmetry import DirectProdGroup, PGD2H, SZ, SU2, ParticleN
 
 from block.symmetry import SpinQuantum, SpinSpace, IrrepSpace

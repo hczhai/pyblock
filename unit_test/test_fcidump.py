@@ -1,5 +1,5 @@
 
-from pyblock.hamiltonian.qc import TInt, VInt, read_fcidump
+from pyblock.qchem.fcidump import TInt, VInt, read_fcidump
 
 import numpy as np
 import pytest

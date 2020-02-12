@@ -25,7 +25,7 @@ Davidson diagonalization algorithm.
 
 import numpy as np
 
-class DavidsonError:
+class DavidsonError(Exception):
     pass
 
 class Vector:

@@ -108,7 +108,9 @@ class SubTensor:
             and all(np.allclose(cgx, cgy) for cgx, cgy in zip(self.cgs, o.cgs))
 
     def __repr__(self):
-        return "(Q=) %r (R=) %r" % (self.q_labels, self.reduced)
+#         reduced = self.reduced if self.reduced is not None else self.reduced_shape
+        reduced = self.reduced_shape
+        return "(Q=) %r (R=) %r" % (self.q_labels, reduced)
 
 
 class Tensor:
@@ -143,6 +145,12 @@ class Tensor:
         """Deep copy."""
         return Tensor(blocks=self.blocks[:], tags=self.tags.copy(),
                       contractor=self.contractor)
+    
+    def zero_copy(self):
+        """A deep copy with zero reduced matrices."""
+        blocks = [SubTensor(q_labels=b.q_labels, reduced=np.zeros_like(b.reduced), cgs=b.cgs)
+                  for b in self.blocks]
+        return Tensor(blocks=blocks, tags=self.tags.copy(), contractor=self.contractor)
 
     @property
     def rank(self):
@@ -165,7 +173,7 @@ class Tensor:
 
     # build the tensor by coupling states in pre and basis into states in post
     @staticmethod
-    def rank3_init(pre, basis, post):
+    def rank3_init_left(pre, basis, post):
         """
         Build the MPS rank-3 tensor by coupling states
         in ``pre`` and ``basis`` into states in ``post``.
@@ -192,6 +200,122 @@ class Tensor:
                         blocks.append(SubTensor(q_labels=(kp, kb, kr)))
                         blocks[-1].reduced_shape = [vp, vb, post[kr]]
         return Tensor(blocks)
+    
+    @staticmethod
+    def rank3_init_right(pre, basis, post):
+        """
+        Build the MPS rank-3 tensor by coupling states
+        in ``pre`` and ``basis`` into states in ``post``.
+        :attr:`cgs` and :attr:`reduced` will not be calculated.
+        
+        Args:
+            pre : dict(DirectProdGroup -> int)
+                Right basis.
+            basis : dict(DirectProdGroup -> int)
+                Site basis.
+            post : dict(DirectProdGroup -> int)
+                Left basis. Left basis should be obtained from
+                truncating the direct product of right and site basis.
+        
+        Returns:
+            tensor : Tensor
+        """
+        blocks = []
+        for kp, vp in sorted(pre.items(), key=lambda x:x[0]):
+            for kb, vb in sorted(basis.items(), key=lambda x:x[0]):
+                rs = kp + kb
+                for kr in (rs if isinstance(rs, list) else [rs]):
+                    if kr in sorted(post.keys()):
+                        blocks.append(SubTensor(q_labels=(kr, kb, kp)))
+                        blocks[-1].reduced_shape = [post[kr], vb, vp]
+        return Tensor(blocks)
+    
+    @staticmethod
+    def rank2_init_target(left, right, target):
+        blocks = []
+        for kl, vl in sorted(left.items(), key=lambda x:x[0]):
+            for kr, vr in sorted(right.items(), key=lambda x:x[0]):
+                krs = kl + kr
+                if target in (krs if isinstance(krs, list) else [krs]):
+                    blocks.append(SubTensor(q_labels=(kl, kr)))
+                    blocks[-1].reduced_shape = (vl, vr)
+        return Tensor(blocks)
+    
+    def fuse_index(self, idxl, fused, target=None):
+        map_tensor = {}
+        repeated_q_labels = {}
+        for block in self.blocks:
+            p = block.q_labels[idxl]
+            q = block.q_labels[idxl + 1]
+            rs = p + q
+            if block.q_labels not in repeated_q_labels:
+                repeated_q_labels[block.q_labels] = set()
+            for r in (rs if isinstance(rs, list) else [rs]):
+                if r not in fused:
+                    continue
+                if r in repeated_q_labels[block.q_labels]:
+                    continue
+                q_labels = block.q_labels[:idxl] + (r, ) + block.q_labels[idxl + 2:]
+                if target is not None:
+                    if len(q_labels) == 2:
+                        qs = q_labels[0] + q_labels[1]
+                        if target not in (qs if isinstance(qs, list) else [qs]):
+                            continue
+                    elif len(q_labels) == 3:
+                        gs = q_labels[0] + q_labels[1]
+                        found = False
+                        for g in (gs if isinstance(gs, list) else [gs]):
+                            hs = g + q_labels[2]
+                            if target in (hs if isinstance(hs, list) else [hs]):
+                                found = True
+                                break
+                        if not found:
+                            continue
+                repeated_q_labels[block.q_labels].add(r)
+                if q_labels not in map_tensor:
+                    map_tensor[q_labels] = []
+                reduced = block.reduced.reshape(
+                    block.reduced.shape[:idxl] + (block.reduced.shape[idxl] * block.reduced.shape[idxl + 1], )
+                    + block.reduced.shape[idxl + 2:])
+                map_tensor[q_labels].append((p, q, reduced))
+                break
+        blocks = []
+        for q_labels, v in sorted(map_tensor.items(), key=lambda x:x[0]):
+            v.sort(key=lambda x: x[0:2])
+            reduced = np.concatenate([t[2] for t in v], axis=idxl)
+            blocks.append(SubTensor(q_labels=q_labels, reduced=reduced))
+        self.blocks = blocks 
+    
+    def unfuse_index(self, idx, left, right):
+        blocks = []
+        map_tensor = {}
+        shape = tuple(slice(None) for _ in range(self.rank))
+        for block in self.blocks:
+            qidx = block.q_labels[idx]
+            if qidx not in map_tensor:
+                map_tensor[qidx] = [[], 0]
+            map_tensor[qidx][0].append(block)
+        if not isinstance(left, list):
+            left = sorted(left.items(), key=lambda x:x[0])
+        if not isinstance(right, list):
+            right = sorted(right.items(), key=lambda x:x[0])
+        for kl, vl in left:
+            for kr, vr in right:
+                kts = kl + kr
+                for kt in (kts if isinstance(kts, list) else [kts]):
+                    if kt in map_tensor:
+                        tidx = map_tensor[kt][1]
+                        for block in map_tensor[kt][0]:
+                            q_labels = block.q_labels[:idx] + (kl, kr) + block.q_labels[idx + 1:]
+                            if block.reduced is not None:
+                                reduced = block.reduced[shape[:idx] + (slice(tidx, tidx + vl * vr), ) + shape[idx + 1:]]
+                                reduced = reduced.reshape(reduced.shape[:idx] + (vl, vr) + reduced.shape[idx + 1:])
+                                blocks.append(SubTensor(q_labels=q_labels, reduced=reduced))
+                            else:
+                                blocks.append(SubTensor(q_labels=q_labels))
+                                blocks[-1].reduced_shape = block.reduced_shape[:idx] + (vl, vr) + block.reduced_shape[idx + 1:]
+                        map_tensor[kt][1] += vl * vr
+        self.blocks = blocks
 
     # repr is a list of dense matrices, in different op_q_labels
     # op_q_labels is a list of operator quantum numbers
@@ -324,7 +448,7 @@ class Tensor:
         else:
             raise TensorNetworkError('not implemented yet!')
         
-        return Tensor(tensors=map_idx_out.values(), tags=ts.tags, contractor=ts.contractor)
+        return Tensor(tensors=list(map_idx_out.values()), tags=ts.tags, contractor=ts.contractor)
 
     @staticmethod
     def contract(tsa, tsb, idxa, idxb, target_q_labels=None):
@@ -424,9 +548,51 @@ class Tensor:
                                         q_labels=outg, reduced=mat, cgs=cgs)
                                 else:
                                     map_idx_out[outg].reduced += mat
-        return Tensor(map_idx_out.values())
+        return Tensor(list(map_idx_out.values()))
     
-    def svd(self, k=-1):
+    def diag_eigs(self, k=-1):
+        assert self.rank == 2
+        blocks = []
+        eigen_values = []
+        total_k = 0
+        for block in self.blocks:
+            assert block.q_labels[0] == block.q_labels[1]
+            ld, alpha = np.linalg.eigh(block.reduced)
+            blocks.append(SubTensor(block.q_labels, alpha))
+            eigen_values.append(ld)
+            total_k += len(ld)
+        
+        if k == -1 or total_k <= k:
+            # no truncation
+            return Tensor(blocks), eigen_values, 0.0
+        else:
+            error = 0.0
+            ss = [(i, j, v) for i, ps in enumerate(eigen_values) for j, v in enumerate(ps)]
+            assert len(ss) == total_k
+            ss.sort(key=lambda x: -x[2])
+            ss_trunc = ss[:k]
+            ss_trunc.sort(key=lambda x: (x[0], x[1]))
+            blocks_covered = [False] * len(self.blocks)
+            for ik, g in groupby(ss_trunc, key=lambda x: x[0]):
+                gl = np.array([ig[1] for ig in g], dtype=int)
+                blocks_covered[ik] = True
+                if len(gl) != len(eigen_values[ik]):
+                    blocks[ik].reduced = blocks[ik].reduced[:, gl]
+                    blocks[ik].reduced_shape = blocks[ik].reduced.shape
+                    error += eigen_values[ik].sum() - eigen_values[ik][gl].sum()
+                    eigen_values[ik] = eigen_values[ik][gl]
+            blocks_trunc = []
+            eigen_values_trunc = []
+            for ik, cov in enumerate(blocks_covered):
+                if cov:
+                    blocks_trunc.append(blocks[ik])
+                    eigen_values_trunc.append(eigen_values[ik])
+                else:
+                    error += eigen_values[ik].sum()
+            return Tensor(blocks_trunc), eigen_values_trunc, error
+        
+    
+    def svd(self, q_label_left, k=-1):
         """
         Singular Value Decomposition of rank-2 block-diagonal Tensor.
         
@@ -442,7 +608,7 @@ class Tensor:
             svd_s : list(numpy.ndarray)
                 A list including singular values for each tensor block.
             error : float
-                Sum of Discarded weights.
+                Sum of Discarded weights (square of singular values).
         """
         assert self.rank == 2
         blocks_l = []
@@ -450,10 +616,13 @@ class Tensor:
         svd_s = []
         total_k = 0
         for block in self.blocks:
-            assert block.q_labels[0] == block.q_labels[1]
             u, s, vh = np.linalg.svd(block.reduced, full_matrices=False)
-            blocks_l.append(SubTensor(block.q_labels, u))
-            blocks_r.append(SubTensor(block.q_labels, vh))
+            if q_label_left:
+                blocks_l.append(SubTensor((block.q_labels[0], block.q_labels[0]), u))
+                blocks_r.append(SubTensor(block.q_labels, vh))
+            else:
+                blocks_l.append(SubTensor(block.q_labels, u))
+                blocks_r.append(SubTensor((block.q_labels[1], block.q_labels[1]), vh))
             svd_s.append(s)
             total_k += len(s)
         
@@ -479,8 +648,8 @@ class Tensor:
                     blocks_l[ik].reduced_shape = blocks_l[ik].reduced.shape
                     blocks_r[ik].reduced = blocks_r[ik].reduced[glb:gle + 1, :]
                     blocks_r[ik].reduced_shape = blocks_r[ik].reduced.shape
+                    error += (svd_s[ik][:glb] ** 2).sum() + (svd_s[ik][gle + 1:] ** 2).sum()
                     svd_s[ik] = svd_s[ik][glb:gle + 1]
-                    error += svd_s[ik][:glb].sum() + svd_s[ik][gle + 1:].sum()
             blocks_l_trunc = []
             blocks_r_trunc = []
             svd_s_trunc = []
@@ -490,8 +659,48 @@ class Tensor:
                     blocks_r_trunc.append(blocks_r[ik])
                     svd_s_trunc.append(svd_s[ik])
                 else:
-                    error += svd_s[ik].sum()
+                    error += (svd_s[ik] ** 2).sum()
             return Tensor(blocks_l_trunc), Tensor(blocks_r_trunc), svd_s_trunc, error
+    
+    def get_diag_density_matrix(self, trace_right, noise=0.0):
+        assert self.rank == 2
+        map_idx_b = {}
+        for block in self.blocks:
+            subg = block.q_labels[0 if trace_right else 1]
+            if subg not in map_idx_b:
+                map_idx_b[subg] = []
+            map_idx_b[subg].append(block)
+        blocks = []
+        # trace T*trans(T), keeping only diagonal elements
+        for q, qbs in map_idx_b.items():
+            mat = 0
+            for block in qbs:
+                idx = [1] if trace_right else [0]
+                mat += np.tensordot(block.reduced, block.reduced, axes=(idx, idx))
+            blocks.append(SubTensor(q_labels=(q, q), reduced=mat))
+        
+        dm = Tensor(blocks=blocks)
+        
+        if noise != 0.0:
+            noise_tensor = self.zero_copy()
+            noise_tensor.add_noise(noise)
+            noise_dm = noise_tensor.get_diag_density_matrix(trace_right)
+            dm += noise_dm
+        
+        return dm
+    
+    def split_using_density_matrix(self, dm, absorb_right, k=-1):
+        ts_p, _, error = dm.diag_eigs(k=k)
+        if absorb_right:
+            ts_l = ts_p
+            ts_r = Tensor.contract(ts_p, self, [0], [0])
+        else:
+            ts_l = Tensor.contract(self, ts_p, [1], [0])
+            ts_r = ts_p
+            for block in ts_r.blocks:
+                block.reduced = block.reduced.T
+                block.reduced_shape = block.reduced.shape
+        return ts_l, ts_r, error
     
     # split rank-2 block-diagonal Tensor to two tensors
     # using svd
@@ -518,7 +727,7 @@ class Tensor:
             error : float
                 Sum of Discarded weights.
         """
-        ts_l, ts_r, svd_s, error = self.svd(k=k)
+        ts_l, ts_r, svd_s, error = self.svd(q_label_left=absorb_right, k=k)
         assert ts_l.n_blocks == ts_r.n_blocks and ts_l.n_blocks == len(svd_s)
         for l, r, s in zip(ts_l.blocks, ts_r.blocks, svd_s):
             if absorb_right:
@@ -532,9 +741,9 @@ class Tensor:
     # left normalization needs to collect all left indices for each specific right index
     # so that we will only have one R, but left dim of q is unchanged
     # at: where to divide the tensor into matrix => (0, at) x (at, n_ranks)
-    def left_normalize(self):
+    def left_canonicalize(self):
         """
-        Left normalization (using QR factorization).
+        Left canonicalization (using QR factorization).
         
         Returns:
             r_blocks : dict((DirectProdGroup, ) -> numpy.ndarray)
@@ -563,9 +772,9 @@ class Tensor:
                 b.reduced_shape = b.reduced.shape
         return r_blocks
 
-    def right_normalize(self):
+    def right_canonicalize(self):
         """
-        Right normalization (using LQ factorization).
+        Right canonicalization (using LQ factorization).
         
         Returns:
             l_blocks : dict((DirectProdGroup, ) -> numpy.ndarray)
@@ -597,7 +806,7 @@ class Tensor:
     def left_multiply(self, mats):
         """
         Left Multiplication.
-        Currently only used for multiplying R obtained from Left-normalization.
+        Currently only used for multiplying R obtained from right-canonicalization.
         
         Args:
             mats : dict((DirectProdGroup, ) -> numpy.ndarray)
@@ -608,6 +817,22 @@ class Tensor:
             if q_labels_r in mats:
                 block.reduced = np.tensordot(
                     mats[q_labels_r], block.reduced, axes=([1], [0]))
+                block.reduced_shape = block.reduced.shape
+                
+    def right_multiply(self, mats):
+        """
+        Right Multiplication.
+        Currently only used for multiplying L obtained from right-canonicalization.
+        
+        Args:
+            mats : dict((DirectProdGroup, ) -> numpy.ndarray)
+                The L matrix for each left-index quantum label.
+        """
+        for block in self.blocks:
+            q_labels_l = (block.q_labels[-1], )
+            if q_labels_l in mats:
+                block.reduced = np.tensordot(
+                    block.reduced, mats[q_labels_l], axes=([block.rank - 1], [0]))
                 block.reduced_shape = block.reduced.shape
 
     def set_tags(self, tags):
@@ -625,10 +850,10 @@ class Tensor:
         map_s = {tuple(b.q_labels): b for b in self.blocks}
         map_o = {tuple(b.q_labels): b for b in o.blocks}
         blocks = []
-        for q, b in map_s:
+        for q, b in map_s.items():
             if q in map_o:
                 blocks.append(
-                    SubTensor(q, b.reduced + map_o[q].reduced, b.cgs))
+                    SubTensor(q_labels=q, reduced=b.reduced + map_o[q].reduced, cgs=b.cgs))
             else:
                 blocks.append(b)
         return Tensor(blocks=blocks, tags=self.tags, contractor=self.contractor)
@@ -703,7 +928,7 @@ class TensorNetwork:
                 raise TensorNetworkError('invalid which parameter.')
             if inverse ^ p:
                 r.append(tensor)
-        return self.__class__(tensors=r)
+        return TensorNetwork(tensors=r)
 
     def remove(self, tags, which='all', in_place=False):
         """
@@ -736,27 +961,42 @@ class TensorNetwork:
         elif isinstance(tn, TensorNetwork):
             for tensor in tn.tensors:
                 self.tensors.append(tensor)
+        elif isinstance(tn, list):
+            for tensor in tn:
+                self.tensors.append(tensor)
         else:
             raise TensorNetworkError(
                 'Unable to add this object to the network.')
+    
+    def replace(self, tags, tn, which='all'):
+        self.remove(tags, which=which, in_place=True)
+        self.add(tn)
 
     def add_tags(self, tags):
         """Add tags to all tensors in the tensor network."""
         for tensor in self.tensors:
             tensor.tags |= tags
+        return self
+    
+    def set_contractor(self, contractor):
+        """Set contractor for all tensors in the tensor network."""
+        for tensor in self.tensors:
+            tensor.contractor = contractor
+        return self
 
     def remove_tags(self, tags):
         """Remove tags from all tensors in the tensor network."""
         for tensor in self.tensors:
             tensor.tags -= tags
+        return self
     
     def copy(self):
         """Shallow copy."""
-        return self.__class__(tensors=[t.copy() for t in self.tensors])
+        return TensorNetwork(tensors=[t.copy() for t in self.tensors])
     
     def deep_copy(self):
         """Deep copy."""
-        return self.__class__(tensors=[t.deep_copy() for t in self.tensors])
+        return TensorNetwork(tensors=[t.deep_copy() for t in self.tensors])
 
     def contract(self, tags, in_place=False):
         """
@@ -780,6 +1020,10 @@ class TensorNetwork:
         if isinstance(tags, str) or isinstance(tags, int):
             tags = (tags, )
         cont_tn = self.select(set(tags), which='any')
+        if len(cont_tn) == 1:
+            return self
+        elif len(cont_tn) == 0:
+            raise TensorNetworkError('No tensor to conract.')
         ctr = None
         for t in cont_tn.tensors:
             if t.contractor is not None:
@@ -819,12 +1063,11 @@ class TensorNetwork:
 
     def __or__(self, other):
         if isinstance(other, Tensor):
-            return self.__class__(tensors=self.tensors + [other])
+            return TensorNetwork(tensors=self.tensors + [other])
         elif isinstance(other, TensorNetwork):
-            if self.__class__ == other.__class__:
-                return self.__class__(tensors=self.tensors + other.tensors)
-            else:
-                return TensorNetwork(tensors=self.tensors + other.tensors)
+            return TensorNetwork(tensors=self.tensors + other.tensors)
+        elif isinstance(other, list):
+            return TensorNetwork(tensors=self.tensors + other)
         else:
             raise TensorNetworkError(
                 'Unable to create the network using this object.')
