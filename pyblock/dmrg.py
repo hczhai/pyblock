@@ -146,6 +146,10 @@ class DMRG:
         
         self._h.set_contractor(contractor)
         self._k.set_contractor(contractor)
+        
+        self.canonical_form  = ['L'] * min(self.center, self.n_sites)
+        self.canonical_form += ['C'] * self.dot
+        self.canonical_form += ['R'] * max(self.n_sites - self.center - self.dot, 0)
 
         self.energies = []
         
@@ -201,7 +205,6 @@ class DMRG:
         if h_eff.contractor is not None:
             energy, gs, ndav = h_eff.contractor.eigs(h_eff, gs_old)
             
-            
             dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
             
             l_fused, r_fused, error = \
@@ -218,6 +221,9 @@ class DMRG:
         else:
             raise DMRGError('general eigenvalue solver is not implemented!')
         
+        self.canonical_form[i] = 'L' if forward else 'C'
+        self.canonical_form[i + 1] = 'R' if not forward else 'C'
+            
         tn_lr = TensorNetwork(tensors=[l, r])
         tn_lr_ket = tn_lr.copy().add_tags({'_KET'})
         tn_lr_bra = tn_lr.copy().add_tags({'_BRA'})
@@ -258,13 +264,20 @@ class DMRG:
         else:
             
             if len(self._k.select({i, i + 1, '_KET'}, which='exact')) == 0:
-                self._k[{i, '_KET'}].contractor = self._h[{i, '_HAM'}].contractor
-                twod_ket = self._k.select({i, i + 1}, which='any') ^ ('_KET', i, i + 1)
-                twod_bra = twod_ket.copy().remove_tags({'_KET'}).add_tags({'_BRA'})
-                self._k.replace({i, i + 1}, twod_ket, which='any')
-                self._b.replace({i, i + 1}, twod_bra, which='any')
-                [self.eff_ham().remove({j, t}, in_place=True) for j in [i, i + 1] for t in ['_KET', '_BRA']]
-                self.eff_ham().add(twod_ket | twod_bra)
+                ctr = self._h[{i, '_HAM'}].contractor
+                
+                if ctr is not None:
+                    self._k[{i, '_KET'}].contractor = ctr
+                    ctr.fuse_left(i, self._k[{i, '_KET'}], self.canonical_form[i] == 'L')
+                    ctr.fuse_right(i + 1, self._k[{i + 1, '_KET'}], self.canonical_form[i + 1] == 'R')
+                    twod_ket = self._k.select({i, i + 1}, which='any') ^ ('_KET', i, i + 1)
+                    twod_bra = twod_ket.copy().remove_tags({'_KET'}).add_tags({'_BRA'})
+                    self._k.replace({i, i + 1}, twod_ket, which='any')
+                    self._b.replace({i, i + 1}, twod_bra, which='any')
+                    [self.eff_ham().remove({j, t}, in_place=True) for j in [i, i + 1] for t in ['_KET', '_BRA']]
+                    self.eff_ham().add(twod_ket | twod_bra)
+                else:
+                    raise DMRGError('need a contractor for fusing two-dot object!')
             
             return self.update_two_dot(i, forward, bond_dim, noise)
 

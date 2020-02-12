@@ -241,7 +241,7 @@ class Tensor:
                     blocks[-1].reduced_shape = (vl, vr)
         return Tensor(blocks)
     
-    def fuse_index(self, idxl, fused, target=None):
+    def fuse_index(self, idxl, fused, target=None, equal=None):
         map_tensor = {}
         repeated_q_labels = {}
         for block in self.blocks:
@@ -256,6 +256,10 @@ class Tensor:
                 if r in repeated_q_labels[block.q_labels]:
                     continue
                 q_labels = block.q_labels[:idxl] + (r, ) + block.q_labels[idxl + 2:]
+                if equal is not None:
+                    assert len(q_labels) == 2
+                    if q_labels[0] != q_labels[1]:
+                        continue
                 if target is not None:
                     if len(q_labels) == 2:
                         qs = q_labels[0] + q_labels[1]
@@ -283,6 +287,9 @@ class Tensor:
         for q_labels, v in sorted(map_tensor.items(), key=lambda x:x[0]):
             v.sort(key=lambda x: x[0:2])
             reduced = np.concatenate([t[2] for t in v], axis=idxl)
+            if reduced.shape[idxl] != fused[q_labels[idxl]]:
+                print(q_labels, q_labels[idxl], reduced.shape[idxl], fused[q_labels[idxl]])
+            assert reduced.shape[idxl] == fused[q_labels[idxl]]
             blocks.append(SubTensor(q_labels=q_labels, reduced=reduced))
         self.blocks = blocks 
     

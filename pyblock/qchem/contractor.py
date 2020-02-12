@@ -30,7 +30,7 @@ from block.rev import tensor_precondition
 
 from ..tensor.tensor import Tensor, SubTensor
 from ..davidson import davidson
-from .core import BlockHamiltonian, BlockEvaluation
+from .core import BlockHamiltonian, BlockEvaluation, BlockSymmetry
 import numpy as np
 
 
@@ -91,18 +91,11 @@ class DMRGContractor:
             mpst = mpst.copy()
             i = self._tag_site(mpst)
             
-            l = self.mps_info.left_block_basis[i - 1] if i > 0 else None
-            r = self.mps_info.basis[i]
-            mpst.fuse_index(0, self.mps_info.lcp.tensor_product(l, r), target=self.mps_info.lcp.target)
-            
-            l = self.mps_info.basis[i + 1]
-            r = self.mps_info.right_block_basis[i + 2] if i + 1 < self.n_sites - 1 else None
-            mpst.fuse_index(1, self.mps_info.lcp.tensor_product(l, r), target=self.mps_info.lcp.target)
+            st_l = self.mps_info.left_state_info_no_trunc[i]
+            st_r = self.mps_info.right_state_info_no_trunc[i + 1]
             
             wfn = self.mps_info.get_wavefunction_fused(i, mpst, dot=2)
             
-            st_l = self.mps_info.left_state_info_no_trunc[i]
-            st_r = self.mps_info.right_state_info_no_trunc[i + 1]
             st = state_tensor_product_target(st_l, st_r)
             a = BlockMultiplyH(opt, st)
             b = [BlockWavefunction(wfn)]
@@ -127,6 +120,22 @@ class DMRGContractor:
         """Update :attr:`info` for site i using the right tensor from SVD."""
         block_basis = [(b.q_labels[0], b.reduced.shape[0]) for b in r_fused.blocks]
         self.mps_info.update_local_right_block_basis(i, block_basis)
+    
+    def fuse_left(self, i, tensor, q_label_left):
+        st_l = self.mps_info.left_state_info_no_trunc[i]
+        stlq = BlockSymmetry.from_state_info(st_l)
+        if q_label_left:
+            tensor.fuse_index(0, dict(stlq), equal=True)
+        else:
+            tensor.fuse_index(0, dict(stlq), target=self.mps_info.lcp.target)
+    
+    def fuse_right(self, i, tensor, q_label_right):
+        st_r = self.mps_info.right_state_info_no_trunc[i]
+        strq = BlockSymmetry.from_state_info(st_r)
+        if q_label_right:
+            tensor.fuse_index(1, dict(strq), equal=True)
+        else:
+            tensor.fuse_index(1, dict(strq), target=self.mps_info.lcp.target)
     
     def unfuse_left(self, i, tensor):
         l = [(self.mps_info.lcp.empty, 1)] if i == 0 else self.mps_info.left_block_basis[i - 1]
@@ -208,25 +217,24 @@ class DMRGContractor:
                     ham_right = ts[2]
                 return BlockEvaluation.left_right_contract(ham_left, ham_right)
             else:
-                print(tn.tags)
                 assert False
         elif dir == '_KET':
             ts = sorted(tn.tensors, key=self._tag_site)
+            at = 1
             map_idx_b = {}
             for block in ts[1].blocks:
                 subg = block.q_labels[0]
                 if subg not in map_idx_b:
                     map_idx_b[subg] = []
                 map_idx_b[subg].append(block)
-            # note that for future fusing indices same q_labels must be kept un-summed
             blocks = []
             for block_a in ts[0].blocks:
-                subg = block_a.q_labels[2]
+                subg = block_a.q_labels[at]
                 if subg in map_idx_b:
-                    outga = block_a.q_labels[0:2]
+                    outga = block_a.q_labels[0:at]
                     for block_b in map_idx_b[subg]:
                         outg = outga + block_b.q_labels[1:]
-                        mat = np.tensordot(block_a.reduced, block_b.reduced, axes=([2], [0]))
+                        mat = np.tensordot(block_a.reduced, block_b.reduced, axes=([at], [0]))
                         blocks.append(SubTensor(q_labels=outg, reduced=mat))
             return Tensor(blocks=blocks).set_tags({dir, i, j})
         else:

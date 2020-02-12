@@ -46,6 +46,28 @@ class LineCoupling:
         self.right_dims = self._fill_from_right()
         if self.target is not None:
             self._filter()
+        self.left_dims_fci = [d.copy() for d in self.left_dims]
+        self.right_dims_fci = [d.copy() for d in self.right_dims]
+    
+    def _post_check_left(self):
+        for d in range(0, self.n_sites):
+            if d == 0:
+                dd = self.tensor_product(None, self.basis[d])
+            else:
+                dd = self.tensor_product(self.left_dims[d - 1], self.basis[d])
+            for k, v in self.left_dims[d].items():
+                if k in dd and self.left_dims[d][k] > dd[k]:
+                    self.left_dims[d][k] = dd[k]
+    
+    def _post_check_right(self):
+        for d in range(self.n_sites - 1, -1, -1):
+            if d == self.n_sites - 1:
+                dd = self.tensor_product(self.basis[d], None)
+            else:
+                dd = self.tensor_product(self.basis[d], self.right_dims[d + 1])
+            for k, v in self.right_dims[d].items():
+                if k in dd and self.right_dims[d][k] > dd[k]:
+                    self.right_dims[d][k] = dd[k]
     
     def _fill_from_left(self):
         dim_l = [None] * self.n_sites
@@ -116,6 +138,8 @@ class LineCoupling:
             if x > m:
                 for k, v in self.right_dims[i].items():
                     self.right_dims[i][k] = int(np.ceil(v * m / x))
+        self._post_check_left()
+        self._post_check_right()
 
 class MPSInfo:
     def __init__(self, lcp):
@@ -308,9 +332,6 @@ class MPSInfo:
                 q_labels = (BlockSymmetry.from_spin_quantum(st_l.quanta[il]),
                     BlockSymmetry.from_spin_quantum(st_r.quanta[ir]))
                 if q_labels in map_tensor:
-                    # FIXME !!! sometimes this shape can mismatch!
-                    if mat.ref.shape != map_tensor[q_labels].reduced.shape:
-                        print(q_labels, mat.ref.shape, map_tensor[q_labels].reduced.shape)
                     mat.ref[:, :] = map_tensor[q_labels].reduced
             
             return wfn
@@ -568,11 +589,6 @@ class MPS(TensorNetwork):
         if self.dot != 0:
             tensors.append(Tensor.rank2_init_target(ld, rd, lcp.target))
             tensors[-1].tags = set(range(self.center, self.center + self.dot))
-        if self.dot == 1:
-            tensors[-1].unfuse_index(0, l, lcp.basis[self.center])
-        elif self.dot == 2:
-            tensors[-1].unfuse_index(0, l, lcp.basis[self.center])
-            tensors[-1].unfuse_index(2, lcp.basis[self.center + 1], r)
         return tensors
         
     def randomize(self):
@@ -586,9 +602,21 @@ class MPS(TensorNetwork):
             rs = self[i].left_canonicalize()
             if i + 1 < self.n_sites:
                 ts = self.select({i + 1}).tensors[0]
+                if i + 1 == self.center:
+                    l = self.lcp.left_dims[i]
+                    ts.unfuse_index(0, l, self.lcp.basis[i + 1])
                 ts.left_multiply(rs)
+                if i + 1 == self.center:
+                    ld = self.lcp.tensor_product(l, self.lcp.basis[i + 1])
+                    ts.fuse_index(0, ld, target=self.lcp.target)
         for i in range(self.n_sites - 1, self.center + self.dot - 1, -1):
             ls = self[i].right_canonicalize()
             if i - 1 >= 0:
                 ts = self.select({i - 1}).tensors[0]
+                if i - 1 == self.center + self.dot - 1:
+                    r = self.lcp.right_dims[i]
+                    ts.unfuse_index(1, self.lcp.basis[i - 1], r)
                 ts.right_multiply(ls)
+                if i - 1 == self.center + self.dot - 1:
+                    rd = self.lcp.tensor_product(self.lcp.basis[i - 1], r)
+                    ts.fuse_index(1, rd, target=self.lcp.target)

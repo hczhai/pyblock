@@ -404,6 +404,17 @@ class BlockSymmetry:
             qs.append(self.to_spin_quantum(k))
             ns.append(v)
         return StateInfo(qs, ns)
+    
+    @classmethod
+    def from_state_info(self, state_info):
+        """Translate from StateInfo (block code) to [(:class:`DirectProdGroup`, int)]."""
+        n = len(state_info.quanta)
+        states = []
+        for i in range(n):
+            q = self.from_spin_quantum(state_info.quanta[i])
+            nq = state_info.n_states[i]
+            states.append((q, nq))
+        return states
 
     @classmethod
     def initial_state_info(self, i=0):
