@@ -1,5 +1,6 @@
 
 # PYTHONPATH=../..:../../build python dmrg_block.py
+# E = -75.7283698579
 # E(block-dmrg) = -75.728386566258
 
 from pyblock.qchem import BlockHamiltonian, MPS, MPSInfo, LineCoupling

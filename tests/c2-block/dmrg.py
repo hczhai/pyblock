@@ -8,7 +8,7 @@ from pyblock.dmrg import DMRG
 
 bond_dim = 200
 
-with BlockHamiltonian.get(fcidump='C2.BLOCK.FCIDUMP', pg='d2h', su2=True, output_level=0, memory=8) as hamil:
+with BlockHamiltonian.get(fcidump='C2.BLOCK.FCIDUMP', pg='d2h', su2=True, output_level=0, memory=8000) as hamil:
     lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
     mps = MPS(lcp, center=0, dot=2)
     mps.randomize()

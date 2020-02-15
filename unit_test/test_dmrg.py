@@ -17,7 +17,7 @@ class TestDMRG:
     def test_hubbard(self, data_dir):
         fcidump = 'HUBBARD-L8.FCIDUMP'
         pg = 'c1'
-        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1) as hamil:
+        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1, memory=200) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(50)
             mps = MPS(lcp, center=0, dot=2)
@@ -32,7 +32,7 @@ class TestDMRG:
     def test_n2_sto3g(self, data_dir):
         fcidump = 'N2.STO3G.FCIDUMP'
         pg = 'd2h'
-        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1) as hamil:
+        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1, memory=1200) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(100)
             mps = MPS(lcp, center=0, dot=2)

@@ -523,7 +523,7 @@ class BlockHamiltonian:
                 elif k == 'max_m':
                     input['maxM'] = str(v)
                 elif k == 'memory':
-                    input['memory'] = str(v) + ' g'
+                    input['memory'] = str(v) + ' m'
                 elif k == 'spin_adapted':
                     if v == False:
                         input['nonspinadapted'] = ''
@@ -578,59 +578,6 @@ class BlockHamiltonian:
                                     for j in range(self.n_sites)], dtype=object)
         self.two_site_minus_q = np.array([[self.one_site_q[i] - self.one_site_q[j] for i in range(self.n_sites)]
                                     for j in range(self.n_sites)], dtype=object)
-    
-    def get_site_operators_1e(self, i):
-        ops = {}
-        block = Block(i, i, 0, False)
-        
-        mat = StackSparseMatrix()
-        mat.deep_copy(block.ops[OpTypes.Hamiltonian].local_element_linear(0)[0])
-        assert not mat.fermion
-        ops[OpElement(OpNames.H, ())] = mat
-        
-        mat = StackSparseMatrix()
-        mat.deep_copy(block.ops[OpTypes.Overlap].local_element_linear(0)[0])
-        assert not mat.fermion
-        ops[OpElement(OpNames.I, ())] = mat
-        
-        mat = StackSparseMatrix()
-        mat.deep_copy(block.ops[OpTypes.Cre].local_element_linear(0)[0])
-        assert mat.fermion
-        ops[OpElement(OpNames.C, (i, ))] = mat
-        
-        mat = StackSparseMatrix()
-        mat.deep_copy(block.ops[OpTypes.Des].local_element_linear(0)[0])
-        assert mat.fermion
-        ops[OpElement(OpNames.D, (i, ))] = mat
-        
-        for j in range(0, self.n_sites):
-            
-            if j == i:
-                continue
-            
-            mat = StackSparseMatrix()
-            mat.deep_copy(block.ops[OpTypes.Des].local_element_linear(0)[0])
-            assert mat.fermion
-            tensor_scale(self.t[j, i] * np.sqrt(2) * 0.25, mat)
-            ops[OpElement(OpNames.S, (j, ))] = mat
-            ql = mat.delta_quantum[0]
-            ql.symm = IrrepSpace(self.spatial_syms[j])
-            mat.delta_quantum = VectorSpinQuantum([ql])
-            
-            mat = StackSparseMatrix()
-            mat.deep_copy(block.ops[OpTypes.Cre].local_element_linear(0)[0])
-            assert mat.fermion
-            tensor_scale(self.t[j, i] * np.sqrt(2) * 0.25, mat)
-            ops[OpElement(OpNames.SD, (j, ))] = mat
-            ql = mat.delta_quantum[0]
-            ql.symm = IrrepSpace(self.spatial_syms[j])
-            mat.delta_quantum = VectorSpinQuantum([ql])
-            
-            if self.spatial_syms[j] != self.spatial_syms[i]:
-                assert np.isclose(self.t[j, i], 0.0)
-        
-        # TODO :: need to store Block to deallocate it later
-        return ops
     
     def get_site_operators(self, m):
         """Return operator representations dict(OpElement -> StackSparseMatrix) at site m."""
@@ -796,7 +743,7 @@ class BlockHamiltonian:
     
     @staticmethod
     @contextlib.contextmanager
-    def get(fcidump, pg, su2, dot=2, output_level=0, memory=2):
+    def get(fcidump, pg, su2, dot=2, output_level=0, memory=2000):
         ham = BlockHamiltonian(fcidump=fcidump, point_group=pg,
                                dot=dot, spin_adapted=su2,
                                output_level=output_level, memory=memory)
