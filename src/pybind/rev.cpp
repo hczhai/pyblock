@@ -19,12 +19,12 @@ PYBIND11_MAKE_OPAQUE(vector<::Matrix>);
 void pybind_rev(py::module &m) {
     
     m.def("tensor_trace", &block2::TensorTrace, py::arg("a"), py::arg("c"),
-          py::arg("state_info"), py::arg("trace_right"), py::arg("scale") = 1.0,
-          
-          py::call_guard<py::scoped_ostream_redirect,
-                     py::scoped_estream_redirect>());
+          py::arg("state_info"), py::arg("trace_right"), py::arg("scale") = 1.0);
     
     m.def("tensor_product", &block2::TensorProduct, py::arg("a"), py::arg("b"), py::arg("c"),
+          py::arg("state_info"), py::arg("scale") = 1.0);
+    
+    m.def("product", &block2::Product, py::arg("a"), py::arg("b"), py::arg("c"),
           py::arg("state_info"), py::arg("scale") = 1.0);
     
     m.def("tensor_rotate", &block2::TensorRotate, py::arg("a"), py::arg("c"),

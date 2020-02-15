@@ -334,6 +334,52 @@ void TensorProduct(const StackSparseMatrix &a, const StackSparseMatrix &b, Stack
     }
 
 }
+    
+
+void Product(const StackSparseMatrix &a, const StackSparseMatrix &b, const StackSparseMatrix &c,
+             const StateInfo &state_info, double scale) {
+    
+    if (fabs(scale) < TINY)
+        return;
+    
+    int rows = c.nrows();
+    for (int cq = 0; cq < rows; ++cq)
+        for (int cqprime = 0; cqprime < rows; ++cqprime)
+            if (c.allowed(cq, cqprime))
+                for (int aprime = 0; aprime < rows; aprime++)
+                    if (a.allowed(cq, aprime) && b.allowed(aprime, cqprime)) {
+                        int apj = state_info.quanta[aprime].get_s().getirrep(),
+                            cqj = state_info.quanta[cq].get_s().getirrep(),
+                            cqpj = state_info.quanta[cqprime].get_s().getirrep();
+                        
+                        double factor = a.get_scaling(state_info.quanta[cq],
+                                                      state_info.quanta[aprime]);
+                        factor *= b.get_scaling(state_info.quanta[aprime],
+                                                state_info.quanta[cqprime]);
+                        
+                        if (dmrginp.spinAdapted()) {
+
+                            factor *=
+                                racah(cqpj, b.get_spin().getirrep(), cqj,
+                                      a.get_spin().getirrep(), apj,
+                                      c.get_spin().getirrep()) *
+                                pow((1.0 * c.get_spin().getirrep() + 1.0) *
+                                        (1.0 * apj + 1.0),
+                                    0.5) *
+                                pow(-1.0,
+                                    static_cast<int>((b.get_spin().getirrep() +
+                                                      a.get_spin().getirrep() -
+                                                      c.get_spin().getirrep()) /
+                                                     2.0));
+                        }
+                        
+                        MatrixMultiply(
+                            a.operator_element(cq, aprime), a.conjugacy(),
+                            b.operator_element(aprime, cqprime), b.conjugacy(),
+                            c.operator_element(cq, cqprime), scale * factor,
+                            1.0);
+                    }
+}
 
 void TensorProductDiagonal(const StackSparseMatrix &a, const StackSparseMatrix &b, DiagonalMatrix &c,
                            const vector<boost::shared_ptr<StateInfo>> &state_info, double scale) {

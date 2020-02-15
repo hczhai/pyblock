@@ -756,7 +756,7 @@ After reordering of terms
         -\frac{\sqrt{3}}{2} \sum_{k \in *} \left[ \sum_{jl\in L} v_{ijkl} \big(a_l\big)^{[1/2]} \otimes_{[1]} \big(a_j\big)^{[1/2]} \right]
         \otimes_{[1/2]} \big(a_k^\dagger\big)^{[1/2]}  \\
         &\ + \frac{1}{2} \sum_{j\in *} \left[ \sum_{kl\in L} (2v_{ijkl} - v_{ilkj}) \big(a_k^\dagger\big)^{[1/2]} \otimes_{[0]} \big(a_l\big)^{[1/2]} \right]
-        \otimes_{[1/2]} \big(a_l\big)^{[1/2]}
+        \otimes_{[1/2]} \big(a_j\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{l\in *} \left[ \sum_{jk\in L} v_{ijkl} \big(a_k^\dagger\big)^{[1/2]} \otimes_{[1]} \big(a_j\big)^{[1/2]} \right]
         \otimes_{[1/2]} \big(a_l\big)^{[1/2]}
 
@@ -792,7 +792,7 @@ we have
         +\frac{\sqrt{3}}{2} \sum_{l\in L} \big(a_l\big)^{[1/2]} \otimes_{[1/2]} \big( {\hat{Q}}_{il}^{\prime *} \big)^{[1]}\\
         &\ - \frac{1}{2} \sum_{k \in *,jl\in L} v_{ijkl} \big( \hat{A}_{jl}^\dagger \big)^{[0]} \otimes_{[1/2]}  \big(a_k^\dagger\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{k \in *,jl\in L} v_{ijkl} \big( \hat{A}_{jl}^\dagger \big)^{[1]} \otimes_{[1/2]} \big(a_k^\dagger\big)^{[1/2]}  \\
-        &\ + \frac{1}{2} \sum_{j\in *,kl\in L} (2v_{ijkl} - v_{ilkj}) \big( \hat{B}_{kl} \big)^{[0]} \otimes_{[1/2]} \big(a_l\big)^{[1/2]}
+        &\ + \frac{1}{2} \sum_{j\in *,kl\in L} (2v_{ijkl} - v_{ilkj}) \big( \hat{B}_{kl} \big)^{[0]} \otimes_{[1/2]} \big(a_j\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{l\in *,jk\in L} v_{ijkl} \big( {\hat{B}'}_{kj} \big)^{[1]} \otimes_{[1/2]} \big(a_l\big)^{[1/2]} \\
     \big( \hat{R}_{i}^{\prime L*,CN} \big)^{[1/2]} =&\
         \big( \hat{R}_{i}^{\prime L} \big)^{[1/2]} \otimes_{[1/2]} \big( \hat{1}^* \big)^{[0]}
@@ -803,7 +803,7 @@ we have
         +\frac{\sqrt{3}}{2} \sum_{l\in L,jk\in *} v_{ijkl} \big(a_l\big)^{[1/2]} \otimes_{[1/2]} \big( {\hat{B}'}_{kj} \big)^{[1]} \\
         &\ - \frac{1}{2} \sum_{k \in *} \big( \hat{P}_{ik}^{L} \big)^{[0]} \otimes_{[1/2]}  \big(a_k^\dagger\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{k \in *} \big( \hat{P}_{ik}^{L} \big)^{[1]} \otimes_{[1/2]} \big(a_k^\dagger\big)^{[1/2]}  \\
-        &\ + \frac{1}{2} \sum_{j\in *} \big( {\hat{Q}}_{ij}^{\prime \prime L} \big)^{[0]} \otimes_{[1/2]} \big(a_l\big)^{[1/2]}
+        &\ + \frac{1}{2} \sum_{j\in *} \big( {\hat{Q}}_{ij}^{\prime \prime L} \big)^{[0]} \otimes_{[1/2]} \big(a_j\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{l\in *} \big( {\hat{Q}}_{il}^{ \prime L} \big)^{[1]} \otimes_{[1/2]} \big(a_l\big)^{[1/2]}
 
 Similarly,
@@ -818,7 +818,7 @@ Similarly,
         +\frac{\sqrt{3}}{2} \sum_{l\in *} \big(a_l\big)^{[1/2]} \otimes_{[1/2]} \big( {\hat{Q}}_{il}^{\prime R} \big)^{[1]}\\
         &\ - \frac{1}{2} \sum_{k \in R,jl\in *} v_{ijkl} \big( \hat{A}_{jl}^\dagger \big)^{[0]} \otimes_{[1/2]}  \big(a_k^\dagger\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{k \in R,jl\in *} v_{ijkl} \big( \hat{A}_{jl}^\dagger \big)^{[1]} \otimes_{[1/2]} \big(a_k^\dagger\big)^{[1/2]}  \\
-        &\ + \frac{1}{2} \sum_{j\in R,kl\in *} (2v_{ijkl} - v_{ilkj}) \big( \hat{B}_{kl} \big)^{[0]} \otimes_{[1/2]} \big(a_l\big)^{[1/2]}
+        &\ + \frac{1}{2} \sum_{j\in R,kl\in *} (2v_{ijkl} - v_{ilkj}) \big( \hat{B}_{kl} \big)^{[0]} \otimes_{[1/2]} \big(a_j\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{l\in R,jk\in *} v_{ijkl} \big( {\hat{B}'}_{kj} \big)^{[1]} \otimes_{[1/2]} \big(a_l\big)^{[1/2]} \\
     \big( \hat{R}_{i}^{\prime R*,CN} \big)^{[1/2]} =&\
         \big( \hat{R}_{i}^{\prime *} \big)^{[1/2]} \otimes_{[1/2]} \big( \hat{1}^R \big)^{[0]}
@@ -829,7 +829,7 @@ Similarly,
         +\frac{\sqrt{3}}{2} \sum_{l\in *,jk\in R} v_{ijkl} \big(a_l\big)^{[1/2]} \otimes_{[1/2]} \big( {\hat{B}'}_{kj} \big)^{[1]} \\
         &\ - \frac{1}{2} \sum_{k \in R} \big( \hat{P}_{ik}^{*} \big)^{[0]} \otimes_{[1/2]}  \big(a_k^\dagger\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{k \in R} \big( \hat{P}_{ik}^{*} \big)^{[1]} \otimes_{[1/2]} \big(a_k^\dagger\big)^{[1/2]}  \\
-        &\ + \frac{1}{2} \sum_{j\in R} \big( {\hat{Q}}_{ij}^{\prime \prime *} \big)^{[0]} \otimes_{[1/2]} \big(a_l\big)^{[1/2]}
+        &\ + \frac{1}{2} \sum_{j\in R} \big( {\hat{Q}}_{ij}^{\prime \prime *} \big)^{[0]} \otimes_{[1/2]} \big(a_j\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{l\in R} \big( {\hat{Q}}_{il}^{ \prime *} \big)^{[1]} \otimes_{[1/2]} \big(a_l\big)^{[1/2]}
 
 Number of terms

@@ -261,7 +261,16 @@ void pybind_operator(py::module &m) {
             })
         .def_property(
             "delta_quantum",
-            [](StackSparseMatrix *self) { return self->set_deltaQuantum(); },
+            [](StackSparseMatrix *self) {
+                if (self->conjugacy() == 'n')
+                    return self->set_deltaQuantum();
+                else {
+                    vector<SpinQuantum> vs = self->set_deltaQuantum();
+                    for (size_t i = 0; i < vs.size(); i++)
+                        vs[i] = -vs[i];
+                    return vs;
+                }
+            },
             [](StackSparseMatrix *self, const vector<SpinQuantum> &m) {
                 self->set_deltaQuantum() = m;
             },
@@ -275,12 +284,20 @@ void pybind_operator(py::module &m) {
         .def("allowed", [](StackSparseMatrix *self, int i, int j) -> bool {
             return (bool) self->allowed(i, j);
         })
+        .def("get_scaling", &StackSparseMatrix::get_scaling, py::arg("leftq"), py::arg("rightq"))
+        .def("transpose", [](StackSparseMatrix *self) {
+            return SpinAdapted::Transpose(*self);
+        })
         .def("clear", &StackSparseMatrix::Clear)
         .def("deep_copy", &StackSparseMatrix::deepCopy)
         .def("deep_clear_copy", &StackSparseMatrix::deepClearCopy)
         .def("allocate", (void (StackSparseMatrix::*)(const StateInfo &)) &
                              StackSparseMatrix::allocate)
         .def("deallocate", &StackSparseMatrix::deallocate);
+    
+    py::class_<StackTransposeview, boost::shared_ptr<StackTransposeview>,
+               StackSparseMatrix>(m, "StackTransposeView")
+        .def(py::init<StackSparseMatrix&>());
 
     py::class_<StackWavefunction, boost::shared_ptr<StackWavefunction>,
                StackSparseMatrix>(m, "Wavefunction")

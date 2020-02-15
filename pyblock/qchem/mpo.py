@@ -23,7 +23,7 @@
 Matrix Product Operator for quantum chemistry calculations.
 """
 
-from ..tensor.operator import OpElement, OpNames
+from .operator import OpElement, OpNames
 from ..tensor.tensor import Tensor, TensorNetwork
 import numpy as np
 
@@ -66,8 +66,8 @@ class MPOInfo:
         self.hamil = hamil
         self.n_sites = hamil.n_sites
         self._init_operator_names()
-    
-    def _init_operator_names(self):
+        
+    def _init_operator_names_1e(self):
         self.left_operator_names = [None] * self.n_sites
         self.right_operator_names = [None] * self.n_sites
         
@@ -80,14 +80,141 @@ class MPOInfo:
             if i != 0:
                 lop[0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
                 for j in range(0, i):
-                    lop[1 + j * 2] = OpElement(OpNames.S, (j, ), q_label=-self.hamil.creation_q_labels[j])
-                    lop[2 + j * 2] = -OpElement(OpNames.SD, (j, ), q_label=self.hamil.creation_q_labels[j])
+                    lop[1 + j * 2] = 4.0 * OpElement(OpNames.S, (j, ), q_label=-self.hamil.one_site_q[j])
+                    lop[2 + j * 2] = 4.0 * OpElement(OpNames.SD, (j, ), q_label=self.hamil.one_site_q[j])
             rop[0] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
             if i != self.n_sites - 1:
                 for j in range(i + 1):
-                    rop[1 + j * 2] = OpElement(OpNames.C, (j, ), q_label=self.hamil.creation_q_labels[j])
-                    rop[2 + j * 2] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.creation_q_labels[j])
+                    rop[1 + j * 2] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
+                    rop[2 + j * 2] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
                 rop[-1] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            self.left_operator_names[i] = lop
+            self.right_operator_names[i] = rop
+    
+    def _init_operator_names_1e_x(self):
+        self.left_operator_names = [None] * self.n_sites
+        self.right_operator_names = [None] * self.n_sites
+        
+        for i in range(self.n_sites):
+            lshape = 2 + 2 * self.n_sites if i != 0 else 1
+            rshape = 2 + 2 * self.n_sites if i != self.n_sites - 1 else 1
+            lop = np.zeros((lshape, ), dtype=object)
+            rop = np.zeros((rshape, ), dtype=object)
+            rop[0] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+            if i != self.n_sites - 1:
+                rop[1] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                p = 2
+                for j in range(i + 1):
+                    rop[p + j] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
+                p += i + 1
+                for j in range(i + 1):
+                    rop[p + j] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += i + 1
+                for j in range(i + 1, self.n_sites):
+                    rop[p + j - i - 1] = 2.0 * OpElement(OpNames.SD, (j, ), q_label=self.hamil.one_site_q[j])
+                p += self.n_sites - (i + 1)
+                for j in range(i + 1, self.n_sites):
+                    rop[p + j - i - 1] = 2.0 * OpElement(OpNames.S, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += self.n_sites - (i + 1)
+                assert p == rop.shape[0]
+            lop[0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            if i != 0:
+                lop[1] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+                p = 2
+                for j in range(i):
+                    lop[p + j] = 2.0 * OpElement(OpNames.S, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += i
+                for j in range(i):
+                    lop[p + j] = 2.0 * OpElement(OpNames.SD, (j, ), q_label=self.hamil.one_site_q[j])
+                p += i
+                for j in range(i, self.n_sites):
+                    lop[p + j - i] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += self.n_sites - i
+                for j in range(i, self.n_sites):
+                    lop[p + j - i] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
+                p += self.n_sites - i
+                assert p == lop.shape[0]
+            self.left_operator_names[i] = lop
+            self.right_operator_names[i] = rop
+    
+    def _init_operator_names(self):
+        self.left_operator_names = [None] * self.n_sites
+        self.right_operator_names = [None] * self.n_sites
+        
+        for i in range(self.n_sites):
+            lshape = 2 + 2 * self.n_sites + 6 * i * i if i != 0 else 1
+            rshape = 2 + 2 * self.n_sites + 6 * (i + 1) * (i + 1) if i != self.n_sites - 1 else 1
+            lop = np.zeros((lshape, ), dtype=object)
+            rop = np.zeros((rshape, ), dtype=object)
+            rop[0] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+            if i != self.n_sites - 1:
+                rop[1] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                p = 2
+                for j in range(i + 1):
+                    rop[p + j] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
+                p += i + 1
+                for j in range(i + 1):
+                    rop[p + j] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += i + 1
+                for j in range(i + 1, self.n_sites):
+                    rop[p + j - i - 1] = 2.0 * OpElement(OpNames.RD, (j, ), q_label=self.hamil.one_site_q[j])
+                p += self.n_sites - (i + 1)
+                for j in range(i + 1, self.n_sites):
+                    rop[p + j - i - 1] = 2.0 * OpElement(OpNames.R, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += self.n_sites - (i + 1)
+                for s in [0, 1]:
+                    for j in range(i + 1):
+                        for k in range(i + 1):
+                            rop[p + k] = OpElement(OpNames.A, (j, k, s), q_label=self.hamil.two_site_plus_q[j, k][s])
+                        p += i + 1
+                for s in [0, 1]:
+                    for j in range(i + 1):
+                        for k in range(i + 1):
+                            rop[p + k] = OpElement(OpNames.AD, (j, k, s), q_label=-self.hamil.two_site_plus_q[j, k][s])
+                        p += i + 1
+                for s in [0, 1]:
+                    for j in range(i + 1):
+                        for k in range(i + 1):
+                            rop[p + k] = OpElement(OpNames.B, (j, k, s), q_label=self.hamil.two_site_minus_q[j, k][s])
+                        p += i + 1
+                assert p == rop.shape[0]
+            lop[0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            if i != 0:
+                lop[1] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+                p = 2
+                for j in range(i):
+                    lop[p + j] = 2.0 * OpElement(OpNames.R, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += i
+                for j in range(i):
+                    lop[p + j] = 2.0 * OpElement(OpNames.RD, (j, ), q_label=self.hamil.one_site_q[j])
+                p += i
+                for j in range(i, self.n_sites):
+                    lop[p + j - i] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += self.n_sites - i
+                for j in range(i, self.n_sites):
+                    lop[p + j - i] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
+                p += self.n_sites - i
+                su2_factor = [-0.5, -0.5 * np.sqrt(3.0)]
+                for s in [0, 1]:
+                    for j in range(i):
+                        for k in range(i):
+                            lop[p + k] = su2_factor[s] * \
+                                OpElement(OpNames.P, (j, k, s), q_label=-self.hamil.two_site_plus_q[j, k][s])
+                        p += i
+                for s in [0, 1]:
+                    for j in range(i):
+                        for k in range(i):
+                            lop[p + k] = su2_factor[s] * \
+                                OpElement(OpNames.PD, (j, k, s), q_label=self.hamil.two_site_plus_q[j, k][s])
+                        p += i
+                su2_factor = [1.0, np.sqrt(3.0)]
+                for s in [0, 1]:
+                    for j in range(i):
+                        for k in range(i):
+                            lop[p + k] = su2_factor[s] * \
+                                OpElement(OpNames.Q, (j, k, s), q_label=self.hamil.two_site_minus_q[j, k][s])
+                        p += i
+                assert p == lop.shape[0]
             self.left_operator_names[i] = lop
             self.right_operator_names[i] = rop
 
@@ -99,14 +226,14 @@ class MPO(TensorNetwork):
         tensors = self._init_mpo_tensors()
         super().__init__(tensors)
     
-    def _init_mpo_tensors(self):
+    def _init_mpo_tensors_1e(self):
         """Generate :attr:`tensors`."""
         tensors = []
         op_h = OpElement(OpNames.H, ())
         op_i = OpElement(OpNames.I, ())
-        op_c = OpElement(OpNames.C, ())
-        op_d = OpElement(OpNames.D, ())
         for i in range(self.n_sites):
+            op_c = OpElement(OpNames.C, (i, ))
+            op_d = OpElement(OpNames.D, (i, ))
             if i == 0:
                 mat = np.array([[op_h, op_c, op_d, op_i]], dtype=object)
             else:
@@ -122,8 +249,284 @@ class MPO(TensorNetwork):
                 mat[0, 0] = op_i
                 mat[1 + 2 * i, 0] = op_h
                 for j in range(0, i):
-                    mat[1 + j * 2, 0] = OpElement(OpNames.S, (j, ))
-                    mat[2 + j * 2, 0] = -OpElement(OpNames.SD, (j, ))
+                    mat[1 + j * 2, 0] = 4.0 * OpElement(OpNames.S, (j, ))
+                    mat[2 + j * 2, 0] = 4.0 * OpElement(OpNames.SD, (j, ))
             tensors.append(OperatorTensor(mat=mat, tags={i},
-                ops=self.hamil.get_site_operators(i)))
+                ops=self.hamil.get_site_operators_1e(i)))
+        return tensors
+    
+    
+    def _init_mpo_tensors_1e_x(self):
+        """Generate :attr:`tensors`."""
+        tensors = []
+        op_h = OpElement(OpNames.H, ())
+        op_i = OpElement(OpNames.I, ())
+        op_c = OpElement(OpNames.C, ())
+        op_d = OpElement(OpNames.D, ())
+        for m in range(self.n_sites):
+            lshape = 2 + 2 * self.n_sites if m != 0 else 1
+            rshape = 2 + 2 * self.n_sites if m != self.n_sites - 1 else 1
+            mat = np.zeros((lshape, rshape), dtype=object)
+            if m == 0:
+                mat[-1, 0] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+                mat[-1, 1] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                mat[-1, 2] = OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                mat[-1, 3] = OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
+                p = 4
+                for j in range(m + 1, self.n_sites):
+                    mat[-1, p + j - m - 1] = 2.0 * OpElement(OpNames.SD, (j, ), q_label=self.hamil.one_site_q[j])
+                p += self.n_sites - (m + 1)
+                for j in range(m + 1, self.n_sites):
+                    mat[-1, p + j - m - 1] = 2.0 * OpElement(OpNames.S, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += self.n_sites - (m + 1)
+                assert p == rshape
+            else:
+                mat[0, 0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                mat[1, 0] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+                p = 2
+                for j in range(m):
+                    mat[p + j, 0] = 2.0 * OpElement(OpNames.S, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += m
+                for j in range(m):
+                    mat[p + j, 0] = 2.0 * OpElement(OpNames.SD, (j, ), q_label=self.hamil.one_site_q[j])
+                p += m
+                for j in range(m, self.n_sites):
+                    if j == m:
+                        mat[p + j - m, 0] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += self.n_sites - m
+                for j in range(m, self.n_sites):
+                    if j == m:
+                        mat[p + j - m, 0] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
+                p += self.n_sites - m
+                assert p == lshape
+            if m != 0 and m != self.n_sites - 1:
+                mat[1, 1] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                p = 2
+                # pointers
+                pi = 1
+                pc = 2
+                pd = 2 + m
+                prd = 2 + m + m - m
+                pr = 2 + m + self.n_sites - m
+                # C
+                for j in range(m):
+                    mat[pc + j, p + j] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                mat[pi, p + m] = OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                p += m + 1
+                # D
+                for j in range(m):
+                    mat[pd + j, p + j] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                mat[pi, p + m] = OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
+                p += m + 1
+                # RD
+                for i in range(m + 1, self.n_sites):
+                    mat[prd + i, p + i - (m + 1)] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                    mat[pi, p + i - (m + 1)] = 2.0 * OpElement(OpNames.SD, (i, ), q_label=self.hamil.one_site_q[i])
+                p += self.n_sites - (m + 1)
+                # R
+                for i in range(m + 1, self.n_sites):
+                    mat[pr + i, p + i - (m + 1)] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                    mat[pi, p + i - (m + 1)] = 2.0 * OpElement(OpNames.S, (i, ), q_label=-self.hamil.one_site_q[i])
+                p += self.n_sites - (m + 1)
+                assert p == rshape
+            tensors.append(OperatorTensor(mat=mat, tags={m}, ops=self.hamil.get_site_operators_1e(m)))
+        return tensors
+    
+    def _init_mpo_tensors(self):
+        """Generate :attr:`tensors`."""
+        tensors = []
+        op_h = OpElement(OpNames.H, ())
+        op_i = OpElement(OpNames.I, ())
+        op_c = OpElement(OpNames.C, ())
+        op_d = OpElement(OpNames.D, ())
+        for m in range(self.n_sites):
+            lshape = 2 + 2 * self.n_sites + 6 * m * m if m != 0 else 1
+            rshape = 2 + 2 * self.n_sites + 6 * (m + 1) * (m + 1) if m != self.n_sites - 1 else 1
+            mat = np.zeros((lshape, rshape), dtype=object)
+            if m == 0:
+                mat[-1, 0] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+                mat[-1, 1] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                mat[-1, 2] = OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                mat[-1, 3] = OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
+                p = 4
+                for j in range(m + 1, self.n_sites):
+                    mat[-1, p + j - m - 1] = 2.0 * OpElement(OpNames.RD, (j, ), q_label=self.hamil.one_site_q[j])
+                p += self.n_sites - (m + 1)
+                for j in range(m + 1, self.n_sites):
+                    mat[-1, p + j - m - 1] = 2.0 * OpElement(OpNames.R, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += self.n_sites - (m + 1)
+                for s in [0, 1]:
+                    mat[-1, p + s] = OpElement(OpNames.A, (m, m, s), q_label=self.hamil.two_site_plus_q[m, m][s])
+                p += 2
+                for s in [0, 1]:
+                    mat[-1, p + s] = OpElement(OpNames.AD, (m, m, s), q_label=-self.hamil.two_site_plus_q[m, m][s])
+                p += 2
+                for s in [0, 1]:
+                    mat[-1, p + s] = OpElement(OpNames.B, (m, m, s), q_label=self.hamil.two_site_minus_q[m, m][s])
+                p += 2
+                assert p == rshape
+            else:
+                mat[0, 0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                mat[1, 0] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+                p = 2
+                for j in range(m):
+                    mat[p + j, 0] = 2.0 * OpElement(OpNames.R, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += m
+                for j in range(m):
+                    mat[p + j, 0] = 2.0 * OpElement(OpNames.RD, (j, ), q_label=self.hamil.one_site_q[j])
+                p += m
+                for j in range(m, self.n_sites):
+                    if j == m:
+                        mat[p + j - m, 0] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
+                p += self.n_sites - m
+                for j in range(m, self.n_sites):
+                    if j == m:
+                        mat[p + j - m, 0] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
+                p += self.n_sites - m
+                su2_factor = [-0.5, -0.5 * np.sqrt(3.0)]
+                for s in [0, 1]:
+                    for j in range(m):
+                        for k in range(m):
+                            mat[p + k, 0] = su2_factor[s] * \
+                                OpElement(OpNames.P, (j, k, s), q_label=-self.hamil.two_site_plus_q[j, k][s])
+                        p += m
+                for s in [0, 1]:
+                    for j in range(m):
+                        for k in range(m):
+                            mat[p + k, 0] = su2_factor[s] * \
+                                OpElement(OpNames.PD, (j, k, s), q_label=self.hamil.two_site_plus_q[j, k][s])
+                        p += m
+                su2_factor = [1.0, np.sqrt(3.0)]
+                for s in [0, 1]:
+                    for j in range(m):
+                        for k in range(m):
+                            mat[p + k, 0] = su2_factor[s] * \
+                                OpElement(OpNames.Q, (j, k, s), q_label=self.hamil.two_site_minus_q[j, k][s])
+                        p += m
+                assert p == lshape
+            if m != 0 and m != self.n_sites - 1:
+                mat[1, 1] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                p = 2
+                # pointers
+                pi = 1
+                pc = 2
+                pd = 2 + m
+                prd = 2 + m + m - m
+                pr = 2 + m + self.n_sites - m
+                pa0 = 2 + self.n_sites * 2
+                pa1 = 2 + self.n_sites * 2 + m * m
+                pad0 = 2 + self.n_sites * 2 + m * m * 2
+                pad1 = 2 + self.n_sites * 2 + m * m * 3
+                pb0 = 2 + self.n_sites * 2 + m * m * 4
+                pb1 = 2 + self.n_sites * 2 + m * m * 5
+                # C
+                for j in range(m):
+                    mat[pc + j, p + j] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                mat[pi, p + m] = OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                p += m + 1
+                # D
+                for j in range(m):
+                    mat[pd + j, p + j] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                mat[pi, p + m] = OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
+                p += m + 1
+                # RD
+                for i in range(m + 1, self.n_sites):
+                    mat[prd + i, p + i - (m + 1)] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                    mat[pi, p + i - (m + 1)] = 2.0 * OpElement(OpNames.RD, (i, ), q_label=self.hamil.one_site_q[i])
+                    for k in range(0, m):
+                        mat[pd + k, p + i - (m + 1)] = 2.0 * (
+                            (-0.5) * OpElement(OpNames.PD, (i, k, 0), q_label=self.hamil.two_site_plus_q[i, k][0]) \
+                            + (-0.5 * np.sqrt(3)) * OpElement(OpNames.PD, (i, k, 1), q_label=self.hamil.two_site_plus_q[i, k][1])
+                        )
+                        mat[pc + k, p + i - (m + 1)] = 2.0 * (
+                            0.5 * OpElement(OpNames.Q, (k, i, 0), q_label=self.hamil.two_site_minus_q[k, i][0]) \
+                            + (-0.5 * np.sqrt(3)) * OpElement(OpNames.Q, (k, i, 1), q_label=self.hamil.two_site_minus_q[k, i][1])
+                        )
+                    for j in range(0, m):
+                        for l in range(0, m):
+                            f = 2.0 * self.hamil.v[i, j, m, l]
+                            mat[pa0 + j * m + l, p + i - (m + 1)] = f * (-0.5) * \
+                                OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
+                            mat[pa1 + j * m + l, p + i - (m + 1)] = f * (0.5 * np.sqrt(3)) * \
+                                OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
+                    for k in range(0, m):
+                        for l in range(0, m):
+                            f = 2.0 * (2 * self.hamil.v[i, m, k, l] - self.hamil.v[i, l, k, m]) * 0.5
+                            mat[pb0 + l * m + k, p + i - (m + 1)] = f * \
+                                OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                    for j in range(0, m):
+                        for k in range(0, m):
+                            f = 2.0 * self.hamil.v[i, j, k, m] * np.sqrt(3) * 0.5
+                            mat[pb1 + j * m + k, p + i - (m + 1)] = f * \
+                                OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                p += self.n_sites - (m + 1)
+                # R
+                for i in range(m + 1, self.n_sites):
+                    mat[pr + i, p + i - (m + 1)] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                    mat[pi, p + i - (m + 1)] = 2.0 * OpElement(OpNames.R, (i, ), q_label=-self.hamil.one_site_q[i])
+                    for k in range(0, m):
+                        mat[pc + k, p + i - (m + 1)] = 2.0 * (
+                            (-0.5) * OpElement(OpNames.P, (i, k, 0), q_label=-self.hamil.two_site_plus_q[i, k][0]) \
+                            + (0.5 * np.sqrt(3)) * OpElement(OpNames.P, (i, k, 1), q_label=-self.hamil.two_site_plus_q[i, k][1])
+                        )
+                        mat[pd + k, p + i - (m + 1)] = 2.0 * (
+                            0.5 * OpElement(OpNames.Q, (i, k, 0), q_label=self.hamil.two_site_minus_q[i, k][0]) \
+                            + (0.5 * np.sqrt(3)) * OpElement(OpNames.Q, (i, k, 1), q_label=self.hamil.two_site_minus_q[i, k][1])
+                        )
+                    for j in range(0, m):
+                        for l in range(0, m):
+                            f = 2.0 * self.hamil.v[i, j, m, l]
+                            mat[pad0 + j * m + l, p + i - (m + 1)] = f * (-0.5) * \
+                                OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                            mat[pad1 + j * m + l, p + i - (m + 1)] = f * (-0.5 * np.sqrt(3)) * \
+                                OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                    for k in range(0, m):
+                        for l in range(0, m):
+                            f = 2.0 * (2 * self.hamil.v[i, m, k, l] - self.hamil.v[i, l, k, m]) * 0.5
+                            mat[pb0 + k * m + l, p + i - (m + 1)] = f * \
+                                OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
+                    for j in range(0, m):
+                        for k in range(0, m):
+                            f = 2.0 * self.hamil.v[i, j, k, m] * np.sqrt(3) * (-0.5)
+                            mat[pb1 + k * m + j, p + i - (m + 1)] = f * \
+                                OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
+                p += self.n_sites - (m + 1)
+                # A
+                for s in [0, 1]:
+                    pa = [pa0, pa1][s]
+                    for i in range(m):
+                        for j in range(m):
+                            mat[pa + i * m + j, p + i * (m + 1) + j] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                    for i in range(m):
+                        f = [1.0, -1.0][s]
+                        mat[pc + i, p + i * (m + 1) + m] = OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                        mat[pc + i, p + m * (m + 1) + i] = f * OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                    mat[pi, p + m * (m + 1) + m] = OpElement(OpNames.A, (m, m, s), q_label=self.hamil.two_site_plus_q[m, m][s])
+                    p += (m + 1) * (m + 1)
+                # AD
+                for s in [0, 1]:
+                    pad = [pad0, pad1][s]
+                    for i in range(m):
+                        for j in range(m):
+                            mat[pad + i * m + j, p + i * (m + 1) + j] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                    for i in range(m):
+                        f = [1.0, -1.0][s]
+                        mat[pd + i, p + i * (m + 1) + m] = f * OpElement(OpNames.D, (m, ), q_label=self.hamil.one_site_q[m])
+                        mat[pd + i, p + m * (m + 1) + i] = OpElement(OpNames.D, (m, ), q_label=self.hamil.one_site_q[m])
+                    mat[pi, p + m * (m + 1) + m] = OpElement(OpNames.AD, (m, m, s), q_label=-self.hamil.two_site_plus_q[m, m][s])
+                    p += (m + 1) * (m + 1)
+                # B
+                for s in [0, 1]:
+                    pb = [pb0, pb1][s]
+                    for i in range(m):
+                        for j in range(m):
+                            mat[pb + i * m + j, p + i * (m + 1) + j] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                    for i in range(m):
+                        f = [1.0, -1.0][s]
+                        mat[pc + i, p + i * (m + 1) + m] = OpElement(OpNames.D, (m, ), q_label=self.hamil.one_site_q[m])
+                        mat[pd + i, p + m * (m + 1) + i] = f * OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
+                    mat[pi, p + m * (m + 1) + m] = OpElement(OpNames.B, (m, m, s), q_label=self.hamil.two_site_minus_q[m, m][s])
+                    p += (m + 1) * (m + 1)
+                assert p == rshape
+            tensors.append(OperatorTensor(mat=mat, tags={m}, ops=self.hamil.get_site_operators(m)))
         return tensors

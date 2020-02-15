@@ -29,19 +29,24 @@ from enum import Enum, auto
 class OpNames(Enum):
     """Operator Names."""
     H = auto()
-    S = auto()
-    D = auto()
-    C = auto()
     I = auto()
+    C = auto()
+    D = auto()
+    S = auto()
     SD = auto()
+    R = auto()
+    RD = auto()
+    A = auto()
+    AD = auto()
+    P = auto()
+    PD = auto()
+    B = auto()
+    Q = auto()
     
     def __repr__(self):
         return self.name
 
-op_names = [
-    ('a', OpNames.D), ('ad', OpNames.C), ('I', OpNames.I), ('H', OpNames.H),
-    ('S', OpNames.S), ('Sd', OpNames.SD)
-]
+op_names = list(OpNames.__members__.items())
 
 class OpExpression:
     pass
@@ -55,21 +60,22 @@ class OpElement(OpExpression):
             Type of the operator.
         site_index : () or tuple(int..)
             Site indices of the operator.
-        sign : int (1 or -1)
-            Sign factor.
+        factor : float
+            scalar factor.
         q_label : DirectProdGroup
             Quantum label of the operator.
     """
-    __slots__ = ['name', 'site_index', 'sign', 'q_label']
-    def __init__(self, name, site_index, sign=1, q_label=None):
+    __slots__ = ['name', 'site_index', 'factor', 'q_label']
+    def __init__(self, name, site_index, factor=1, q_label=None):
         self.name = name
+        assert isinstance(site_index, tuple)
         self.site_index = site_index
-        self.sign = sign
+        self.factor = factor
         self.q_label = q_label
     
     def __repr__(self):
-        if self.sign == -1:
-            return '(-%r)' % (-self)
+        if self.factor != 1:
+            return '(%10.5f %r)' % (self.factor, abs(self))
         if len(self.site_index) == 0:
             return repr(self.name)
         elif len(self.site_index) == 1:
@@ -80,30 +86,45 @@ class OpElement(OpExpression):
     def __mul__(self, other):
         if other == 0:
             return 0
+        elif isinstance(other, float):
+            return OpElement(self.name, self.site_index, self.factor * other, self.q_label)
+        elif isinstance(other, OpSum):
+            return OpSum([OpString([self] + st.ops, st.factor) for st in other.strings])
         else:
             return OpString([self, other])
     
     def __rmul__(self, other):
         if other == 0:
             return 0
+        elif isinstance(other, float):
+            return OpElement(self.name, self.site_index, self.factor * other, self.q_label)
         else:
             return OpString([other, self])
     
-    def __neg__(self):
-        return OpElement(self.name, self.site_index, -self.sign, self.q_label)
+    def __add__(self, other):
+        if other == 0:
+            return self
+        else:
+            return OpSum([OpString([self]), OpString([other])])
+    
+    def __radd__(self, other):
+        if other == 0:
+            return self
+        else:
+            return OpSum([OpString([other]), OpString([self])])
     
     def __abs__(self):
-        return OpElement(self.name, self.site_index, 1)
+        return OpElement(self.name, self.site_index, 1, self.q_label)
     
     def __eq__(self, other):
         if not isinstance(other, OpElement):
             return False
         else:
             return self.name == other.name and self.site_index == other.site_index \
-                and self.sign == other.sign
+                and self.factor == other.factor
     
     def __hash__(self):
-        return hash((self.name, self.site_index, self.sign))
+        return hash((self.name, self.site_index, self.factor))
     
     @staticmethod
     def parse_site_index(expr):
@@ -129,30 +150,36 @@ class OpString(OpExpression):
         ops : list(:class:`OpElement`)
             A list of single operator symbols.
         sign : int (1 or -1)
-            Sign factor. Currently this is used to indicate whether the order
-            of fermionic operators has been changed (which gives a fermionic sign factor).
-            Other factors (such as SU(2)) for exchange two operators are not considered here
-            and should be added later by checking this sign.
+            Sign factor. With SU(2) factor considered
     """
-    __slots__ = ['ops', 'sign']
-    def __init__(self, ops, sign=1):
-        self.sign = np.prod([x.sign for x in ops]) * sign
+    __slots__ = ['ops', 'factor']
+    def __init__(self, ops, factor=1):
+        self.factor = np.prod([x.factor for x in ops]) * factor
         self.ops = [abs(x) for x in ops]
     
     def __repr__(self):
-        if self.sign == -1:
-            return '(-%r)' % (-self)
+        if self.factor != 1:
+            return '(%10.5f %r)' % (self.factor, abs(self))
         else:
             return " ".join([repr(x) for x in self.ops])
     
-    def __neg__(self):
-        return OpString(self.ops, -self.sign)
+    def __truediv__(self, other):
+        if isinstance(other, float):
+            return OpString(self.ops, self.factor / other)
+        else:
+            print(other.__class__)
+            assert False
+    
+    def __abs__(self):
+        return OpString(self.ops, 1)
     
     def __mul__(self, other):
         if isinstance(other, OpElement):
-            return OpString(self.ops + [other], self.sign)
+            return OpString(self.ops + [other], self.factor)
         elif other == 0:
             return 0
+        elif isinstance(other, float):
+            return OpString(self.ops, self.factor * other)
         else:
             print(other.__class__)
             assert False
@@ -193,15 +220,33 @@ class OpSum(OpExpression):
         else:
             print(other.__class__)
             assert False
-            
-    def __neg__(self):
-        return OpSum([-x for x in self.strings])
+    
+    def __truediv__(self, other):
+        if isinstance(other, float):
+            return OpSum([x / other for x in self.strings])
+        else:
+            print(other.__class__)
+            assert False
     
     def __mul__(self, other):
         if isinstance(other, OpElement):
             return OpSum([x * other for x in self.strings])
         elif other == 0:
             return 0
+        elif isinstance(other, float):
+            return OpSum([x * other for x in self.strings])
         else:
             print(other.__class__)
             assert False
+    
+    def __rmul__(self, other):
+        if isinstance(other, OpElement):
+            return OpSum([other * x for x in self.strings])
+        elif other == 0:
+            return 0
+        elif isinstance(other, float):
+            return OpSum([x * other for x in self.strings])
+        else:
+            print(other.__class__)
+            assert False
+

@@ -596,6 +596,11 @@ class MPS(TensorNetwork):
         for ts in self.tensors:
             ts.build_random()
             
+    def fill_identity(self):
+        """Fill MPS reduced matrices with identity matrices whenever possible."""
+        for ts in self.tensors:
+            ts.build_identity()
+            
     def canonicalize(self):
         """Canonicalization."""
         for i in range(0, self.center):

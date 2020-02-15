@@ -1,19 +1,14 @@
 
-# PYTHONPATH=../..:../../build python test_mps.py
-# Example:
-# Block SU(2) DMRG with random initial MPS genereated by python code
-# Energy = -107.6482490830
-# FCI E = -107.648250974014
+# PYTHONPATH=../..:../../build python dmrg_block.py
+# E(block-dmrg) = -75.728386566258
 
 from pyblock.qchem import BlockHamiltonian, MPS, MPSInfo, LineCoupling
 from pyblock.legacy.block_dmrg import DMRG as BLOCK_DMRG
 
-with BlockHamiltonian.get(fcidump='N2.STO3G.FCIDUMP', pg='d2h', su2=True) as hamil:
-    
-    print(hamil.n_electrons, hamil.n_sites, hamil.target_s, hamil.target_spatial_sym)
-    print('spatial symmetries = ', [hamil.PG.IrrepNames[x] for x in hamil.spatial_syms])
+with BlockHamiltonian.get(fcidump='C2.BLOCK.FCIDUMP', pg='d2h', su2=True) as hamil:
     
     lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
+    lcp.set_bond_dimension(100)
     mps = MPS(lcp, center=hamil.n_sites, dot=0)
     mps.randomize()
     mps.canonicalize()

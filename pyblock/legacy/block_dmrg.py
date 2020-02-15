@@ -144,15 +144,18 @@ class DMRG(object):
                 self.sweep_params.guess_type = GuessWaveTypes.Basic
             else:
                 self.sweep_params.guess_type = GuessWaveTypes.Transform
-
+            
             self.system = self.gen_block_block_and_decimate(
                 dot_with_sys, rot_mats=rot_mats, implicit_trans=implicit_trans,
                 do_norms=do_norms, do_comp=do_comp)
 
             self.system.store(forward, self.system.sites, cur_root, cur_root)
-
-            dot_with_sys = get_dot_with_sys(
-                self.system, self.sweep_params.one_dot, forward)
+            
+            if do_norms:
+                dot_with_sys = True
+            else:
+                dot_with_sys = get_dot_with_sys(
+                    self.system, self.sweep_params.one_dot, forward)
 
             self.sweep_params.block_iter += 1
 
