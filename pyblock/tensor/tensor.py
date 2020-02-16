@@ -108,8 +108,8 @@ class SubTensor:
             and all(np.allclose(cgx, cgy) for cgx, cgy in zip(self.cgs, o.cgs))
 
     def __repr__(self):
-#         reduced = self.reduced if self.reduced is not None else self.reduced_shape
-        reduced = self.reduced_shape
+        reduced = self.reduced if self.reduced is not None else self.reduced_shape
+#         reduced = self.reduced_shape
         return "(Q=) %r (R=) %r" % (self.q_labels, reduced)
 
 
@@ -335,7 +335,7 @@ class Tensor:
         :attr:`cgs` and :attr:`reduced` will be calculated.
         
         Args:
-            basis : dict(DirectProdGroup -> int)
+            basis : list(DirectProdGroup)
                 Site basis.
             repr : list(numpy.ndarray)
                 A list of dense matrices for different ``op_q_label`` s.
@@ -347,7 +347,7 @@ class Tensor:
                 Operator Tensor.
         """
         blocks = []
-        for q in range(len(repr.shape)):
+        for q in range(len(repr)):
             for i in range(repr[q].shape[0]):
                 for j in range(repr[q].shape[1]):
                     if not np.isclose(repr[q][i, j], 0.0):

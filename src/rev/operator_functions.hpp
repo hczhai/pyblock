@@ -37,6 +37,10 @@ void TensorProductElement(const StackSparseMatrix &a, const StackSparseMatrix &b
 void TensorProduct(const StackSparseMatrix &a, const StackSparseMatrix &b, StackSparseMatrix &c,
                    const vector<boost::shared_ptr<StateInfo>> &state_info, double scale = 1.0);
 
+// PRODUCT (no kron product) A x B -> C
+void Product(const StackSparseMatrix &a, const StackSparseMatrix &b, const StackSparseMatrix &c,
+             const StateInfo &state_info, double scale);
+
 // TENSOR PRODUCT diag(A x B) -> diag(C)
 // only diagonal elements of C are calculated in regular dense matrix form
 void TensorProductDiagonal(const StackSparseMatrix &a, const StackSparseMatrix &b, DiagonalMatrix &c,

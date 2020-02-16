@@ -136,7 +136,7 @@ def read_fcidump(filename):
         e = 0.0
         for l in ints.split('\n'):
             ll = l.strip()
-            if len(ll) == 0:
+            if len(ll) == 0 or ll.strip()[0] == '!':
                 continue
             ll = ll.split()
             d = float(ll[0])

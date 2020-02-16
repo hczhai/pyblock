@@ -247,7 +247,7 @@ double StackSparseMatrix::get_scaling(SpinQuantum leftq, SpinQuantum rightq) con
       continue;
     else {
       ///CHANGE THE SPATIAL_CG cirrep,1 to cirrep,0 depending on how the transpose works out!!!
-      double spinscale = pow(-1.0,cspin) * cleb/clebsch(rspin, rsz, cspin, cspin, lspin, lsz);
+      double spinscale = pow(-1.0, cspin) * cleb/clebsch(rspin, rsz, cspin, cspin, lspin, lsz);
       double spatscale =  clebspatial/Symmetry::spatial_cg(rirrep, cirrepTranspose, lirrep, rl, Symmetry::sizeofIrrep(cirrep)-1, ll);  
 
       return spinscale*spatscale;

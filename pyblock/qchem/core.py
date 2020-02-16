@@ -35,11 +35,12 @@ from block.operator import Wavefunction, OpTypes, StackSparseMatrix
 from block.block import Block, VectorBlock
 from block.rev import tensor_scale, tensor_trace, tensor_rotate, tensor_product
 from block.rev import tensor_scale_add, tensor_trace_diagonal, tensor_product_diagonal
-from block.rev import tensor_trace_multiply, tensor_product_multiply
+from block.rev import tensor_trace_multiply, tensor_product_multiply, product
+from block.rev import tensor_scale_add_no_trans
 
 from ..symmetry.symmetry import ParticleN, SU2, SZ, PointGroup, point_group
 from ..symmetry.symmetry import DirectProdGroup
-from ..tensor.operator import OpElement, OpNames, OpString, OpSum
+from .operator import OpElement, OpNames, OpString, OpSum
 from .fcidump import read_fcidump
 from fractions import Fraction
 import contextlib
@@ -153,8 +154,9 @@ class BlockEvaluation:
         new_ops = {}
         for j in range(new_mat.shape[1]):
             ql = op_names[j].q_label
-            if op_names[j].sign == -1:
-                new_ops[-op_names[j]] = self.expr_eval(-new_mat[0, j], optl.ops, optd.ops, st, ql)
+            if op_names[j].factor != 1:
+                new_ops[abs(op_names[j])] = \
+                    self.expr_eval(new_mat[0, j] / op_names[j].factor, optl.ops, optd.ops, st, ql)
             else:
                 new_ops[op_names[j]] = self.expr_eval(new_mat[0, j], optl.ops, optd.ops, st, ql)
         return optd.__class__(mat=op_names.reshape(new_mat.shape),
@@ -185,8 +187,9 @@ class BlockEvaluation:
         new_ops = {}
         for j in range(new_mat.shape[0]):
             ql = op_names[j].q_label
-            if op_names[j].sign == -1:
-                new_ops[-op_names[j]] = self.expr_eval(-new_mat[j, 0], optd.ops, optr.ops, st, ql)
+            if op_names[j].factor != 1:
+                new_ops[abs(op_names[j])] = \
+                    self.expr_eval(new_mat[j, 0] / op_names[j].factor, optd.ops, optr.ops, st, ql)
             else:
                 new_ops[op_names[j]] = self.expr_eval(new_mat[j, 0], optd.ops, optr.ops, st, ql)
         return optd.__class__(mat=op_names.reshape(new_mat.shape),
@@ -243,11 +246,11 @@ class BlockEvaluation:
         if isinstance(expr, OpString):
             assert len(expr.ops) == 2
             if expr.ops[0] == OpElement(OpNames.I, ()):
-                tensor_trace_diagonal(b[expr.ops[1]], diag, state_info, False, float(expr.sign))
+                tensor_trace_diagonal(b[expr.ops[1]], diag, state_info, False, float(expr.factor))
             elif expr.ops[1] == OpElement(OpNames.I, ()):
-                tensor_trace_diagonal(a[expr.ops[0]], diag, state_info, True, float(expr.sign))
+                tensor_trace_diagonal(a[expr.ops[0]], diag, state_info, True, float(expr.factor))
             else:
-                tensor_product_diagonal(a[expr.ops[0]], b[expr.ops[1]], diag, state_info, 1.0)
+                tensor_product_diagonal(a[expr.ops[0]], b[expr.ops[1]], diag, state_info, float(expr.factor))
             return diag
         elif isinstance(expr, OpSum):
             diag = self.expr_diagonal_eval(expr.strings[0], a, b, st)
@@ -279,13 +282,13 @@ class BlockEvaluation:
         if isinstance(expr, OpString):
             assert len(expr.ops) == 2
             if expr.ops[0] == OpElement(OpNames.I, ()):
-                tensor_trace_multiply(b[expr.ops[1]], c, nwave, st, False, float(expr.sign))
+                tensor_trace_multiply(b[expr.ops[1]], c, nwave, st, False, float(expr.factor))
             elif expr.ops[1] == OpElement(OpNames.I, ()):
-                tensor_trace_multiply(a[expr.ops[0]], c, nwave, st, True, float(expr.sign))
+                tensor_trace_multiply(a[expr.ops[0]], c, nwave, st, True, float(expr.factor))
             else:
                 aq, bq = a[expr.ops[0]].delta_quantum[0], b[expr.ops[1]].delta_quantum[0]
                 op_q = (aq + bq)[0]
-                tensor_product_multiply(a[expr.ops[0]], b[expr.ops[1]], c, nwave, st, op_q, 1.0)
+                tensor_product_multiply(a[expr.ops[0]], b[expr.ops[1]], c, nwave, st, op_q, float(expr.factor))
         elif isinstance(expr, OpSum):
             self.expr_multiply_eval(expr.strings[0], a, b, c, nwave, st)
             twave = Wavefunction()
@@ -330,25 +333,30 @@ class BlockEvaluation:
                 nmat.fermion = b[expr.ops[1]].fermion
                 nmat.allocate(st)
                 nmat.initialized = True
-                tensor_trace(b[expr.ops[1]], nmat, state_info, False, float(expr.sign))
+                tensor_trace(b[expr.ops[1]], nmat, state_info, False, float(expr.factor))
             elif expr.ops[1] == OpElement(OpNames.I, ()):
                 nmat.delta_quantum = a[expr.ops[0]].delta_quantum
                 nmat.fermion = a[expr.ops[0]].fermion
                 nmat.allocate(st)
                 nmat.initialized = True
-                tensor_trace(a[expr.ops[0]], nmat, state_info, True, float(expr.sign))
+                tensor_trace(a[expr.ops[0]], nmat, state_info, True, float(expr.factor))
             else:
                 cq = BlockSymmetry.to_spin_quantum(q_label)
                 nmat.delta_quantum = VectorSpinQuantum([cq])
                 nmat.fermion = a[expr.ops[0]].fermion ^ b[expr.ops[1]].fermion
                 nmat.allocate(st)
                 nmat.initialized = True
-                tensor_product(a[expr.ops[0]], b[expr.ops[1]], nmat, state_info, 1.0)
+                tensor_product(a[expr.ops[0]], b[expr.ops[1]], nmat, state_info, float(expr.factor))
             return nmat
         elif isinstance(expr, OpSum):
-            nmat = self.expr_eval(expr.strings[0], a, b, st, q_label)
+            nmat = StackSparseMatrix()
+            cq = BlockSymmetry.to_spin_quantum(q_label)
+            nmat.delta_quantum = VectorSpinQuantum([cq])
+            nmat.fermion = a[expr.strings[0].ops[0]].fermion ^ b[expr.strings[0].ops[1]].fermion
+            nmat.allocate(st)
+            nmat.initialized = True
             assert nmat.conjugacy == 'n'
-            for x in expr.strings[1:]:
+            for x in expr.strings:
                 t = self.expr_eval(x, a, b, st, q_label)
                 tensor_scale_add(1.0, t, nmat, st)
                 t.deallocate()
@@ -514,6 +522,8 @@ class BlockHamiltonian:
                     input['maxiter'] = str(v)
                 elif k == 'max_m':
                     input['maxM'] = str(v)
+                elif k == 'memory':
+                    input['memory'] = str(v) + ' m'
                 elif k == 'spin_adapted':
                     if v == False:
                         input['nonspinadapted'] = ''
@@ -562,13 +572,17 @@ class BlockHamiltonian:
             } for sp in self.spatial]
             self.target = ParticleN(self.n_electrons) * SZ(self.target_s) * self.PG(self.target_spatial_sym)
         
-        self.creation_q_labels = [ParticleN(1) * SU2(Fraction(1, 2)) * self.PG(sp)
-                                 for sp in self.spatial]
+        self.one_site_q = np.array([ParticleN(1) * SU2(Fraction(1, 2)) * self.PG(sp)
+                                    for sp in self.spatial], dtype=object)
+        self.two_site_plus_q = np.array([[self.one_site_q[i] + self.one_site_q[j] for i in range(self.n_sites)]
+                                    for j in range(self.n_sites)], dtype=object)
+        self.two_site_minus_q = np.array([[self.one_site_q[i] - self.one_site_q[j] for i in range(self.n_sites)]
+                                    for j in range(self.n_sites)], dtype=object)
     
-    def get_site_operators(self, i):
-        """Return operator representations dict(OpElement -> StackSparseMatrix) at site i."""
+    def get_site_operators(self, m):
+        """Return operator representations dict(OpElement -> StackSparseMatrix) at site m."""
         ops = {}
-        block = Block(i, i, 0, False)
+        block = Block(m, m, 0, False)
         
         mat = StackSparseMatrix()
         mat.deep_copy(block.ops[OpTypes.Hamiltonian].local_element_linear(0)[0])
@@ -583,35 +597,120 @@ class BlockHamiltonian:
         mat = StackSparseMatrix()
         mat.deep_copy(block.ops[OpTypes.Cre].local_element_linear(0)[0])
         assert mat.fermion
-        ops[OpElement(OpNames.C, ())] = mat
+        ops[OpElement(OpNames.C, (m, ))] = mat
         
         mat = StackSparseMatrix()
         mat.deep_copy(block.ops[OpTypes.Des].local_element_linear(0)[0])
         assert mat.fermion
-        ops[OpElement(OpNames.D, ())] = mat
+        ops[OpElement(OpNames.D, (m, ))] = mat
         
-        for j in range(0, i):
+        for s in [0, 1]:
+            mat = StackSparseMatrix()
+            mat.fermion = False
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_plus_q[m, m][s])])
+            mat.allocate(BlockSymmetry.initial_state_info(m))
+            mat.initialized = True
+            product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.C, (m, ))],
+                    mat, BlockSymmetry.initial_state_info(m), 1.0)
+            ops[OpElement(OpNames.A, (m, m, s))] = mat
+        
+        for s in [0, 1]:
+            mat = StackSparseMatrix()
+            mat.fermion = False
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.two_site_plus_q[m, m][s])])
+            mat.allocate(BlockSymmetry.initial_state_info(m))
+            mat.initialized = True
+            product(ops[OpElement(OpNames.D, (m, ))], ops[OpElement(OpNames.D, (m, ))],
+                    mat, BlockSymmetry.initial_state_info(m), 1.0)
+            ops[OpElement(OpNames.AD, (m, m, s))] = mat
+        
+        for s in [0, 1]:
+            mat = StackSparseMatrix()
+            mat.fermion = False
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[m, m][s])])
+            mat.allocate(BlockSymmetry.initial_state_info(m))
+            mat.initialized = True
+            product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.D, (m, ))],
+                    mat, BlockSymmetry.initial_state_info(m), 1.0)
+            ops[OpElement(OpNames.B, (m, m, s))] = mat
+        
+        for i in range(0, self.n_sites):
+            
+            if i == m:
+                continue
             
             mat = StackSparseMatrix()
-            mat.deep_copy(block.ops[OpTypes.Des].local_element_linear(0)[0])
+            mat.deep_copy(ops[OpElement(OpNames.D, (m, ))])
             assert mat.fermion
-            tensor_scale(self.t[j, i] * np.sqrt(2), mat)
-            ops[OpElement(OpNames.S, (j, ))] = mat
-            ql = mat.delta_quantum[0]
-            ql.symm = IrrepSpace(self.spatial_syms[j])
-            mat.delta_quantum = VectorSpinQuantum([ql])
+            tensor_scale(self.t[i, m] * np.sqrt(2) * 0.25, mat)
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.one_site_q[m])])
+            
+            mat2 = StackSparseMatrix()
+            mat2.deep_clear_copy(ops[OpElement(OpNames.D, (m, ))])
+            product(ops[OpElement(OpNames.B, (m, m, 0))], ops[OpElement(OpNames.D, (m, ))],
+                    mat2, BlockSymmetry.initial_state_info(m), 1.0)
+            tensor_scale_add_no_trans(self.v[i, m, m, m], mat2, mat)
+            mat2.deallocate()
+            ops[OpElement(OpNames.R, (i, ))] = mat
             
             mat = StackSparseMatrix()
-            mat.deep_copy(block.ops[OpTypes.Cre].local_element_linear(0)[0])
+            mat.deep_copy(ops[OpElement(OpNames.C, (m, ))])
             assert mat.fermion
-            tensor_scale(self.t[j, i] * np.sqrt(2), mat)
-            ops[OpElement(OpNames.SD, (j, ))] = mat
-            ql = mat.delta_quantum[0]
-            ql.symm = IrrepSpace(self.spatial_syms[j])
-            mat.delta_quantum = VectorSpinQuantum([ql])
+            tensor_scale(self.t[i, m] * np.sqrt(2) * 0.25, mat)
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.one_site_q[m])])
             
-            if self.spatial_syms[j] != self.spatial_syms[i]:
-                assert np.isclose(self.t[j, i], 0.0)
+            mat2 = StackSparseMatrix()
+            mat2.deep_clear_copy(ops[OpElement(OpNames.C, (m, ))])
+            product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.B, (m, m, 0))], 
+                    mat2, BlockSymmetry.initial_state_info(m), 1.0)
+            tensor_scale_add_no_trans(self.v[i, m, m, m], mat2, mat)
+            mat2.deallocate()
+            ops[OpElement(OpNames.RD, (i, ))] = mat
+            
+            if self.spatial_syms[m] != self.spatial_syms[i]:
+                assert np.isclose(self.t[m, i], 0.0)
+        
+        for s in [0, 1]:
+            for i in range(0, self.n_sites):
+                for k in range(0, self.n_sites):
+                    if i != m and k != m:
+                        mat = StackSparseMatrix()
+                        mat.deep_copy(ops[OpElement(OpNames.AD, (m, m, s))])
+                        assert not mat.fermion
+                        tensor_scale(self.v[i, m, k, m], mat)
+                        mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.two_site_plus_q[i, k][s])])
+                        ops[OpElement(OpNames.P, (i, k, s))] = mat
+        
+        for s in [0, 1]:
+            for i in range(0, self.n_sites):
+                for k in range(0, self.n_sites):
+                    if i != m and k != m:
+                        mat = StackSparseMatrix()
+                        mat.deep_copy(ops[OpElement(OpNames.A, (m, m, s))])
+                        assert not mat.fermion
+                        tensor_scale(self.v[i, m, k, m], mat)
+                        mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_plus_q[i, k][s])])
+                        ops[OpElement(OpNames.PD, (i, k, s))] = mat
+        
+        for i in range(0, self.n_sites):
+            for j in range(0, self.n_sites):
+                if i != m and j != m:
+                    mat = StackSparseMatrix()
+                    mat.deep_copy(ops[OpElement(OpNames.B, (m, m, 0))])
+                    assert not mat.fermion
+                    tensor_scale(2 * self.v[i, j, m, m] -  self.v[i, m, m, j], mat)
+                    mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[i, j][0])])
+                    ops[OpElement(OpNames.Q, (i, j, 0))] = mat
+                
+        for i in range(0, self.n_sites):
+            for j in range(0, self.n_sites):
+                if i != m and j != m:
+                    mat = StackSparseMatrix()
+                    mat.deep_copy(ops[OpElement(OpNames.B, (m, m, 1))])
+                    assert not mat.fermion
+                    tensor_scale(self.v[i, m, m, j], mat)
+                    mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[i, j][1])])
+                    ops[OpElement(OpNames.Q, (i, j, 1))] = mat
         
         # TODO :: need to store Block to deallocate it later
         return ops
@@ -644,9 +743,10 @@ class BlockHamiltonian:
     
     @staticmethod
     @contextlib.contextmanager
-    def get(fcidump, pg, su2, dot=2, output_level=0):
+    def get(fcidump, pg, su2, dot=2, output_level=0, memory=2000):
         ham = BlockHamiltonian(fcidump=fcidump, point_group=pg,
-                               dot=dot, spin_adapted=su2, output_level=output_level)
+                               dot=dot, spin_adapted=su2,
+                               output_level=output_level, memory=memory)
         try:
             yield ham
         finally:

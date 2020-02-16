@@ -315,9 +315,9 @@ class DMRG:
 
         for i in sweep_range:
             if self.dot == 2:
-                print(" %3s Iter = %4d-%4d .. " % ('==>' if forward else '<==', i, i + 1), end='', flush=True)
+                print(" %3s Iter = %4d-%4d .. " % ('-->' if forward else '<--', i, i + 1), end='', flush=True)
             else:
-                print(" %3s Iter = %4d .. " % ('==>' if forward else '<==', i), end='', flush=True)
+                print(" %3s Iter = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
             energy, error, ndav = self.blocking(i, forward=forward, bond_dim=bond_dim, noise=noise)
             print("NDAV = %4d E = %15.8f Error = %15.8f" % (ndav, energy, error))
             sweep_energies.append(energy)
