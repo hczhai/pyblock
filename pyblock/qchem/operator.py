@@ -157,6 +157,11 @@ class OpString(OpExpression):
         self.factor = np.prod([x.factor for x in ops]) * factor
         self.ops = [abs(x) for x in ops]
     
+    @property
+    def op(self):
+        assert len(self.ops) == 1
+        return self.factor * self.ops[0]
+    
     def __repr__(self):
         if self.factor != 1:
             return '(%10.5f %r)' % (self.factor, abs(self))
@@ -215,8 +220,19 @@ class OpSum(OpExpression):
             return OpSum(self.strings + [other])
         elif isinstance(other, OpSum):
             return OpSum(self.strings + other.strings)
-        elif isinstance(other, int):
+        elif other == 0:
             return self
+        else:
+            print(other.__class__)
+            assert False
+    
+    def __radd__(self, other):
+        if other == 0:
+            return self
+        elif isinstance(other, OpString):
+            return OpSum([other] + self.strings)
+        elif isinstance(other, OpSum):
+            return OpSum(other.strings + self.strings)
         else:
             print(other.__class__)
             assert False

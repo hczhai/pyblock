@@ -24,6 +24,7 @@ DMRG algorithm.
 """
 
 from .tensor.tensor import Tensor, TensorNetwork
+import time
 
 class DMRGError(Exception):
     pass
@@ -300,7 +301,10 @@ class DMRG:
         self._pre_sweep()
         
         if self.rebuild:
+            t = time.perf_counter()
+            print(" Constructing environment .. ", end='', flush=True)
             self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
+            print("T = %4.2f" % (time.perf_counter() - t))
         else:
             self.eff_ham.prepare_sweep()
 
@@ -318,8 +322,9 @@ class DMRG:
                 print(" %3s Iter = %4d-%4d .. " % ('-->' if forward else '<--', i, i + 1), end='', flush=True)
             else:
                 print(" %3s Iter = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
+            t = time.perf_counter()
             energy, error, ndav = self.blocking(i, forward=forward, bond_dim=bond_dim, noise=noise)
-            print("NDAV = %4d E = %15.8f Error = %15.8f" % (ndav, energy, error))
+            print("NDAV = %4d E = %15.8f Error = %15.8f T = %4.2f" % (ndav, energy, error, time.perf_counter() - t))
             sweep_energies.append(energy)
         
         self._post_sweep()
@@ -349,7 +354,9 @@ class DMRG:
             
         if len(self.noise) < n_sweeps:
             self.noise.extend([self.noise[-1]] * (n_sweeps - len(self.noise)))
-
+        
+        start = time.perf_counter()
+        
         for iw in range(n_sweeps):
 
             print("Sweep = %4d | Direction = %8s | Bond dimension = %4d | Noise = %9.2g"
@@ -366,5 +373,7 @@ class DMRG:
                 break
 
             forward = not forward
+            
+            print('Time Elapsed = %10.2f' % (time.perf_counter() - start))
         
         return energy

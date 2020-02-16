@@ -1,0 +1,389 @@
+Reading input file
+m_hf_occ_user integral
+No orbital reorder: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 
+
+open orbs   :
+closed orbs :
+Initial HF occupancy guess: 1 1 0 0 0 0 0 0 0 0 0 0 1 1 0 0 0 0 1 1 0 0 0 0 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
+Checking input for errors
+Summary of input
+----------------
+Total number of orbitals                           :   26
+Symmetry of the targeted wavefunctions             :   8:0:1
+Number of wavefunctions targeted                   :   1
+Symmetry of the molecule                           :   d2h
+Irreducible representations of the orbitals        :   Ag  Ag  Ag  Ag  Ag  Ag  B3u  B3u  B3u  B2u  B2u  B2u  B1g  B1u  B1u  B1u  B1u  B1u  B1u  B2g  B2g  B2g  B3g  B3g  B3g  Au  
+
+Schedule
+--------
+Iter       : # States              Davidson_tol          Random_noise        
+0          : 250                   1.000000e-05          1.000000e-04        
+8          : 500                   1.000000e-05          1.000000e-04        
+10         : 500                   1.000000e-06          0.000000e+00        
+Maximum sweep iterations                           :   30
+
+allocating 2000000000 doubles 
+Sweep =    0 | Direction =  forward | Bond dimension =   50 | Noise =     0.001
+ Constructing Environment .. T = 28.34
+ --> Iter =    0-   1 .. NDAV =   15 E =    -69.46051311 Error =      0.00000000 T = 0.04
+ --> Iter =    1-   2 .. NDAV =   18 E =    -71.25853665 Error =      0.00000000 T = 0.11
+ --> Iter =    2-   3 .. NDAV =   17 E =    -72.31736926 Error =      0.00000000 T = 0.17
+ --> Iter =    3-   4 .. NDAV =   18 E =    -73.71159637 Error =      0.00005267 T = 0.28
+ --> Iter =    4-   5 .. NDAV =    5 E =    -73.71908001 Error =      0.00005530 T = 0.18
+ --> Iter =    5-   6 .. NDAV =    3 E =    -73.72030101 Error =      0.00000921 T = 0.28
+ --> Iter =    6-   7 .. NDAV =    3 E =    -73.72598020 Error =      0.00001746 T = 0.36
+ --> Iter =    7-   8 .. NDAV =    2 E =    -73.72597666 Error =      0.00000294 T = 0.40
+ --> Iter =    8-   9 .. NDAV =    4 E =    -73.74551685 Error =      0.00000295 T = 0.80
+ --> Iter =    9-  10 .. NDAV =    3 E =    -73.74712956 Error =      0.00000701 T = 1.10
+ --> Iter =   10-  11 .. NDAV =    3 E =    -73.74863671 Error =      0.00000239 T = 1.10
+ --> Iter =   11-  12 .. NDAV =    3 E =    -73.74956636 Error =      0.00000013 T = 1.03
+ --> Iter =   12-  13 .. NDAV =    4 E =    -73.81642708 Error =      0.00000004 T = 2.37
+ --> Iter =   13-  14 .. NDAV =    3 E =    -73.82206378 Error =      0.00000619 T = 2.87
+ --> Iter =   14-  15 .. NDAV =    3 E =    -73.82500705 Error =      0.00000535 T = 3.63
+ --> Iter =   15-  16 .. NDAV =    4 E =    -73.82665980 Error =      0.00000252 T = 3.76
+ --> Iter =   16-  17 .. NDAV =    3 E =    -73.82836560 Error =      0.00000078 T = 4.04
+ --> Iter =   17-  18 .. NDAV =    3 E =    -73.82886371 Error =      0.00000048 T = 4.23
+ --> Iter =   18-  19 .. NDAV =    4 E =    -73.87620878 Error =      0.00000017 T = 4.71
+ --> Iter =   19-  20 .. NDAV =    3 E =    -73.87715072 Error =      0.00000047 T = 5.26
+ --> Iter =   20-  21 .. NDAV =    3 E =    -73.87825038 Error =      0.00000021 T = 5.34
+ --> Iter =   21-  22 .. NDAV =    3 E =    -73.87901934 Error =      0.00000000 T = 5.98
+ --> Iter =   22-  23 .. NDAV =    1 E =    -73.87901934 Error =     -0.00000000 T = 6.54
+ --> Iter =   23-  24 .. NDAV =    1 E =    -73.87901934 Error =     -0.00000000 T = 5.53
+ --> Iter =   24-  25 .. NDAV =    1 E =    -73.87901934 Error =     -0.00000000 T = 4.88
+Time Elapsed =      93.30
+Sweep =    1 | Direction = backward | Bond dimension =   80 | Noise =    0.0001
+ Constructing Environment .. T = 19.40
+ <-- Iter =   24-  25 .. NDAV =    1 E =    -73.87901934 Error =      0.00000000 T = 2.53
+ <-- Iter =   23-  24 .. NDAV =    1 E =    -73.87901934 Error =      0.00000000 T = 3.43
+ <-- Iter =   22-  23 .. NDAV =    1 E =    -73.87901934 Error =      0.00000000 T = 5.87
+ <-- Iter =   21-  22 .. NDAV =    1 E =    -73.87901934 Error =      0.00000000 T = 6.76
+ <-- Iter =   20-  21 .. NDAV =    2 E =    -73.87902234 Error =      0.00000000 T = 6.37
+ <-- Iter =   19-  20 .. NDAV =    2 E =    -73.87903311 Error =      0.00000000 T = 5.85
+ <-- Iter =   18-  19 .. NDAV =    3 E =    -73.87906929 Error =      0.00000000 T = 5.66
+ <-- Iter =   17-  18 .. NDAV =    3 E =    -73.87920308 Error =      0.00000001 T = 4.99
+ <-- Iter =   16-  17 .. NDAV =    3 E =    -73.87975754 Error =      0.00000002 T = 4.84
+ <-- Iter =   15-  16 .. NDAV =    4 E =    -73.88400752 Error =      0.00000007 T = 4.50
+ <-- Iter =   14-  15 .. NDAV =    3 E =    -73.88558367 Error =      0.00000015 T = 4.38
+ <-- Iter =   13-  14 .. NDAV =    6 E =    -73.89546295 Error =      0.00000022 T = 4.23
+ <-- Iter =   12-  13 .. NDAV =    2 E =    -73.89564982 Error =      0.00000000 T = 3.46
+ <-- Iter =   11-  12 .. NDAV =    4 E =    -73.90069906 Error =      0.00000011 T = 2.23
+ <-- Iter =   10-  11 .. NDAV =    5 E =    -73.90284383 Error =      0.00000016 T = 1.28
+ <-- Iter =    9-  10 .. NDAV =    6 E =    -73.91000285 Error =      0.00000027 T = 1.37
+ <-- Iter =    8-   9 .. NDAV =    4 E =    -73.91114904 Error =      0.00000005 T = 1.11
+ <-- Iter =    7-   8 .. NDAV =   11 E =    -73.95879292 Error =      0.00000050 T = 1.00
+ <-- Iter =    6-   7 .. NDAV =   10 E =    -74.01453007 Error =      0.00000090 T = 0.59
+ <-- Iter =    5-   6 .. NDAV =   19 E =    -74.28945749 Error =      0.00000041 T = 0.62
+ <-- Iter =    4-   5 .. NDAV =    9 E =    -74.83093273 Error =      0.00000229 T = 0.37
+ <-- Iter =    3-   4 .. NDAV =    9 E =    -75.50891212 Error =      0.00000159 T = 0.23
+ <-- Iter =    2-   3 .. NDAV =    1 E =    -75.50891081 Error =     -0.00000000 T = 0.16
+ <-- Iter =    1-   2 .. NDAV =    1 E =    -75.50891081 Error =     -0.00000000 T = 0.10
+ <-- Iter =    0-   1 .. NDAV =    1 E =    -75.50891081 Error =     -0.00000000 T = 0.05
+Time Elapsed =     184.70
+Sweep =    2 | Direction =  forward | Bond dimension =  100 | Noise =     1e-05
+ Constructing Environment .. T = 26.34
+ --> Iter =    0-   1 .. NDAV =    1 E =    -75.50891081 Error =      0.00000000 T = 0.02
+ --> Iter =    1-   2 .. NDAV =    1 E =    -75.50891081 Error =      0.00000000 T = 0.04
+ --> Iter =    2-   3 .. NDAV =    1 E =    -75.50891081 Error =      0.00000000 T = 0.08
+ --> Iter =    3-   4 .. NDAV =    2 E =    -75.50891263 Error =      0.00000001 T = 0.13
+ --> Iter =    4-   5 .. NDAV =    5 E =    -75.50929676 Error =      0.00000019 T = 0.25
+ --> Iter =    5-   6 .. NDAV =    7 E =    -75.52249553 Error =      0.00000021 T = 0.41
+ --> Iter =    6-   7 .. NDAV =    5 E =    -75.52862442 Error =      0.00000373 T = 0.50
+ --> Iter =    7-   8 .. NDAV =    8 E =    -75.53408627 Error =      0.00000087 T = 0.66
+ --> Iter =    8-   9 .. NDAV =   18 E =    -75.55181785 Error =      0.00000003 T = 1.30
+ --> Iter =    9-  10 .. NDAV =   10 E =    -75.56240975 Error =      0.00000229 T = 1.42
+ --> Iter =   10-  11 .. NDAV =    8 E =    -75.57802705 Error =      0.00000069 T = 1.48
+ --> Iter =   11-  12 .. NDAV =    9 E =    -75.60331053 Error =      0.00000039 T = 1.52
+ --> Iter =   12-  13 .. NDAV =    6 E =    -75.62127655 Error =      0.00000000 T = 2.39
+ --> Iter =   13-  14 .. NDAV =    5 E =    -75.62899531 Error =      0.00000037 T = 3.02
+ --> Iter =   14-  15 .. NDAV =    4 E =    -75.63181390 Error =      0.00000037 T = 4.00
+ --> Iter =   15-  16 .. NDAV =    4 E =    -75.63390573 Error =      0.00000015 T = 3.77
+ --> Iter =   16-  17 .. NDAV =    5 E =    -75.63615377 Error =      0.00000003 T = 4.02
+ --> Iter =   17-  18 .. NDAV =    5 E =    -75.63817094 Error =      0.00000001 T = 4.34
+ --> Iter =   18-  19 .. NDAV =    7 E =    -75.64837633 Error =      0.00000001 T = 4.95
+ --> Iter =   19-  20 .. NDAV =    4 E =    -75.64862131 Error =      0.00000001 T = 5.20
+ --> Iter =   20-  21 .. NDAV =    2 E =    -75.64862763 Error =      0.00000000 T = 5.23
+ --> Iter =   21-  22 .. NDAV =    2 E =    -75.64864075 Error =     -0.00000000 T = 5.97
+ --> Iter =   22-  23 .. NDAV =    1 E =    -75.64864075 Error =     -0.00000000 T = 6.70
+ --> Iter =   23-  24 .. NDAV =    1 E =    -75.64864075 Error =     -0.00000000 T = 5.69
+ --> Iter =   24-  25 .. NDAV =    1 E =    -75.64864075 Error =     -0.00000000 T = 4.96
+Time Elapsed =     279.08
+Sweep =    3 | Direction = backward | Bond dimension =  200 | Noise =     1e-05
+ Constructing Environment .. T = 20.28
+ <-- Iter =   24-  25 .. NDAV =    1 E =    -75.64864075 Error =      0.00000000 T = 2.71
+ <-- Iter =   23-  24 .. NDAV =    1 E =    -75.64864075 Error =      0.00000000 T = 3.55
+ <-- Iter =   22-  23 .. NDAV =    1 E =    -75.64864075 Error =      0.00000000 T = 6.03
+ <-- Iter =   21-  22 .. NDAV =    1 E =    -75.64864075 Error =      0.00000000 T = 6.90
+ <-- Iter =   20-  21 .. NDAV =    1 E =    -75.64864075 Error =      0.00000000 T = 6.37
+ <-- Iter =   19-  20 .. NDAV =    1 E =    -75.64864075 Error =     -0.00000000 T = 5.96
+ <-- Iter =   18-  19 .. NDAV =    1 E =    -75.64864075 Error =     -0.00000000 T = 5.78
+ <-- Iter =   17-  18 .. NDAV =    2 E =    -75.64866583 Error =     -0.00000000 T = 5.42
+ <-- Iter =   16-  17 .. NDAV =    3 E =    -75.64871363 Error =      0.00000000 T = 5.05
+ <-- Iter =   15-  16 .. NDAV =    3 E =    -75.64882633 Error =      0.00000000 T = 5.05
+ <-- Iter =   14-  15 .. NDAV =    3 E =    -75.64901278 Error =      0.00000001 T = 4.73
+ <-- Iter =   13-  14 .. NDAV =    5 E =    -75.64981978 Error =      0.00000001 T = 4.80
+ <-- Iter =   12-  13 .. NDAV =    3 E =    -75.64991933 Error =     -0.00000000 T = 4.00
+ <-- Iter =   11-  12 .. NDAV =    4 E =    -75.65041574 Error =      0.00000002 T = 2.76
+ <-- Iter =   10-  11 .. NDAV =    5 E =    -75.65283461 Error =      0.00000003 T = 1.71
+ <-- Iter =    9-  10 .. NDAV =    9 E =    -75.65917752 Error =      0.00000086 T = 2.22
+ <-- Iter =    8-   9 .. NDAV =    6 E =    -75.66046843 Error =      0.00000001 T = 1.61
+ <-- Iter =    7-   8 .. NDAV =    7 E =    -75.66738767 Error =      0.00000005 T = 1.32
+ <-- Iter =    6-   7 .. NDAV =    8 E =    -75.69515351 Error =      0.00000056 T = 1.02
+ <-- Iter =    5-   6 .. NDAV =    5 E =    -75.69860160 Error =      0.00000002 T = 0.71
+ <-- Iter =    4-   5 .. NDAV =    4 E =    -75.70192936 Error =      0.00000008 T = 0.70
+ <-- Iter =    3-   4 .. NDAV =    3 E =    -75.70200991 Error =      0.00000000 T = 0.43
+ <-- Iter =    2-   3 .. NDAV =    1 E =    -75.70200991 Error =     -0.00000000 T = 0.31
+ <-- Iter =    1-   2 .. NDAV =    1 E =    -75.70200991 Error =     -0.00000000 T = 0.18
+ <-- Iter =    0-   1 .. NDAV =    1 E =    -75.70200991 Error =     -0.00000000 T = 0.09
+Time Elapsed =     378.76
+Sweep =    4 | Direction =  forward | Bond dimension =  250 | Noise =     1e-05
+ Constructing Environment .. T = 29.81
+ --> Iter =    0-   1 .. NDAV =    1 E =    -75.70200991 Error =      0.00000000 T = 0.02
+ --> Iter =    1-   2 .. NDAV =    1 E =    -75.70200991 Error =      0.00000000 T = 0.06
+ --> Iter =    2-   3 .. NDAV =    1 E =    -75.70200991 Error =      0.00000000 T = 0.11
+ --> Iter =    3-   4 .. NDAV =    1 E =    -75.70200991 Error =      0.00000000 T = 0.17
+ --> Iter =    4-   5 .. NDAV =    1 E =    -75.70200991 Error =      0.00000001 T = 0.29
+ --> Iter =    5-   6 .. NDAV =    4 E =    -75.70325206 Error =      0.00000012 T = 0.83
+ --> Iter =    6-   7 .. NDAV =    3 E =    -75.70348324 Error =      0.00000128 T = 1.34
+ --> Iter =    7-   8 .. NDAV =    4 E =    -75.70426715 Error =      0.00000078 T = 1.40
+ --> Iter =    8-   9 .. NDAV =    6 E =    -75.70838048 Error =      0.00000041 T = 1.90
+ --> Iter =    9-  10 .. NDAV =    4 E =    -75.70940444 Error =      0.00000669 T = 1.98
+ --> Iter =   10-  11 .. NDAV =    4 E =    -75.71103222 Error =      0.00000097 T = 2.17
+ --> Iter =   11-  12 .. NDAV =    5 E =    -75.71601345 Error =      0.00000056 T = 1.98
+ --> Iter =   12-  13 .. NDAV =    6 E =    -75.72206477 Error =      0.00000001 T = 3.25
+ --> Iter =   13-  14 .. NDAV =    3 E =    -75.72244840 Error =      0.00000038 T = 4.22
+ --> Iter =   14-  15 .. NDAV =    4 E =    -75.72320474 Error =      0.00000036 T = 5.18
+ --> Iter =   15-  16 .. NDAV =    3 E =    -75.72346723 Error =      0.00000016 T = 5.10
+ --> Iter =   16-  17 .. NDAV =    3 E =    -75.72362319 Error =      0.00000005 T = 5.56
+ --> Iter =   17-  18 .. NDAV =    3 E =    -75.72373713 Error =      0.00000003 T = 5.61
+ --> Iter =   18-  19 .. NDAV =    3 E =    -75.72381264 Error =      0.00000002 T = 6.21
+ --> Iter =   19-  20 .. NDAV =    2 E =    -75.72381921 Error =      0.00000001 T = 6.54
+ --> Iter =   20-  21 .. NDAV =    1 E =    -75.72381920 Error =     -0.00000000 T = 6.42
+ --> Iter =   21-  22 .. NDAV =    1 E =    -75.72381920 Error =     -0.00000000 T = 6.77
+ --> Iter =   22-  23 .. NDAV =    1 E =    -75.72381920 Error =     -0.00000000 T = 7.66
+ --> Iter =   23-  24 .. NDAV =    1 E =    -75.72381920 Error =     -0.00000000 T = 6.58
+ --> Iter =   24-  25 .. NDAV =    1 E =    -75.72381920 Error =     -0.00000000 T = 5.84
+Time Elapsed =     495.79
+Sweep =    5 | Direction = backward | Bond dimension =  250 | Noise =         0
+ Constructing Environment .. T = 27.68
+ <-- Iter =   24-  25 .. NDAV =    1 E =    -75.72381920 Error =      0.00000000 T = 2.87
+ <-- Iter =   23-  24 .. NDAV =    1 E =    -75.72381920 Error =      0.00000000 T = 3.88
+ <-- Iter =   22-  23 .. NDAV =    1 E =    -75.72381920 Error =      0.00000000 T = 6.69
+ <-- Iter =   21-  22 .. NDAV =    1 E =    -75.72381920 Error =      0.00000000 T = 7.48
+ <-- Iter =   20-  21 .. NDAV =    1 E =    -75.72381920 Error =      0.00000000 T = 6.82
+ <-- Iter =   19-  20 .. NDAV =    1 E =    -75.72381920 Error =     -0.00000000 T = 6.72
+ <-- Iter =   18-  19 .. NDAV =    1 E =    -75.72381920 Error =     -0.00000000 T = 6.69
+ <-- Iter =   17-  18 .. NDAV =    1 E =    -75.72381920 Error =     -0.00000000 T = 6.52
+ <-- Iter =   16-  17 .. NDAV =    2 E =    -75.72382150 Error =      0.00000002 T = 6.39
+ <-- Iter =   15-  16 .. NDAV =    2 E =    -75.72382728 Error =      0.00000026 T = 6.00
+ <-- Iter =   14-  15 .. NDAV =    2 E =    -75.72383636 Error =      0.00000075 T = 6.04
+ <-- Iter =   13-  14 .. NDAV =    2 E =    -75.72385866 Error =      0.00000073 T = 5.65
+ <-- Iter =   12-  13 .. NDAV =    2 E =    -75.72386163 Error =     -0.00000000 T = 4.61
+ <-- Iter =   11-  12 .. NDAV =    3 E =    -75.72396800 Error =      0.00000132 T = 3.38
+ <-- Iter =   10-  11 .. NDAV =    3 E =    -75.72413969 Error =      0.00000240 T = 2.18
+ <-- Iter =    9-  10 .. NDAV =    5 E =    -75.72518612 Error =      0.00001823 T = 2.72
+ <-- Iter =    8-   9 .. NDAV =    3 E =    -75.72527445 Error =      0.00000165 T = 2.01
+ <-- Iter =    7-   8 .. NDAV =    3 E =    -75.72541936 Error =      0.00000169 T = 1.59
+ <-- Iter =    6-   7 .. NDAV =    3 E =    -75.72552975 Error =      0.00000228 T = 1.52
+ <-- Iter =    5-   6 .. NDAV =    2 E =    -75.72552052 Error =      0.00000001 T = 1.07
+ <-- Iter =    4-   5 .. NDAV =    1 E =    -75.72552045 Error =     -0.00000000 T = 0.65
+ <-- Iter =    3-   4 .. NDAV =    1 E =    -75.72552045 Error =     -0.00000000 T = 0.45
+ <-- Iter =    2-   3 .. NDAV =    1 E =    -75.72552045 Error =     -0.00000000 T = 0.35
+ <-- Iter =    1-   2 .. NDAV =    1 E =    -75.72552045 Error =     -0.00000000 T = 0.20
+ <-- Iter =    0-   1 .. NDAV =    1 E =    -75.72552045 Error =     -0.00000000 T = 0.10
+Time Elapsed =     616.05
+Sweep =    6 | Direction =  forward | Bond dimension =  250 | Noise =         0
+ Constructing Environment .. T = 31.61
+ --> Iter =    0-   1 .. NDAV =    1 E =    -75.72552045 Error =      0.00000000 T = 0.03
+ --> Iter =    1-   2 .. NDAV =    1 E =    -75.72552045 Error =      0.00000000 T = 0.06
+ --> Iter =    2-   3 .. NDAV =    1 E =    -75.72552045 Error =      0.00000000 T = 0.13
+ --> Iter =    3-   4 .. NDAV =    1 E =    -75.72552045 Error =      0.00000000 T = 0.21
+ --> Iter =    4-   5 .. NDAV =    1 E =    -75.72552045 Error =     -0.00000000 T = 0.30
+ --> Iter =    5-   6 .. NDAV =    1 E =    -75.72552045 Error =     -0.00000000 T = 0.83
+ --> Iter =    6-   7 .. NDAV =    2 E =    -75.72553249 Error =      0.00000185 T = 1.13
+ --> Iter =    7-   8 .. NDAV =    2 E =    -75.72553245 Error =      0.00000132 T = 1.27
+ --> Iter =    8-   9 .. NDAV =    3 E =    -75.72554921 Error =      0.00000188 T = 1.49
+ --> Iter =    9-  10 .. NDAV =    3 E =    -75.72564665 Error =      0.00002051 T = 2.10
+ --> Iter =   10-  11 .. NDAV =    3 E =    -75.72562314 Error =      0.00000296 T = 2.21
+ --> Iter =   11-  12 .. NDAV =    3 E =    -75.72581522 Error =      0.00000219 T = 1.86
+ --> Iter =   12-  13 .. NDAV =    4 E =    -75.72634397 Error =      0.00000001 T = 3.17
+ --> Iter =   13-  14 .. NDAV =    3 E =    -75.72641779 Error =      0.00000176 T = 4.40
+ --> Iter =   14-  15 .. NDAV =    3 E =    -75.72646092 Error =      0.00000118 T = 5.48
+ --> Iter =   15-  16 .. NDAV =    2 E =    -75.72647059 Error =      0.00000038 T = 5.17
+ --> Iter =   16-  17 .. NDAV =    2 E =    -75.72647318 Error =      0.00000005 T = 5.67
+ --> Iter =   17-  18 .. NDAV =    2 E =    -75.72647857 Error =      0.00000001 T = 5.63
+ --> Iter =   18-  19 .. NDAV =    2 E =    -75.72648165 Error =      0.00000000 T = 6.06
+ --> Iter =   19-  20 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 6.43
+ --> Iter =   20-  21 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 6.42
+ --> Iter =   21-  22 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 6.61
+ --> Iter =   22-  23 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 7.54
+ --> Iter =   23-  24 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 6.78
+ --> Iter =   24-  25 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 6.07
+Time Elapsed =     734.70
+Sweep =    7 | Direction = backward | Bond dimension =  250 | Noise =         0
+ Constructing Environment .. T = 27.98
+ <-- Iter =   24-  25 .. NDAV =    1 E =    -75.72648165 Error =      0.00000000 T = 2.84
+ <-- Iter =   23-  24 .. NDAV =    1 E =    -75.72648165 Error =      0.00000000 T = 3.89
+ <-- Iter =   22-  23 .. NDAV =    1 E =    -75.72648165 Error =      0.00000000 T = 6.25
+ <-- Iter =   21-  22 .. NDAV =    1 E =    -75.72648165 Error =      0.00000000 T = 7.28
+ <-- Iter =   20-  21 .. NDAV =    1 E =    -75.72648165 Error =      0.00000000 T = 6.87
+ <-- Iter =   19-  20 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 6.76
+ <-- Iter =   18-  19 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 7.01
+ <-- Iter =   17-  18 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 6.35
+ <-- Iter =   16-  17 .. NDAV =    1 E =    -75.72648165 Error =     -0.00000000 T = 6.48
+ <-- Iter =   15-  16 .. NDAV =    2 E =    -75.72648423 Error =      0.00000038 T = 6.03
+ <-- Iter =   14-  15 .. NDAV =    2 E =    -75.72648890 Error =      0.00000115 T = 5.84
+ <-- Iter =   13-  14 .. NDAV =    2 E =    -75.72649193 Error =      0.00000145 T = 5.82
+ <-- Iter =   12-  13 .. NDAV =    1 E =    -75.72648429 Error =     -0.00000000 T = 4.46
+ <-- Iter =   11-  12 .. NDAV =    2 E =    -75.72650321 Error =      0.00000218 T = 3.03
+ <-- Iter =   10-  11 .. NDAV =    3 E =    -75.72653170 Error =      0.00000357 T = 2.07
+ <-- Iter =    9-  10 .. NDAV =    3 E =    -75.72671567 Error =      0.00002311 T = 2.63
+ <-- Iter =    8-   9 .. NDAV =    2 E =    -75.72662278 Error =      0.00000170 T = 1.87
+ <-- Iter =    7-   8 .. NDAV =    3 E =    -75.72662776 Error =      0.00000184 T = 1.56
+ <-- Iter =    6-   7 .. NDAV =    2 E =    -75.72663322 Error =      0.00000220 T = 1.28
+ <-- Iter =    5-   6 .. NDAV =    1 E =    -75.72662128 Error =     -0.00000000 T = 0.91
+ <-- Iter =    4-   5 .. NDAV =    1 E =    -75.72662128 Error =     -0.00000000 T = 0.61
+ <-- Iter =    3-   4 .. NDAV =    1 E =    -75.72662128 Error =     -0.00000000 T = 0.38
+ <-- Iter =    2-   3 .. NDAV =    1 E =    -75.72662128 Error =     -0.00000000 T = 0.29
+ <-- Iter =    1-   2 .. NDAV =    1 E =    -75.72662128 Error =     -0.00000000 T = 0.19
+ <-- Iter =    0-   1 .. NDAV =    1 E =    -75.72662128 Error =     -0.00000000 T = 0.10
+Time Elapsed =     853.48
+Sweep =    8 | Direction =  forward | Bond dimension =  250 | Noise =         0
+ Constructing Environment .. T = 32.04
+ --> Iter =    0-   1 .. NDAV =    1 E =    -75.72662128 Error =      0.00000000 T = 0.04
+ --> Iter =    1-   2 .. NDAV =    1 E =    -75.72662128 Error =      0.00000000 T = 0.08
+ --> Iter =    2-   3 .. NDAV =    1 E =    -75.72662128 Error =      0.00000000 T = 0.12
+ --> Iter =    3-   4 .. NDAV =    1 E =    -75.72662128 Error =      0.00000000 T = 0.20
+ --> Iter =    4-   5 .. NDAV =    1 E =    -75.72662128 Error =     -0.00000000 T = 0.30
+ --> Iter =    5-   6 .. NDAV =    1 E =    -75.72662128 Error =     -0.00000000 T = 0.63
+ --> Iter =    6-   7 .. NDAV =    2 E =    -75.72663334 Error =      0.00000219 T = 1.14
+ --> Iter =    7-   8 .. NDAV =    2 E =    -75.72663143 Error =      0.00000177 T = 1.27
+ --> Iter =    8-   9 .. NDAV =    2 E =    -75.72663297 Error =      0.00000188 T = 1.42
+ --> Iter =    9-  10 .. NDAV =    3 E =    -75.72672960 Error =      0.00002253 T = 2.04
+ --> Iter =   10-  11 .. NDAV =    2 E =    -75.72665195 Error =      0.00000322 T = 2.05
+ --> Iter =   11-  12 .. NDAV =    3 E =    -75.72666628 Error =      0.00000251 T = 1.84
+ --> Iter =   12-  13 .. NDAV =    2 E =    -75.72666909 Error =      0.00000003 T = 2.98
+ --> Iter =   13-  14 .. NDAV =    2 E =    -75.72667960 Error =      0.00000179 T = 4.25
+ --> Iter =   14-  15 .. NDAV =    2 E =    -75.72667811 Error =      0.00000112 T = 5.23
+ --> Iter =   15-  16 .. NDAV =    2 E =    -75.72667579 Error =      0.00000041 T = 5.26
+ --> Iter =   16-  17 .. NDAV =    1 E =    -75.72667320 Error =     -0.00000000 T = 5.30
+ --> Iter =   17-  18 .. NDAV =    1 E =    -75.72667320 Error =     -0.00000000 T = 5.67
+ --> Iter =   18-  19 .. NDAV =    1 E =    -75.72667320 Error =      0.00000000 T = 5.74
+ --> Iter =   19-  20 .. NDAV =    2 E =    -75.72667433 Error =     -0.00000000 T = 6.68
+ --> Iter =   20-  21 .. NDAV =    1 E =    -75.72667433 Error =     -0.00000000 T = 6.37
+ --> Iter =   21-  22 .. NDAV =    1 E =    -75.72667433 Error =     -0.00000000 T = 6.74
+ --> Iter =   22-  23 .. NDAV =    1 E =    -75.72667433 Error =     -0.00000000 T = 7.42
+ --> Iter =   23-  24 .. NDAV =    1 E =    -75.72667433 Error =     -0.00000000 T = 6.66
+ --> Iter =   24-  25 .. NDAV =    1 E =    -75.72667433 Error =     -0.00000000 T = 5.56
+Time Elapsed =     970.50
+Sweep =    9 | Direction = backward | Bond dimension =  250 | Noise =         0
+ Constructing Environment .. T = 27.39
+ <-- Iter =   24-  25 .. NDAV =    1 E =    -75.72667433 Error =      0.00000000 T = 2.92
+ <-- Iter =   23-  24 .. NDAV =    1 E =    -75.72667433 Error =      0.00000000 T = 3.85
+ <-- Iter =   22-  23 .. NDAV =    1 E =    -75.72667433 Error =      0.00000000 T = 6.49
+ <-- Iter =   21-  22 .. NDAV =    1 E =    -75.72667433 Error =      0.00000000 T = 7.25
+ <-- Iter =   20-  21 .. NDAV =    1 E =    -75.72667433 Error =      0.00000000 T = 6.74
+ <-- Iter =   19-  20 .. NDAV =    1 E =    -75.72667433 Error =     -0.00000000 T = 6.73
+ <-- Iter =   18-  19 .. NDAV =    1 E =    -75.72667433 Error =     -0.00000000 T = 7.01
+ <-- Iter =   17-  18 .. NDAV =    1 E =    -75.72667433 Error =     -0.00000000 T = 6.40
+ <-- Iter =   16-  17 .. NDAV =    1 E =    -75.72667433 Error =     -0.00000000 T = 6.21
+ <-- Iter =   15-  16 .. NDAV =    2 E =    -75.72667697 Error =      0.00000042 T = 5.98
+ <-- Iter =   14-  15 .. NDAV =    2 E =    -75.72668047 Error =      0.00000113 T = 5.58
+ <-- Iter =   13-  14 .. NDAV =    2 E =    -75.72668382 Error =      0.00000178 T = 5.76
+ <-- Iter =   12-  13 .. NDAV =    1 E =    -75.72667484 Error =     -0.00000000 T = 4.42
+ <-- Iter =   11-  12 .. NDAV =    2 E =    -75.72668954 Error =      0.00000245 T = 3.07
+ <-- Iter =   10-  11 .. NDAV =    2 E =    -75.72669442 Error =      0.00000335 T = 1.85
+ <-- Iter =    9-  10 .. NDAV =    3 E =    -75.72680729 Error =      0.00002401 T = 2.37
+ <-- Iter =    8-   9 .. NDAV =    2 E =    -75.72670701 Error =      0.00000168 T = 1.95
+ <-- Iter =    7-   8 .. NDAV =    2 E =    -75.72670663 Error =      0.00000131 T = 1.43
+ <-- Iter =    6-   7 .. NDAV =    3 E =    -75.72671042 Error =      0.00000230 T = 1.27
+ <-- Iter =    5-   6 .. NDAV =    1 E =    -75.72669824 Error =     -0.00000000 T = 0.91
+ <-- Iter =    4-   5 .. NDAV =    1 E =    -75.72669824 Error =     -0.00000000 T = 0.60
+ <-- Iter =    3-   4 .. NDAV =    1 E =    -75.72669824 Error =     -0.00000000 T = 0.36
+ <-- Iter =    2-   3 .. NDAV =    1 E =    -75.72669824 Error =     -0.00000000 T = 0.28
+ <-- Iter =    1-   2 .. NDAV =    1 E =    -75.72669824 Error =     -0.00000000 T = 0.17
+ <-- Iter =    0-   1 .. NDAV =    1 E =    -75.72669824 Error =     -0.00000000 T = 0.10
+Time Elapsed =    1087.61
+Sweep =   10 | Direction =  forward | Bond dimension =  250 | Noise =         0
+ Constructing Environment .. T = 33.51
+ --> Iter =    0-   1 .. NDAV =    1 E =    -75.72669824 Error =      0.00000000 T = 0.03
+ --> Iter =    1-   2 .. NDAV =    1 E =    -75.72669824 Error =      0.00000000 T = 0.06
+ --> Iter =    2-   3 .. NDAV =    1 E =    -75.72669824 Error =      0.00000000 T = 0.12
+ --> Iter =    3-   4 .. NDAV =    1 E =    -75.72669824 Error =      0.00000000 T = 0.22
+ --> Iter =    4-   5 .. NDAV =    1 E =    -75.72669824 Error =     -0.00000000 T = 0.30
+ --> Iter =    5-   6 .. NDAV =    1 E =    -75.72669824 Error =     -0.00000000 T = 0.74
+ --> Iter =    6-   7 .. NDAV =    2 E =    -75.72671022 Error =      0.00000218 T = 1.24
+ --> Iter =    7-   8 .. NDAV =    2 E =    -75.72670790 Error =      0.00000177 T = 1.40
+ --> Iter =    8-   9 .. NDAV =    2 E =    -75.72670914 Error =      0.00000205 T = 1.57
+ --> Iter =    9-  10 .. NDAV =    3 E =    -75.72680959 Error =      0.00002407 T = 2.06
+ --> Iter =   10-  11 .. NDAV =    2 E =    -75.72671796 Error =      0.00000327 T = 2.10
+ --> Iter =   11-  12 .. NDAV =    2 E =    -75.72672030 Error =      0.00000242 T = 1.77
+ --> Iter =   12-  13 .. NDAV =    2 E =    -75.72671194 Error =      0.00000002 T = 3.13
+ --> Iter =   13-  14 .. NDAV =    2 E =    -75.72672116 Error =      0.00000134 T = 4.42
+ --> Iter =   14-  15 .. NDAV =    2 E =    -75.72671901 Error =      0.00000101 T = 5.14
+ --> Iter =   15-  16 .. NDAV =    2 E =    -75.72671587 Error =      0.00000037 T = 5.43
+ --> Iter =   16-  17 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 5.29
+ --> Iter =   17-  18 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 5.56
+ --> Iter =   18-  19 .. NDAV =    1 E =    -75.72671321 Error =      0.00000000 T = 5.89
+ --> Iter =   19-  20 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 6.38
+ --> Iter =   20-  21 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 6.34
+ --> Iter =   21-  22 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 7.35
+ --> Iter =   22-  23 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 7.67
+ --> Iter =   23-  24 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 6.98
+ --> Iter =   24-  25 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 6.07
+Time Elapsed =    1208.40
+Sweep =   11 | Direction = backward | Bond dimension =  250 | Noise =         0
+ Constructing Environment .. T = 29.07
+ <-- Iter =   24-  25 .. NDAV =    1 E =    -75.72671321 Error =      0.00000000 T = 2.93
+ <-- Iter =   23-  24 .. NDAV =    1 E =    -75.72671321 Error =      0.00000000 T = 4.02
+ <-- Iter =   22-  23 .. NDAV =    1 E =    -75.72671321 Error =      0.00000000 T = 6.58
+ <-- Iter =   21-  22 .. NDAV =    1 E =    -75.72671321 Error =      0.00000000 T = 7.51
+ <-- Iter =   20-  21 .. NDAV =    1 E =    -75.72671321 Error =      0.00000000 T = 6.99
+ <-- Iter =   19-  20 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 7.37
+ <-- Iter =   18-  19 .. NDAV =    1 E =    -75.72671321 Error =      0.00000000 T = 7.25
+ <-- Iter =   17-  18 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 6.64
+ <-- Iter =   16-  17 .. NDAV =    1 E =    -75.72671321 Error =     -0.00000000 T = 6.42
+ <-- Iter =   15-  16 .. NDAV =    2 E =    -75.72671593 Error =      0.00000040 T = 6.50
+ <-- Iter =   14-  15 .. NDAV =    2 E =    -75.72671953 Error =      0.00000113 T = 5.94
+ <-- Iter =   13-  14 .. NDAV =    2 E =    -75.72672249 Error =      0.00000157 T = 6.05
+ <-- Iter =   12-  13 .. NDAV =    1 E =    -75.72671330 Error =      0.00000000 T = 4.47
+ <-- Iter =   11-  12 .. NDAV =    2 E =    -75.72672709 Error =      0.00000205 T = 3.22
+ <-- Iter =   10-  11 .. NDAV =    3 E =    -75.72673285 Error =      0.00000359 T = 2.04
+ <-- Iter =    9-  10 .. NDAV =    3 E =    -75.72684021 Error =      0.00002542 T = 2.53
+ <-- Iter =    8-   9 .. NDAV =    2 E =    -75.72673487 Error =      0.00000207 T = 1.83
+ <-- Iter =    7-   8 .. NDAV =    2 E =    -75.72673430 Error =      0.00000180 T = 1.72
+ <-- Iter =    6-   7 .. NDAV =    2 E =    -75.72673677 Error =      0.00000219 T = 1.29
+ <-- Iter =    5-   6 .. NDAV =    1 E =    -75.72672478 Error =     -0.00000000 T = 0.91
+ <-- Iter =    4-   5 .. NDAV =    1 E =    -75.72672478 Error =     -0.00000000 T = 0.70
+ <-- Iter =    3-   4 .. NDAV =    1 E =    -75.72672478 Error =     -0.00000000 T = 0.45
+ <-- Iter =    2-   3 .. NDAV =    1 E =    -75.72672478 Error =     -0.00000000 T = 0.37
+ <-- Iter =    1-   2 .. NDAV =    1 E =    -75.72672478 Error =     -0.00000000 T = 0.17
+ <-- Iter =    0-   1 .. NDAV =    1 E =    -75.72672478 Error =     -0.00000000 T = 0.09
+Time Elapsed =    1331.48
+Sweep =   12 | Direction =  forward | Bond dimension =  250 | Noise =         0
+ Constructing Environment .. T = 33.23
+ --> Iter =    0-   1 .. NDAV =    1 E =    -75.72672478 Error =      0.00000000 T = 0.03
+ --> Iter =    1-   2 .. NDAV =    1 E =    -75.72672478 Error =      0.00000000 T = 0.07
+ --> Iter =    2-   3 .. NDAV =    1 E =    -75.72672478 Error =      0.00000000 T = 0.13
+ --> Iter =    3-   4 .. NDAV =    1 E =    -75.72672478 Error =      0.00000000 T = 0.22
+ --> Iter =    4-   5 .. NDAV =    1 E =    -75.72672478 Error =     -0.00000000 T = 0.31
+ --> Iter =    5-   6 .. NDAV =    1 E =    -75.72672478 Error =      0.00000000 T = 0.68
+ --> Iter =    6-   7 .. NDAV =    2 E =    -75.72673673 Error =      0.00000217 T = 1.17
+ --> Iter =    7-   8 .. NDAV =    2 E =    -75.72673442 Error =      0.00000171 T = 1.31
+ --> Iter =    8-   9 .. NDAV =    2 E =    -75.72673545 Error =      0.00000192 T = 1.53
+ --> Iter =    9-  10 .. NDAV =    3 E =    -75.72684081 Error =      0.00002491 T = 2.37
+ --> Iter =   10-  11 .. NDAV =    2 E =    -75.72674533 Error =      0.00000326 T = 2.14
+ --> Iter =   11-  12 .. NDAV =    3 E =    -75.72674583 Error =      0.00000257 T = 1.91
+ --> Iter =   12-  13 .. NDAV =    2 E =    -75.72673850 Error =      0.00000003 T = 3.41
+ --> Iter =   13-  14 .. NDAV =    2 E =    -75.72674848 Error =      0.00000192 T = 4.45
+ --> Iter =   14-  15 .. NDAV =    2 E =    -75.72674557 Error =      0.00000119 T = 5.98
+ --> Iter =   15-  16 .. NDAV =    2 E =    -75.72674226 Error =      0.00000044 T = 5.85
+ --> Iter =   16-  17 .. NDAV =    2 E =    -75.72674040 Error =      0.00000005 T = 6.05
+ --> Iter =   17-  18 .. NDAV =    1 E =    -75.72674007 Error =      0.00000000 T = 5.87
+ --> Iter =   18-  19 .. NDAV =    1 E =    -75.72674007 Error =     -0.00000000 T = 6.29
+ --> Iter =   19-  20 .. NDAV =    1 E =    -75.72674007 Error =     -0.00000000 T = 6.71
+ --> Iter =   20-  21 .. NDAV =    1 E =    -75.72674007 Error =     -0.00000000 T = 6.62
+ --> Iter =   21-  22 .. NDAV =    1 E =    -75.72674007 Error =     -0.00000000 T = 6.95
+ --> Iter =   22-  23 .. NDAV =    1 E =    -75.72674007 Error =     -0.00000000 T = 7.81
+ --> Iter =   23-  24 .. NDAV =    1 E =    -75.72674007 Error =     -0.00000000 T = 7.11
+ --> Iter =   24-  25 .. NDAV =    1 E =    -75.72674007 Error =     -0.00000000 T = 5.98
+final energy =  -75.72684081070427
