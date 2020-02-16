@@ -22,7 +22,7 @@ The partitioning of Hamiltonian in left (:math:`L`) and right (:math:`R`) blocks
     + h.c. \right]
     + 2 \sum_{i\in R} \left[ \big( a_{i}^\dagger \big)^{[\frac{1}{2}]} \otimes_{[0]} \big( \hat{R}_{i}^{L} \big)^{[\frac{1}{2}]}
     + h.c. \right] \\
-    &\ + \frac{1}{2} \sum_{ik\in L} \left[
+    &\ - \frac{1}{2} \sum_{ik\in L} \left[
     \sqrt{3}
     \big(\hat{A}_{ik} \big)^{[1]} \otimes_{[0]}
     \big(\hat{P}_{ik}^{R} \big)^{[1]}
@@ -44,7 +44,7 @@ where the normal and complementary operators are defined by
     \big( \hat{A}_{ik} \big)^{[0/1]} =&\
     \big( a_{i}^\dagger \big)^{[\frac{1}{2}]} \otimes_{[0/1]} \big( a_{k}^\dagger \big)^{[\frac{1}{2}]} \\
     \big( \hat{P}_{ik}^{R} \big)^{[0/1]} =&\
-        \sum_{jl\in R} v_{ijkl} \big( a_{l} \big)^{[\frac{1}{2}]} \otimes_{[0/1]} \big( a_{j} \big)^{[\frac{1}{2}]} \\
+        \sum_{jl\in R} v_{ijkl} \big( a_{j} \big)^{[\frac{1}{2}]} \otimes_{[0/1]} \big( a_{l} \big)^{[\frac{1}{2}]} \\
     \big( \hat{B}_{ij} \big)^{[0]} =&\
         \big( a_{i}^\dagger \big)^{[\frac{1}{2}]} \otimes_{[0]} \big( a_{j} \big)^{[\frac{1}{2}]} \\
     \big( {\hat{B}'}_{ij} \big)^{[1]} =&\
@@ -395,7 +395,32 @@ this is because in the original spatial expression there is a summation over :ma
 AP Term
 *******
 
-This term (without Hermitian conjugate part) is :math:`\sqrt{3} X^{[0]} + Y^{[0]}`.
+Using definition
+
+.. math::
+    \big( \hat{A}_{ik} \big)^{[0/1]} =&\
+    \big( a_{i}^\dagger \big)^{[\frac{1}{2}]} \otimes_{[0/1]} \big( a_{k}^\dagger \big)^{[\frac{1}{2}]} \\
+    \big( \hat{P}_{ik}^{R} \big)^{[0/1]} =&\
+        -\sum_{jl\in R} v_{ijkl} \big( a_{j} \big)^{[\frac{1}{2}]} \otimes_{[0/1]} \big( a_{l} \big)^{[\frac{1}{2}]}
+
+We have
+
+.. math::
+    &\ \sum_{ik\in L} \left[ \sqrt{3} \big(\hat{A}_{ik} \big)^{[1]} \otimes_{[0]}
+    \big(\hat{P}_{ik}^{R} \big)^{[1]} + \big(\hat{A}_{ik} \big)^{[0]} \otimes_{[0]} \big(\hat{P}_{ik}^{R} \big)^{[0]} \right] \\
+    =&\ \sum_{ik\in L,jl\in R} v_{ijkl} \left[ \sqrt{3}
+    \left[ \big( a_{i}^\dagger \big)^{[\frac{1}{2}]} \otimes_{[1]} \big( a_{k}^\dagger \big)^{[\frac{1}{2}]}\right]
+    \otimes_{[0]} \left[ \big( a_{j} \big)^{[\frac{1}{2}]} \otimes_{[1]} \big( a_{l} \big)^{[\frac{1}{2}]} \right]
+    + \left[ \big( a_{i}^\dagger \big)^{[\frac{1}{2}]} \otimes_{[0]} \big( a_{k}^\dagger \big)^{[\frac{1}{2}]}\right]
+    \otimes_{[0]} \left[ \big( a_{j} \big)^{[\frac{1}{2}]} \otimes_{[0]} \big( a_{l} \big)^{[\frac{1}{2}]} \right]
+    \right] \\
+    =&\ \sum_{ik\in L,jl\in R} v_{ijkl} \left[ \sum_{\sigma\sigma'} a_{i\sigma}^\dagger a_{k\sigma'}^\dagger
+        a_{j\sigma} a_{l\sigma'} \right]
+    = -\sum_{ik\in L,jl\in R,\sigma\sigma'} v_{ijkl} a_{i\sigma}^\dagger a_{k\sigma'}^\dagger a_{l\sigma'} a_{j\sigma}
+
+Note that in last step, we can anticommute :math:`a_{l\sigma'}, a_{j\sigma}` because it's assumed that in the :math:`\sigma`
+summation, when :math:`j=l`, :math:`\sigma \neq \sigma'`. Otherwise there will be two :math:`a` operators acting on the same site
+and the contribution is zero.
 
 BQ Term
 *******
@@ -548,7 +573,7 @@ we have
     + \big( a_{i}\big)^{[\frac{1}{2}]} \otimes_{[0]} \big( \hat{R}_{i}^{\prime R\dagger} \big)^{[\frac{1}{2}]} \right]
     + 2 \sum_{i\in R} \left[ \big( \hat{R}_{i}^{\prime L\dagger} \big)^{[\frac{1}{2}]} \otimes_{[0]} \big( a_{i} \big)^{[\frac{1}{2}]}
     + \big( \hat{R}_{i}^{\prime L} \big)^{[\frac{1}{2}]} \otimes_{[0]} \big( a_{i}^\dagger \big)^{[\frac{1}{2}]}\right] \\
-    &\ + \frac{1}{2} \sum_{ik\in L} \left[
+    &\ - \frac{1}{2} \sum_{ik\in L} \left[
     \big(\hat{A}_{ik} \big)^{[0]} \otimes_{[0]} \big(\hat{P}_{ik}^{R} \big)^{[0]}
     + \sqrt{3} \big(\hat{A}_{ik} \big)^{[1]} \otimes_{[0]} \big(\hat{P}_{ik}^{R} \big)^{[1]}
     + \big(\hat{A}_{ik}^\dagger \big)^{[0]} \otimes_{[0]} \big(\hat{P}_{ik}^{R\dagger} \big)^{[0]}
@@ -596,7 +621,7 @@ Note that due the CG factors, exchange any :math:`\otimes_{[0]}` product will no
     + \big( a_{i}\big)^{[\frac{1}{2}]} \otimes_{[0]} \big( \hat{R}_{i}^{\prime R\dagger} \big)^{[\frac{1}{2}]} \right]
     + 2 \sum_{i\in R} \left[ \big( \hat{R}_{i}^{\prime L\dagger} \big)^{[\frac{1}{2}]} \otimes_{[0]} \big( a_{i} \big)^{[\frac{1}{2}]}
     + \big( \hat{R}_{i}^{\prime L} \big)^{[\frac{1}{2}]} \otimes_{[0]} \big( a_{i}^\dagger \big)^{[\frac{1}{2}]}\right] \\
-    &\ + \frac{1}{2} \sum_{jl\in R} \left[
+    &\ - \frac{1}{2} \sum_{jl\in R} \left[
     \big(\hat{P}_{jl}^{L} \big)^{[0]} \otimes_{[0]} \big(\hat{A}_{jl} \big)^{[0]}
     + \sqrt{3} \big(\hat{P}_{jl}^{L} \big)^{[1]} \otimes_{[0]} \big(\hat{A}_{jl} \big)^{[1]}
     + \big(\hat{P}_{jl}^{L\dagger} \big)^{[0]} \otimes_{[0]} \big(\hat{A}_{jl}^\dagger \big)^{[0]}
