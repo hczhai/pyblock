@@ -23,7 +23,7 @@
 Matrix Product Operator for quantum chemistry calculations.
 """
 
-from .operator import OpElement, OpNames
+from .operator import OpElement, OpSum, OpNames
 from ..tensor.tensor import Tensor, TensorNetwork
 import numpy as np
 
@@ -352,5 +352,41 @@ class MPO(TensorNetwork):
                     mat[pi, p + m * (m + 1) + m] = OpElement(OpNames.B, (m, m, s), q_label=self.hamil.two_site_minus_q[m, m][s])
                     p += (m + 1) * (m + 1)
                 assert p == rshape
-            tensors.append(OperatorTensor(mat=mat, tags={m}, ops=self.hamil.get_site_operators(m)))
+            
+            mat, ops = self._post_check_mpo_operators(mat, m)
+            
+            tensors.append(OperatorTensor(mat=mat, tags={m}, ops=ops))
+            
         return tensors
+    
+    def _post_check_mpo_operators(self, mat, m):
+        
+        ops_set = set()
+        
+        for em in mat.reshape(mat.size):
+            if em == 0:
+                pass
+            elif isinstance(em, OpElement):
+                ops_set.add(abs(em))
+            elif isinstance(em, OpSum):
+                ops_set |= { abs(opd.op) for opd in em.strings }
+            else:
+                assert False
+        
+        ops = self.hamil.get_site_operators(m, ops_set)
+        
+        for il in range(mat.shape[0]):
+            for ir in range(mat.shape[1]):
+                em = mat[il, ir]
+                if em == 0:
+                    pass
+                elif isinstance(em, OpElement):
+                    if ops[abs(em)] == 0:
+                        mat[il, ir] = 0
+                elif isinstance(em, OpSum):
+                    if all(ops[abs(opd.op)] == 0 for opd in em.strings):
+                        mat[il, ir] = 0
+        
+        ops = { k : v for k, v in ops.items() if v != 0 }
+        
+        return mat, ops
