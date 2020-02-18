@@ -17,6 +17,11 @@ def state_tensor_product_target(*args, **kwargs):
     pass
 
 
+def wigner_9j(*args, **kwargs):
+    """wigner_9j(arg0: int, arg1: int, arg2: int, arg3: int, arg4: int, arg5: int, arg6: int, arg7: int, arg8: int) -> float"""
+    pass
+
+
 class IrrepSpace:
     """A wrapper class for molecular point group symmetry irrep."""
 

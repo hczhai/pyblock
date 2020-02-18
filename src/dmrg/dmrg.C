@@ -259,6 +259,8 @@ int calldmrg(char *input, char *output) {
         Stackmem.resize(numthrds);
         Stackmem[0].data = stackmemory;
         Stackmem[0].size = dmrginp.getMemory();
+        
+        block2::current_page = &Stackmem[0];
         //************
         // memset(stackmemory, 0, dmrginp.getMemory()*sizeof(double));
         dmrginp.initCumulTimer();

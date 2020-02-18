@@ -11,8 +11,8 @@ np.random.seed(1234)
 
 bond_dim = 200
 
-page = DMRGDataPage(save_dir='node0')
-memory = 2000
+page = None
+memory = 16000
 
 with BlockHamiltonian.get(fcidump='C2.BLOCK.FCIDUMP', pg='d2h', su2=True, output_level=0, memory=memory, page=page) as hamil:
     lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)

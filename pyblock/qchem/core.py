@@ -492,6 +492,12 @@ class BlockHamiltonian:
             Global.dmrginp.output_level = kwargs['output_level']
             self.output_level = kwargs['output_level']
             del kwargs['output_level']
+        
+        if 'page' in kwargs:
+            self.page = kwargs['page']
+            del kwargs['page']
+        else:
+            self.page = None
 
         file_input = False
 
@@ -570,10 +576,12 @@ class BlockHamiltonian:
             raise BlockError('Currently two dot to one dot is not supported.')
         self.dot = 1 if Global.dmrginp.algorithm_type == AlgorithmTypes.OneDot else 2
 
-        init_stack_memory()
-        
-        MPS.site_blocks = VectorBlock([])
-        MPS_init(True)
+        if self.page is None:
+            init_stack_memory()
+            MPS.site_blocks = VectorBlock([])
+            MPS_init(True)
+        else:
+            self.page.initialize()
         
         self.PG = point_group(self.point_group)
         self.spatial = [self.PG.IrrepNames[ir] for ir in self.spatial_syms]
@@ -602,60 +610,84 @@ class BlockHamiltonian:
                                     for j in range(self.n_sites)], dtype=object)
         self.two_site_minus_q = np.array([[self.one_site_q[i] - self.one_site_q[j] for i in range(self.n_sites)]
                                     for j in range(self.n_sites)], dtype=object)
+        
+        self.site_state_info = [BlockSymmetry.to_state_info(b.items()) for b in self.site_basis]
     
     def get_site_operators(self, m, op_set):
         """Return operator representations dict(OpElement -> StackSparseMatrix) at site m."""
         ops = {}
-        block = Block(m, m, 0, False)
         
-        mat = StackSparseMatrix()
-        mat.deep_copy(block.ops[OpTypes.Hamiltonian].local_element_linear(0)[0])
-        assert not mat.fermion
-        ops[OpElement(OpNames.H, ())] = mat
+        if self.spin_adapted:
+            
+            mat = StackSparseMatrix()
+            mat.fermion = False
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
+            mat.allocate(self.site_state_info[m])
+            mat.initialized = True
+            mat.operator_element(0, 0).ref[0, 0] = 1.0
+            mat.operator_element(1, 1).ref[0, 0] = 1.0
+            mat.operator_element(2, 2).ref[0, 0] = 1.0
+            ops[OpElement(OpNames.I, ())] = mat
+            
+            mat = StackSparseMatrix()
+            mat.fermion = False
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
+            mat.allocate(self.site_state_info[m])
+            mat.initialized = True
+            mat.operator_element(0, 0).ref[0, 0] = 0.0
+            mat.operator_element(1, 1).ref[0, 0] = self.t[m, m]
+            mat.operator_element(2, 2).ref[0, 0] = self.t[m, m] * 2 + self.v[m, m, m, m]
+            ops[OpElement(OpNames.H, ())] = mat
+            
+            mat = StackSparseMatrix()
+            mat.fermion = True
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.one_site_q[m])])
+            mat.allocate(self.site_state_info[m])
+            mat.initialized = True
+            mat.operator_element(1, 0).ref[0, 0] = 1.0
+            mat.operator_element(2, 1).ref[0, 0] = -np.sqrt(2)
+            ops[OpElement(OpNames.C, (m, ))] = mat
+
+            mat = StackSparseMatrix()
+            mat.fermion = True
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.one_site_q[m])])
+            mat.allocate(self.site_state_info[m])
+            mat.initialized = True
+            mat.operator_element(0, 1).ref[0, 0] = np.sqrt(2)
+            mat.operator_element(1, 2).ref[0, 0] = 1.0
+            ops[OpElement(OpNames.D, (m, ))] = mat
         
-        mat = StackSparseMatrix()
-        mat.deep_copy(block.ops[OpTypes.Overlap].local_element_linear(0)[0])
-        assert not mat.fermion
-        ops[OpElement(OpNames.I, ())] = mat
-        
-        mat = StackSparseMatrix()
-        mat.deep_copy(block.ops[OpTypes.Cre].local_element_linear(0)[0])
-        assert mat.fermion
-        ops[OpElement(OpNames.C, (m, ))] = mat
-        
-        mat = StackSparseMatrix()
-        mat.deep_copy(block.ops[OpTypes.Des].local_element_linear(0)[0])
-        assert mat.fermion
-        ops[OpElement(OpNames.D, (m, ))] = mat
+        else:
+            raise BlockError('non spin-adapted case not implemented.')
         
         for s in [0, 1]:
             mat = StackSparseMatrix()
             mat.fermion = False
             mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_plus_q[m, m][s])])
-            mat.allocate(BlockSymmetry.initial_state_info(m))
+            mat.allocate(self.site_state_info[m])
             mat.initialized = True
             product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.C, (m, ))],
-                    mat, BlockSymmetry.initial_state_info(m), 1.0)
+                    mat, self.site_state_info[m], 1.0)
             ops[OpElement(OpNames.A, (m, m, s))] = mat
         
         for s in [0, 1]:
             mat = StackSparseMatrix()
             mat.fermion = False
             mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.two_site_plus_q[m, m][s])])
-            mat.allocate(BlockSymmetry.initial_state_info(m))
+            mat.allocate(self.site_state_info[m])
             mat.initialized = True
             product(ops[OpElement(OpNames.D, (m, ))], ops[OpElement(OpNames.D, (m, ))],
-                    mat, BlockSymmetry.initial_state_info(m), 1.0)
+                    mat, self.site_state_info[m], 1.0)
             ops[OpElement(OpNames.AD, (m, m, s))] = mat
         
         for s in [0, 1]:
             mat = StackSparseMatrix()
             mat.fermion = False
             mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[m, m][s])])
-            mat.allocate(BlockSymmetry.initial_state_info(m))
+            mat.allocate(self.site_state_info[m])
             mat.initialized = True
             product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.D, (m, ))],
-                    mat, BlockSymmetry.initial_state_info(m), 1.0)
+                    mat, self.site_state_info[m], 1.0)
             ops[OpElement(OpNames.B, (m, m, s))] = mat
         
         for i in range(0, self.n_sites):
@@ -684,7 +716,7 @@ class BlockHamiltonian:
                     mat2 = StackSparseMatrix()
                     mat2.deep_clear_copy(ops[OpElement(OpNames.D, (m, ))])
                     product(ops[OpElement(OpNames.B, (m, m, 0))], ops[OpElement(OpNames.D, (m, ))],
-                            mat2, BlockSymmetry.initial_state_info(m), 1.0)
+                            mat2, self.site_state_info[m], 1.0)
                     tensor_scale_add_no_trans(self.v[i, m, m, m], mat2, mat)
                     mat2.deallocate()
                     ops[OpElement(OpNames.R, (i, ))] = mat
@@ -700,7 +732,7 @@ class BlockHamiltonian:
                     mat2 = StackSparseMatrix()
                     mat2.deep_clear_copy(ops[OpElement(OpNames.C, (m, ))])
                     product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.B, (m, m, 0))],
-                            mat2, BlockSymmetry.initial_state_info(m), 1.0)
+                            mat2, self.site_state_info[m], 1.0)
                     tensor_scale_add_no_trans(self.v[i, m, m, m], mat2, mat)
                     mat2.deallocate()
                     ops[OpElement(OpNames.RD, (i, ))] = mat
@@ -809,12 +841,15 @@ class BlockHamiltonian:
     
     @staticmethod
     @contextlib.contextmanager
-    def get(fcidump, pg, su2, dot=2, output_level=0, memory=2000):
+    def get(fcidump, pg, su2, dot=2, output_level=0, memory=2000, page=None):
         ham = BlockHamiltonian(fcidump=fcidump, point_group=pg,
-                               dot=dot, spin_adapted=su2,
+                               dot=dot, spin_adapted=su2, page=page,
                                output_level=output_level, memory=memory)
         try:
             yield ham
         finally:
-            BlockHamiltonian.set_current_memory(0)
-            BlockHamiltonian.release_memory()
+            if page is None:
+                BlockHamiltonian.set_current_memory(0)
+                BlockHamiltonian.release_memory()
+            else:
+                page.release()

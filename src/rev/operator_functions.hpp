@@ -1,6 +1,6 @@
 
-#ifndef REV_OPERATOR_FUNCTIONS_H_
-#define REV_OPERATOR_FUNCTIONS_H_
+#ifndef REV_OPERATOR_FUNCTIONS_HPP_
+#define REV_OPERATOR_FUNCTIONS_HPP_
 
 #include "StackBaseOperator.h"
 #include "Stackwavefunction.h"
@@ -80,4 +80,4 @@ void TensorPrecondition(StackSparseMatrix &a, double e, const DiagonalMatrix &di
 
 }
 
-#endif /* REV_OPERATOR_FUNCTIONS_H_ */
+#endif /* REV_OPERATOR_FUNCTIONS_HPP_ */

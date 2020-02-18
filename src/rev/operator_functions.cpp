@@ -559,7 +559,7 @@ void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &
 
     double *dataArray[quanta_thrds];
     for (int q = 0; q < quanta_thrds; q++) {
-        dataArray[q] = Stackmem[omprank].allocate(maxlen);
+        dataArray[q] = block2::current_page->allocate(maxlen);
     }
 
 #pragma omp parallel for schedule(dynamic) num_threads(quanta_thrds)
@@ -621,7 +621,7 @@ void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &
     }
 
     for (int q = quanta_thrds - 1; q > -1; q--) {
-        Stackmem[omprank].deallocate(dataArray[q], maxlen);
+        block2::current_page->deallocate(dataArray[q], maxlen);
     }
 }
 

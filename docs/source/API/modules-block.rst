@@ -12,3 +12,4 @@ Block API References
    block-operator
    block-symmetry
    block-rev
+   block-data-page

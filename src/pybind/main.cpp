@@ -14,6 +14,7 @@ void pybind_dmrg(py::module &m);
 void pybind_operator(py::module &m);
 void pybind_matrix(py::module &m);
 void pybind_rev(py::module &m);
+void pybind_data_page(py::module &m);
 
 PYBIND11_MAKE_OPAQUE(vector<int>);
 PYBIND11_MAKE_OPAQUE(vector<bool>);
@@ -52,4 +53,7 @@ PYBIND11_MODULE(block, m) {
     
     py::module m_rev = m.def_submodule("rev", "Revised Block functions.");
     pybind_rev(m_rev);
+    
+    py::module m_data_page = m.def_submodule("data_page", "Revised data page functions.");
+    pybind_data_page(m_data_page);
 }

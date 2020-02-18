@@ -16,23 +16,22 @@ Sandeep Sharma and Garnet K.-L. Chan
 #include "StackMatrix.h"
 #include "csf.h"
 #include "StateInfo.h"
+#include "global.h"
 
 namespace SpinAdapted{
   
-void StackSparseMatrix::deepCopy(const StackSparseMatrix& o)
-{
-  *this = o;
-  data = Stackmem[omprank].allocate(totalMemory);
-  DCOPY(totalMemory, o.data, 1, data, 1);
-  allocateOperatorMatrix();
+void StackSparseMatrix::deepCopy(const StackSparseMatrix& o) {
+    *this = o;
+    data = block2::current_page->allocate(totalMemory);
+    DCOPY(totalMemory, o.data, 1, data, 1);
+    allocateOperatorMatrix();
 }
 
-void StackSparseMatrix::deepClearCopy(const StackSparseMatrix& o)
-{
-  *this = o;
-  data = Stackmem[omprank].allocate(totalMemory);
-  memset(data, 0, totalMemory*sizeof(double));
-  allocateOperatorMatrix();
+void StackSparseMatrix::deepClearCopy(const StackSparseMatrix& o) {
+    *this = o;
+    data = block2::current_page->allocate(totalMemory);
+    memset(data, 0, totalMemory*sizeof(double));
+    allocateOperatorMatrix();
 }
 
 const StackTransposeview Transpose(StackSparseMatrix& op) { return StackTransposeview(op); };
@@ -306,7 +305,7 @@ void StackSparseMatrix::deallocate()
 { 
   //allowedQuantaMatrix.Clear();
   //operatorMatrix.Clear();
-  Stackmem[omprank].deallocate(data, totalMemory);
+  block2::current_page->deallocate(data, totalMemory);
   totalMemory = 0;
   data = 0;
 }
@@ -315,7 +314,7 @@ void StackSparseMatrix::deallocate()
 void StackSparseMatrix::allocate(const StateInfo& sr, const StateInfo& sl) {
   if (totalMemory != 0) return; //allready built
   long requiredData = getRequiredMemory(sr, sl, get_deltaQuantum());
-  double* data = Stackmem[omprank].allocate(requiredData);
+  double* data = block2::current_page->allocate(requiredData);
   memset(data, 0, requiredData * sizeof(double));      
   allocate(sr, sl, data);
 } 
@@ -323,7 +322,7 @@ void StackSparseMatrix::allocate(const StateInfo& sr, const StateInfo& sl) {
 void StackSparseMatrix::allocate(const StateInfo& s) {
   if (totalMemory != 0) return; //allready built
   long requiredData = getRequiredMemory(s, s, get_deltaQuantum());
-  double* data = Stackmem[omprank].allocate(requiredData);
+  double* data = block2::current_page->allocate(requiredData);
   memset(data, 0, requiredData * sizeof(double));      
   allocate(s, s, data);
 } 

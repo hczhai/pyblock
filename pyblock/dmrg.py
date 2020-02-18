@@ -134,7 +134,7 @@ class DMRG:
         energies : list(float)
             Energies collected for all sweeps.
     """
-    def __init__(self, mpo, mps, bond_dim, noise=0.0, contractor=None, rebuild=True):
+    def __init__(self, mpo, mps, bond_dim, noise=0.0, contractor=None):
         self.n_sites = len(mpo)
         self.dot = mps.dot
         self.center = mps.center
@@ -154,13 +154,13 @@ class DMRG:
 
         self.energies = []
         
-        self._pre_sweep = contractor.pre_sweep if contractor is not None and rebuild else lambda: None
-        self._post_sweep = contractor.post_sweep if contractor is not None and rebuild else lambda: None
+        self._pre_sweep = contractor.pre_sweep if contractor is not None else lambda: None
+        self._post_sweep = contractor.post_sweep if contractor is not None else lambda: None
         
-        self.rebuild = rebuild
+        self.rebuild = contractor.rebuild
         
-        if not rebuild:
-            self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
+        if not self.rebuild:
+            self.construct_envs()
     
     def update_one_dot(self, i, forward, bond_dim, noise):
         """Update local site in one-dot scheme. Not implemented."""
@@ -234,7 +234,13 @@ class DMRG:
         self.eff_ham().replace({i, i + 1}, tn_lr_ket | tn_lr_bra)
         
         return energy, error, ndav
-
+    
+    def construct_envs(self):
+        t = time.perf_counter()
+        print(" Constructing environment .. ", end='', flush=True)
+        self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
+        print("T = %4.2f" % (time.perf_counter() - t))
+    
     def blocking(self, i, forward, bond_dim, noise):
         """
         Perform one blocking iteration.
@@ -301,10 +307,7 @@ class DMRG:
         self._pre_sweep()
         
         if self.rebuild:
-            t = time.perf_counter()
-            print(" Constructing environment .. ", end='', flush=True)
-            self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
-            print("T = %4.2f" % (time.perf_counter() - t))
+            self.construct_envs()
         else:
             self.eff_ham.prepare_sweep()
 

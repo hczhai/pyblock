@@ -1038,6 +1038,10 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
         pass
 
     @property
+    def fermion(self):
+        pass
+
+    @property
     def delta_quantum(self):
         """Allowed change of quantum numbers between states."""
         pass
@@ -1068,6 +1072,14 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
 
     def allowed(self, *args, **kwargs):
         """allowed(self: block.operator.StackSparseMatrix, arg0: int, arg1: int) -> bool"""
+        pass
+
+    def get_scaling(self, *args, **kwargs):
+        """get_scaling(self: block.operator.StackSparseMatrix, leftq: block.symmetry.SpinQuantum, rightq: block.symmetry.SpinQuantum) -> float"""
+        pass
+
+    def transpose(self, *args, **kwargs):
+        """transpose(self: block.operator.StackSparseMatrix) -> SpinAdapted::StackTransposeview"""
         pass
 
     def clear(self, *args, **kwargs):
@@ -1223,6 +1235,15 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
 
     def __init__(self, *args, **kwargs):
         """__init__(self: block.operator.OperatorOverlap) -> None"""
+        pass
+
+
+class StackTransposeView(StackSparseMatrix):
+    """Block-sparse matrix. 
+Non-zero blocks are identified by symmetry (quantum numbers) requirements and stored as :class:`StackMatrix` objects"""
+
+    def __init__(self, *args, **kwargs):
+        """__init__(self: block.operator.StackTransposeView, arg0: block.operator.StackSparseMatrix) -> None"""
         pass
 
 

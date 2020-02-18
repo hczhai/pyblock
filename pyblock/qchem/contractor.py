@@ -27,11 +27,112 @@ from block.symmetry import state_tensor_product_target
 from block.operator import Wavefunction
 from block.rev import tensor_scale, tensor_dot_product, tensor_scale_add_no_trans
 from block.rev import tensor_precondition
+from block.data_page import init_data_pages, release_data_pages, activate_data_page
+from block.data_page import load_data_page, save_data_page
+from block.data_page import set_data_page_pointer
 
 from ..tensor.tensor import Tensor, SubTensor
 from ..davidson import davidson
 from .core import BlockHamiltonian, BlockEvaluation, BlockSymmetry
 import numpy as np
+import os
+
+
+class DataPage:
+    def __init__(self):
+        pass
+    
+    def load(self, tags):
+        pass
+    
+    def unload(self, tags):
+        pass
+    
+    def activate(self, tags, reset=None):
+        pass
+    
+    def save(self, tags):
+        pass
+    
+    def initialize(self, tags):
+        pass
+    
+    def release(self, tags):
+        pass
+
+class DMRGDataPage(DataPage):
+    """Determine how to swap data between disk and memory for DMRG calculation."""
+    def __init__(self, save_dir='node0'):
+        self.current_pages = {}
+        self.main_page = -1
+        self.n_pages = 5
+        self.save_dir = save_dir
+        if not os.path.isdir(self.save_dir):
+            os.mkdir(self.save_dir)
+    
+    def _get_page(self, tags):
+        """Return the data page id for the given data tags."""
+        if tags == {'_BASE'}:
+            return 0
+        site = [i for i in tags if isinstance(i, int)][0]
+        if '_LEFT' in tags:
+            return 1 + site % 2
+        elif '_RIGHT' in tags:
+            return 3 + site % 2
+    
+    def _get_file_name(self, tags):
+        """Return the data page filename for the given data tags."""
+        return os.path.join(self.save_dir, ".".join(sorted(map(str, tags))) + '.page.tmp')
+
+    # this only for load for read
+    def load(self, tags):
+        """Load data page from disk to memory, for reading data."""
+        ip = self._get_page(tags)
+        if ip not in self.current_pages:
+            self.current_pages[ip] = tags
+            load_data_page(ip, self._get_file_name(self.current_pages[ip]))
+        else:
+            assert self.current_pages[ip] == tags
+    
+    # this only for unload for read
+    def unload(self, tags):
+        """Unload data page in memory for reading data."""
+        ip = self._get_page(tags)
+        if ip in self.current_pages:
+            assert self.current_pages[ip] == tags
+            del self.current_pages[ip]
+    
+    # for writing data
+    def activate(self, tags, reset=False):
+        """Activate one data page in memory for writing data."""
+        ip = self._get_page(tags)
+        if ip != self.main_page:
+            if reset:
+                assert ip not in self.current_pages
+            self.current_pages[ip] = tags
+            self.main_page = ip
+            activate_data_page(ip)
+            if reset:
+                set_data_page_pointer(ip, 0)
+    
+    # finish writing, but still loaded
+    def save(self, tags):
+        """Save the data page in memory to disk."""
+        ip = self._get_page(tags)
+        if ip in self.current_pages:
+            assert self.current_pages[ip] == tags
+            save_data_page(ip, self._get_file_name(self.current_pages[ip]))
+        else:
+            assert False
+    
+    def initialize(self):
+        """Allocate memory for all pages."""
+        init_data_pages(self.n_pages)
+        self.activate({'_BASE'})
+    
+    def release(self):
+        """Deallocate memory for all pages."""
+        release_data_pages()
 
 
 class DMRGContractor:
@@ -40,14 +141,21 @@ class DMRGContractor:
         self.mpo_info = mpo_info
         self.n_sites = mpo_info.n_sites
         self.mem_ptr = 0
+        self.rebuild = self.mpo_info.hamil.page is None
+        if self.rebuild:
+            self.page = DataPage()
+        else:
+            self.page = self.mpo_info.hamil.page
     
     def pre_sweep(self):
         """Operations performed at the beginning of each DMRG sweep."""
-        self.mem_ptr = BlockHamiltonian.get_current_memory()
+        if self.rebuild:
+            self.mem_ptr = BlockHamiltonian.get_current_memory()
     
     def post_sweep(self):
         """Operations performed at the end of each DMRG sweep."""
-        BlockHamiltonian.set_current_memory(self.mem_ptr)
+        if self.rebuild:
+            BlockHamiltonian.set_current_memory(self.mem_ptr)
     
     def _tag_site(self, tensor):
         tags = tensor.tags
@@ -101,6 +209,9 @@ class DMRGContractor:
             b = [BlockWavefunction(wfn)]
             
             es, vs, ndav = davidson(a, b, 1)
+            
+            self.page.unload({i, '_LEFT'})
+            self.page.unload({i + 1, '_RIGHT'})
             
             if len(es) == 0:
                 raise MPOError('Davidson not converged!!')
@@ -181,40 +292,53 @@ class DMRGContractor:
         if dir == '_LEFT':
             ket = tn[{i, '_KET'}]
             ham = tn[{i, '_HAM'}]
+            self.page.activate({i, '_LEFT'}, reset=True)
             if i == 0:
                 ham_rot = BlockEvaluation.left_rotate(ham, ket, self.mps_info, i)
                 ham_rot.tags.add(dir)
-                return ham_rot
             else:
+                self.page.load({i - 1, '_LEFT'})
                 ham_prev = tn[{i - 1, '_HAM', dir}]
                 ham_ctr = BlockEvaluation.left_contract(ham_prev, ham, self.mps_info, self.mpo_info, i)
                 ham_rot = BlockEvaluation.left_rotate(ham_ctr, ket, self.mps_info, i)
                 ham_rot.tags.add(dir)
-                return ham_rot
+                self.page.unload({i - 1, '_LEFT'})
+            self.page.save({i, '_LEFT'})
+            return ham_rot
         elif dir == '_RIGHT':
             ket = tn[{i, '_KET'}]
             ham = tn[{i, '_HAM'}]
+            self.page.activate({i, '_RIGHT'}, reset=True)
             if i == self.n_sites - 1:
                 ham_rot = BlockEvaluation.right_rotate(ham, ket, self.mps_info, i)
                 ham_rot.tags.add(dir)
-                return ham_rot
             else:
+                self.page.load({i + 1, '_RIGHT'})
                 ham_prev = tn[{i + 1, '_HAM', dir}]
                 ham_ctr = BlockEvaluation.right_contract(ham_prev, ham, self.mps_info, self.mpo_info, i)
                 ham_rot = BlockEvaluation.right_rotate(ham_ctr, ket, self.mps_info, i)
                 ham_rot.tags.add(dir)
-                return ham_rot
+                self.page.unload({i + 1, '_RIGHT'})
+            self.page.save({i, '_RIGHT'})
+            return ham_rot
         elif dir == '_HAM':
             ts = sorted(tn.tensors, key=self._tag_site)
             if len(tn) == 4:
                 if self._tag_site(ts[0]) != -1:
+                    self.page.activate({self._tag_site(ts[1]), '_LEFT'}, reset=True)
+                    self.page.load({self._tag_site(ts[0]), '_LEFT'})
                     ham_left = BlockEvaluation.left_contract(ts[0], ts[1], self.mps_info, self.mpo_info, self._tag_site(ts[1]))
+                    self.page.unload({self._tag_site(ts[0]), '_LEFT'})
                 else:
                     ham_left = ts[1]
                 if self._tag_site(ts[3]) != self.n_sites:
+                    self.page.activate({self._tag_site(ts[2]), '_RIGHT'}, reset=True)
+                    self.page.load({self._tag_site(ts[3]), '_RIGHT'})
                     ham_right = BlockEvaluation.right_contract(ts[3], ts[2], self.mps_info, self.mpo_info, self._tag_site(ts[2]))
+                    self.page.unload({self._tag_site(ts[3]), '_RIGHT'})
                 else:
                     ham_right = ts[2]
+                self.page.activate({'_BASE'}, reset=False)
                 return BlockEvaluation.left_right_contract(ham_left, ham_right)
             else:
                 assert False

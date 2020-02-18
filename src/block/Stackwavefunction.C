@@ -67,7 +67,7 @@ void SpinAdapted::StackWavefunction::copyData(const StackWavefunction& a) {
  void SpinAdapted::StackWavefunction::initialise(const StackWavefunction& w)
  {
    *this = w;
-   data = Stackmem[omprank].allocate(totalMemory);
+   data = block2::current_page->allocate(totalMemory);
 
    long index = 0;
    for (int i = 0; i<nonZeroBlocks.size(); i++) {
@@ -84,7 +84,7 @@ void SpinAdapted::StackWavefunction::copyData(const StackWavefunction& a) {
  void SpinAdapted::StackWavefunction::initialise(const vector<SpinQuantum>& dQ, const StateInfo& sl, const StateInfo& sr, const bool &onedot_)
  {
    long totalMemory = getRequiredMemoryForWavefunction(sl, sr, dQ);
-   double* data = Stackmem[omprank].allocate(totalMemory);
+   double* data = block2::current_page->allocate(totalMemory);
    //memset(data, 0, totalMemory*sizeof(double));
    initialise(dQ, sl, sr, onedot_, data, totalMemory);  
  }
@@ -532,7 +532,7 @@ void SpinAdapted::StackWavefunction::CollectQuantaAlongColumns (const StateInfo&
 void SpinAdapted::StackWavefunction::deepCopy(const StackWavefunction& o)
 {
   *this = o;
-  data = Stackmem[omprank].allocate(totalMemory);
+  data = block2::current_page->allocate(totalMemory);
   DCOPY(totalMemory, o.data, 1, data, 1);
   allocateWfnOperatorMatrix();
 }
@@ -540,7 +540,7 @@ void SpinAdapted::StackWavefunction::deepCopy(const StackWavefunction& o)
 void SpinAdapted::StackWavefunction::deepClearCopy(const StackWavefunction& o)
 {
   *this = o;
-  data = Stackmem[omprank].allocate(totalMemory);
+  data = block2::current_page->allocate(totalMemory);
   memset(data, 0, totalMemory*sizeof(double));
   allocateWfnOperatorMatrix();
 }

@@ -2,6 +2,11 @@
 """Revised Block functions."""
 
 
+def product(*args, **kwargs):
+    """product(a: block.operator.StackSparseMatrix, b: block.operator.StackSparseMatrix, c: block.operator.StackSparseMatrix, state_info: block.symmetry.StateInfo, scale: float = 1.0) -> None"""
+    pass
+
+
 def tensor_dot_product(*args, **kwargs):
     """tensor_dot_product(a: block.operator.StackSparseMatrix, b: block.operator.StackSparseMatrix) -> float"""
     pass

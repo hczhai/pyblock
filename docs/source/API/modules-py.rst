@@ -8,4 +8,5 @@ pyblock API References
    pyblock
    pyblock-symmetry
    pyblock-tensor
-   pyblock-hamiltonian
+   pyblock-qchem
+   pyblock-legacy

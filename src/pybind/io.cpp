@@ -36,11 +36,13 @@ void pybind_io(py::module &m) {
         Stackmem[0].data = stackmemory;
         Stackmem[0].size = dmrginp.getMemory();
         dmrginp.initCumulTimer();
+        
+        block2::current_page = &Stackmem[0];
     });
     
-    m.def("get_current_stack_memory", []() { return Stackmem[0].memused; });
+    m.def("get_current_stack_memory", []() { return block2::current_page->memused; });
     
-    m.def("set_current_stack_memory", [](size_t m) { Stackmem[0].memused = m; });
+    m.def("set_current_stack_memory", [](size_t m) { block2::current_page->memused = m; });
 
     m.def("release_stack_memory", []() {
         if (stackmemory != nullptr)

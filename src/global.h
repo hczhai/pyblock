@@ -90,5 +90,12 @@ extern std::vector<StackAllocator<double>> Stackmem;
 extern boost::mpi::communicator calc;
 extern MPI_Comm Calc;
 #endif
+
 } // namespace SpinAdapted
+
+namespace block2 {
+
+extern StackAllocator<double> *current_page;
+    
+} // namespace block2
 #endif

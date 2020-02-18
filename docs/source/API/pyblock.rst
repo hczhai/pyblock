@@ -17,11 +17,3 @@ pyblock.davidson
    :undoc-members:
    :show-inheritance:
 
-
-pyblock.block_dmrg
-------------------
-
-.. automodule:: pyblock.block_dmrg
-   :members:
-   :undoc-members:
-   :show-inheritance:

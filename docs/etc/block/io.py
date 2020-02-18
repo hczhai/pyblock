@@ -3,6 +3,11 @@
 
 import enum
 
+def get_current_stack_memory(*args, **kwargs):
+    """get_current_stack_memory() -> int"""
+    pass
+
+
 def init_stack_memory(*args, **kwargs):
     """init_stack_memory() -> None"""
     pass
@@ -15,6 +20,11 @@ def read_input(*args, **kwargs):
 
 def release_stack_memory(*args, **kwargs):
     """release_stack_memory() -> None"""
+    pass
+
+
+def set_current_stack_memory(*args, **kwargs):
+    """set_current_stack_memory(arg0: int) -> None"""
     pass
 
 
