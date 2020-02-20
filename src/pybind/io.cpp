@@ -23,7 +23,7 @@ void pybind_io(py::module &m) {
           [](const string &conf) { ReadInput((char *)conf.c_str()); });
 
     m.def("init_stack_memory", []() {
-        dmrginp.matmultFlops.resize(numthrds, 0.);
+        dmrginp.matmultFlops.resize(max(numthrds, dmrginp.quanta_thrds()), 0.);
 
         cout.precision(12);
         cout << std::fixed;

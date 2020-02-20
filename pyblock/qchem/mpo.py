@@ -62,10 +62,12 @@ class OperatorTensor(Tensor):
             tags=self.tags.copy(), contractor=self.contractor)
 
 class MPOInfo:
-    def __init__(self, hamil):
+    def __init__(self, hamil, cache_contraction=True):
         self.hamil = hamil
         self.n_sites = hamil.n_sites
         self._init_operator_names()
+        self.cache_contraction = cache_contraction
+        self.cached_exprs = {}
     
     def _init_operator_names(self):
         self.left_operator_names = [None] * self.n_sites
@@ -156,7 +158,7 @@ class MPO(TensorNetwork):
         tensors = self._init_mpo_tensors()
         super().__init__(tensors)
     
-    def _init_mpo_tensors(self):
+    def _init_mpo_tensors(self, symmetrized_p=True):
         """Generate :attr:`tensors`."""
         tensors = []
         op_h = OpElement(OpNames.H, ())
@@ -268,10 +270,14 @@ class MPO(TensorNetwork):
                         )
                     for j in range(0, m):
                         for l in range(0, m):
-                            f = 2.0 * self.hamil.v[i, j, m, l]
-                            mat[pa0 + j * m + l, p + i - (m + 1)] = f * (-0.5) * \
+                            if not symmetrized_p:
+                                f0 = f1 = 2.0 * self.hamil.v[i, j, m, l]
+                            else:
+                                f0 = self.hamil.v[i, j, m, l] + self.hamil.v[i, l, m, j]
+                                f1 = self.hamil.v[i, j, m, l] - self.hamil.v[i, l, m, j]
+                            mat[pa0 + j * m + l, p + i - (m + 1)] = f0 * (-0.5) * \
                                 OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
-                            mat[pa1 + j * m + l, p + i - (m + 1)] = f * (0.5 * np.sqrt(3)) * \
+                            mat[pa1 + j * m + l, p + i - (m + 1)] = f1 * (0.5 * np.sqrt(3)) * \
                                 OpElement(OpNames.D, (m, ), q_label=-self.hamil.one_site_q[m])
                     for k in range(0, m):
                         for l in range(0, m):
@@ -299,10 +305,14 @@ class MPO(TensorNetwork):
                         )
                     for j in range(0, m):
                         for l in range(0, m):
-                            f = 2.0 * self.hamil.v[i, j, m, l]
-                            mat[pad0 + j * m + l, p + i - (m + 1)] = f * (-0.5) * \
+                            if not symmetrized_p:
+                                f0 = f1 = 2.0 * self.hamil.v[i, j, m, l]
+                            else:
+                                f0 = self.hamil.v[i, j, m, l] + self.hamil.v[i, l, m, j]
+                                f1 = self.hamil.v[i, j, m, l] - self.hamil.v[i, l, m, j]
+                            mat[pad0 + j * m + l, p + i - (m + 1)] = f0 * (-0.5) * \
                                 OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
-                            mat[pad1 + j * m + l, p + i - (m + 1)] = f * (-0.5 * np.sqrt(3)) * \
+                            mat[pad1 + j * m + l, p + i - (m + 1)] = f1 * (-0.5 * np.sqrt(3)) * \
                                 OpElement(OpNames.C, (m, ), q_label=self.hamil.one_site_q[m])
                     for k in range(0, m):
                         for l in range(0, m):

@@ -17,7 +17,7 @@ StackAllocator<double> *current_page;
 vector<StackAllocator<double>> DataPages;
 
 void init_data_pages(int n_pages) {
-    dmrginp.matmultFlops.resize(numthrds, 0.);
+    dmrginp.matmultFlops.resize(max(numthrds, dmrginp.quanta_thrds()), 0.);
     dmrginp.initCumulTimer();
     
     if (dmrginp.outputlevel() >= 0)
@@ -26,7 +26,7 @@ void init_data_pages(int n_pages) {
     
     size_t n_total = dmrginp.getMemory();
     size_t n_vari = n_total / 200;
-    size_t n_base = n_total / n_pages / 262144 * 262144;
+    size_t n_base = n_total / (n_pages + 1) / 262144 * 262144;
     size_t n_acc = 0;
     double *ptr = new double[n_total];
     DataPages.resize(n_pages);

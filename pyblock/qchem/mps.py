@@ -556,7 +556,7 @@ class MPSInfo:
                 rot.append(Matrix(np.ascontiguousarray(np.concatenate(red, axis=0))))
         
         return VectorMatrix(rot)
-        
+
                     
 class MPS(TensorNetwork):
     """Matrix Product State."""

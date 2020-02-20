@@ -322,12 +322,12 @@ class DMRG:
 
         for i in sweep_range:
             if self.dot == 2:
-                print(" %3s Iter = %4d-%4d .. " % ('-->' if forward else '<--', i, i + 1), end='', flush=True)
+                print(" %3s Site = %4d-%4d .. " % ('-->' if forward else '<--', i, i + 1), end='', flush=True)
             else:
-                print(" %3s Iter = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
+                print(" %3s Site = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
             t = time.perf_counter()
             energy, error, ndav = self.blocking(i, forward=forward, bond_dim=bond_dim, noise=noise)
-            print("NDAV = %4d E = %15.8f Error = %15.8f T = %4.2f" % (ndav, energy, error, time.perf_counter() - t))
+            print("Ndav = %4d E = %15.8f Error = %15.8f T = %4.2f" % (ndav, energy, error, time.perf_counter() - t))
             sweep_energies.append(energy)
         
         self._post_sweep()
@@ -372,11 +372,11 @@ class DMRG:
                 and abs(self.energies[-1] - self.energies[-2]) < tol
                 and self.noise[iw] == self.noise[-1] and self.bond_dims[iw] == self.bond_dims[-1])
 
-            if converged:
-                break
-
             forward = not forward
             
-            print('Time Elapsed = %10.2f' % (time.perf_counter() - start))
+            print('Time elapsed = %10.2f' % (time.perf_counter() - start))
+            
+            if converged:
+                break
         
         return energy

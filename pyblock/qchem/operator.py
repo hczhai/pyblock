@@ -104,12 +104,16 @@ class OpElement(OpExpression):
     def __add__(self, other):
         if other == 0:
             return self
+        if isinstance(other, OpSum):
+            return OpSum(OpString([self]) + other.strings)
         else:
             return OpSum([OpString([self]), OpString([other])])
     
     def __radd__(self, other):
         if other == 0:
             return self
+        if isinstance(other, OpSum):
+            return OpSum(other.strings + OpString([self]))
         else:
             return OpSum([OpString([other]), OpString([self])])
     
@@ -192,12 +196,16 @@ class OpString(OpExpression):
     def __add__(self, other):
         if other == 0:
             return self
+        if isinstance(other, OpSum):
+            return OpSum([self] + other.strings)
         else:
             return OpSum([self, other])
     
     def __radd__(self, other):
         if other == 0:
             return self
+        if isinstance(other, OpSum):
+            return OpSum(other.strings + [self])
         else:
             return OpSum([other, self])
 

@@ -41,16 +41,19 @@ from block.rev import tensor_scale_add_no_trans
 from ..symmetry.symmetry import ParticleN, SU2, SZ, PointGroup, point_group
 from ..symmetry.symmetry import DirectProdGroup
 from .operator import OpElement, OpNames, OpString, OpSum
+from .simplifier import NoSimplifier
 from .fcidump import read_fcidump
 from fractions import Fraction
 import contextlib
 import numpy as np
+import time
                 
 class BlockError(Exception):
     pass
 
 
 class BlockEvaluation:
+    simplifier = NoSimplifier()
     """Explicit evaluation of symbolic expression for operators."""
     @classmethod
     def tensor_rotate(self, opt, old_st, new_st, rmat):
@@ -71,19 +74,19 @@ class BlockEvaluation:
             new_mpo : BlockMPO
                 One-site MPO in (truncated) new basis.
         """
-        new_ops = {}
-        for k, v in opt.ops.items():
-            if v == 0:
-                new_ops[k] = 0
-            else:
-                nmat = StackSparseMatrix()
-                nmat.delta_quantum = v.delta_quantum
-                nmat.fermion = v.fermion
-                nmat.allocate(new_st)
-                nmat.initialized = True
-                state_info = VectorStateInfo([old_st, new_st])
-                tensor_rotate(v, nmat, state_info, rmat)
-                new_ops[k] = nmat
+        with self.simplifier.simplify(opt.ops.items())() as (zipped, new_ops):
+            for op, mat in zipped:
+                if mat == 0:
+                    new_ops[op] = 0
+                else:
+                    nmat = StackSparseMatrix()
+                    nmat.delta_quantum = mat.delta_quantum
+                    nmat.fermion = mat.fermion
+                    nmat.allocate(new_st)
+                    nmat.initialized = True
+                    state_info = VectorStateInfo([old_st, new_st])
+                    tensor_rotate(mat, nmat, state_info, rmat, mat.symm_scale)
+                    new_ops[op] = nmat
         return opt.__class__(mat=opt.mat, ops=new_ops, tags=opt.tags,
                              contractor=opt.contractor)
     
@@ -151,18 +154,20 @@ class BlockEvaluation:
             new_mpo : BlockMPO
                 MPO in untruncated basis in current left block.
         """
-        new_mat = optl.mat @ optd.mat
         st = mps_info.left_state_info_no_trunc[i]
         op_names = mpo_info.right_operator_names[i]
-        new_ops = {}
-        for j in range(new_mat.shape[1]):
-            ql = op_names[j].q_label
-            if op_names[j].factor != 1:
-                new_ops[abs(op_names[j])] = \
-                    self.expr_eval(new_mat[0, j] / op_names[j].factor, optl.ops, optd.ops, st, ql)
-            else:
-                new_ops[op_names[j]] = self.expr_eval(new_mat[0, j], optl.ops, optd.ops, st, ql)
-        return optd.__class__(mat=op_names.reshape(new_mat.shape),
+        exprs = mpo_info.cached_exprs.get((i, '_LEFT'), None)
+        if exprs is None:
+            new_mat = optl.mat @ optd.mat
+            zipped = [(op, expr) if op.factor == 1 else (abs(op), expr / op.factor)
+                      for op, expr in zip(op_names, new_mat[0, :])]
+            exprs = self.simplifier.simplify(zipped)
+            if mpo_info.cache_contraction:
+                mpo_info.cached_exprs[(i, '_LEFT')] = exprs
+        with exprs() as (zipped, new_ops):
+            for op, expr in zipped:
+                new_ops[op] = self.expr_eval(expr, optl.ops, optd.ops, st, op.q_label)
+        return optd.__class__(mat=op_names.reshape((1, -1)),
                               ops=new_ops, tags=optd.tags,
                               contractor=optd.contractor)
     
@@ -184,18 +189,20 @@ class BlockEvaluation:
             new_mpo : BlockMPO
                 MPO in untruncated basis in current right block.
         """
-        new_mat = optd.mat @ optr.mat
         st = mps_info.right_state_info_no_trunc[i]
         op_names = mpo_info.left_operator_names[i]
-        new_ops = {}
-        for j in range(new_mat.shape[0]):
-            ql = op_names[j].q_label
-            if op_names[j].factor != 1:
-                new_ops[abs(op_names[j])] = \
-                    self.expr_eval(new_mat[j, 0] / op_names[j].factor, optd.ops, optr.ops, st, ql)
-            else:
-                new_ops[op_names[j]] = self.expr_eval(new_mat[j, 0], optd.ops, optr.ops, st, ql)
-        return optd.__class__(mat=op_names.reshape(new_mat.shape),
+        exprs = mpo_info.cached_exprs.get((i, '_RIGHT'), None)
+        if exprs is None:
+            new_mat = optd.mat @ optr.mat
+            zipped = [(op, expr) if op.factor == 1 else (abs(op), expr / op.factor)
+                      for op, expr in zip(op_names, new_mat[:, 0])]
+            exprs = self.simplifier.simplify(zipped)
+            if mpo_info.cache_contraction:
+                mpo_info.cached_exprs[(i, '_RIGHT')] = exprs
+        with exprs() as (zipped, new_ops):
+            for op, expr in zipped:
+                new_ops[op] = self.expr_eval(expr, optd.ops, optr.ops, st, op.q_label)
+        return optd.__class__(mat=op_names.reshape((-1, 1)),
                               ops=new_ops, tags=optd.tags,
                               contractor=optd.contractor)
     
@@ -250,12 +257,13 @@ class BlockEvaluation:
             assert len(expr.ops) == 2
             if a[expr.ops[0]] == 0 or b[expr.ops[1]] == 0:
                 return diag
+            factor = float(expr.factor) * a[expr.ops[0]].symm_scale * b[expr.ops[1]].symm_scale
             if expr.ops[0] == OpElement(OpNames.I, ()):
-                tensor_trace_diagonal(b[expr.ops[1]], diag, state_info, False, float(expr.factor))
+                tensor_trace_diagonal(b[expr.ops[1]], diag, state_info, False, factor)
             elif expr.ops[1] == OpElement(OpNames.I, ()):
-                tensor_trace_diagonal(a[expr.ops[0]], diag, state_info, True, float(expr.factor))
+                tensor_trace_diagonal(a[expr.ops[0]], diag, state_info, True, factor)
             else:
-                tensor_product_diagonal(a[expr.ops[0]], b[expr.ops[1]], diag, state_info, float(expr.factor))
+                tensor_product_diagonal(a[expr.ops[0]], b[expr.ops[1]], diag, state_info, factor)
             return diag
         elif isinstance(expr, OpSum):
             diag = self.expr_diagonal_eval(expr.strings[0], a, b, st)
@@ -288,28 +296,23 @@ class BlockEvaluation:
             assert len(expr.ops) == 2
             if a[expr.ops[0]] == 0 or b[expr.ops[1]] == 0:
                 return
+            factor = float(expr.factor) * a[expr.ops[0]].symm_scale * b[expr.ops[1]].symm_scale
             if expr.ops[0] == OpElement(OpNames.I, ()):
-                tensor_trace_multiply(b[expr.ops[1]], c, nwave, st, False, float(expr.factor))
+                tensor_trace_multiply(b[expr.ops[1]], c, nwave, st, False, factor)
             elif expr.ops[1] == OpElement(OpNames.I, ()):
-                tensor_trace_multiply(a[expr.ops[0]], c, nwave, st, True, float(expr.factor))
+                tensor_trace_multiply(a[expr.ops[0]], c, nwave, st, True, factor)
             else:
                 aq, bq = a[expr.ops[0]].delta_quantum[0], b[expr.ops[1]].delta_quantum[0]
                 op_q = (aq + bq)[0]
-                tensor_product_multiply(a[expr.ops[0]], b[expr.ops[1]], c, nwave, st, op_q, float(expr.factor))
+                tensor_product_multiply(a[expr.ops[0]], b[expr.ops[1]], c, nwave, st, op_q, factor)
         elif isinstance(expr, OpSum):
-            self.expr_multiply_eval(expr.strings[0], a, b, c, nwave, st)
-            twave = Wavefunction()
-            twave.initialize_from(nwave)
-            for x in expr.strings[1:]:
-                twave.clear()
-                self.expr_multiply_eval(x, a, b, c, twave, st)
-                tensor_scale_add(1.0, twave, nwave, st)
-            twave.deallocate()
+            for x in expr.strings:
+                self.expr_multiply_eval(x, a, b, c, nwave, st)
         else:
             assert False
     
     @classmethod
-    def expr_eval(self, expr, a, b, st, q_label):
+    def expr_eval(self, expr, a, b, st, q_label, nmat=0):
         """
         Evaluate the result of a symbolic operator expression.
         The operator expression is usually a sum of direct products of
@@ -335,56 +338,34 @@ class BlockEvaluation:
         if isinstance(expr, OpString):
             assert len(expr.ops) == 2
             if a[expr.ops[0]] == 0 or b[expr.ops[1]] == 0:
-                return 0
-            nmat = StackSparseMatrix()
-            if expr.ops[0] == OpElement(OpNames.I, ()):
-                nmat.delta_quantum = b[expr.ops[1]].delta_quantum
-                nmat.fermion = b[expr.ops[1]].fermion
-                nmat.allocate(st)
-                nmat.initialized = True
-                tensor_trace(b[expr.ops[1]], nmat, state_info, False, float(expr.factor))
-            elif expr.ops[1] == OpElement(OpNames.I, ()):
-                nmat.delta_quantum = a[expr.ops[0]].delta_quantum
-                nmat.fermion = a[expr.ops[0]].fermion
-                nmat.allocate(st)
-                nmat.initialized = True
-                tensor_trace(a[expr.ops[0]], nmat, state_info, True, float(expr.factor))
-            else:
+                return nmat
+            factor = float(expr.factor) * a[expr.ops[0]].symm_scale * b[expr.ops[1]].symm_scale
+            if nmat == 0:
+                nmat = StackSparseMatrix()
                 cq = BlockSymmetry.to_spin_quantum(q_label)
                 nmat.delta_quantum = VectorSpinQuantum([cq])
-                nmat.fermion = a[expr.ops[0]].fermion ^ b[expr.ops[1]].fermion
+                if expr.ops[0] == OpElement(OpNames.I, ()):
+                    nmat.fermion = b[expr.ops[1]].fermion
+                elif expr.ops[1] == OpElement(OpNames.I, ()):
+                    nmat.fermion = a[expr.ops[0]].fermion
+                else:
+                    nmat.fermion = a[expr.ops[0]].fermion ^ b[expr.ops[1]].fermion
                 nmat.allocate(st)
                 nmat.initialized = True
-                tensor_product(a[expr.ops[0]], b[expr.ops[1]], nmat, state_info, float(expr.factor))
+            if expr.ops[0] == OpElement(OpNames.I, ()):
+                tensor_trace(b[expr.ops[1]], nmat, state_info, False, factor)
+            elif expr.ops[1] == OpElement(OpNames.I, ()):
+                tensor_trace(a[expr.ops[0]], nmat, state_info, True, factor)
+            else:
+                tensor_product(a[expr.ops[0]], b[expr.ops[1]], nmat, state_info, factor)
+            return nmat
+        elif expr == 0:
             return nmat
         elif isinstance(expr, OpSum):
-            nmat = StackSparseMatrix()
-            cq = BlockSymmetry.to_spin_quantum(q_label)
-            nmat.delta_quantum = VectorSpinQuantum([cq])
-            nmat.fermion = None
             for x in expr.strings:
-                if a[x.ops[0]] != 0 and b[x.ops[1]] != 0:
-                    nmat.fermion = a[x.ops[0]].fermion ^  b[x.ops[1]].fermion
-                    break
-            if nmat.fermion is None:
-                return 0
-            nmat.allocate(st)
-            nmat.initialized = True
-            assert nmat.conjugacy == 'n'
-            not_zero = False
-            for x in expr.strings:
-                t = self.expr_eval(x, a, b, st, q_label)
-                if t != 0:
-                    tensor_scale_add(1.0, t, nmat, st)
-                    t.deallocate()
-                    not_zero = True
-            if not_zero:
-                return nmat
-            else:
-                nmat.deallocate()
-                return 0
-        elif expr == 0:
-            return 0
+                assert not isinstance(x, OpSum)
+                nmat = self.expr_eval(x, a, b, st, q_label, nmat)
+            return nmat
         else:
             assert False
     
@@ -550,6 +531,8 @@ class BlockHamiltonian:
                     input['hf_occ'] = str(v)
                 elif k == 'max_iter':
                     input['maxiter'] = str(v)
+                elif k == 'omp_threads':
+                    input['quanta_thrds'] = str(v)
                 elif k == 'max_m':
                     input['maxM'] = str(v)
                 elif k == 'memory':
@@ -841,10 +824,11 @@ class BlockHamiltonian:
     
     @staticmethod
     @contextlib.contextmanager
-    def get(fcidump, pg, su2, dot=2, output_level=0, memory=2000, page=None):
+    def get(fcidump, pg, su2, dot=2, output_level=0, memory=2000, page=None, omp_threads=1):
         ham = BlockHamiltonian(fcidump=fcidump, point_group=pg,
                                dot=dot, spin_adapted=su2, page=page,
-                               output_level=output_level, memory=memory)
+                               output_level=output_level, memory=memory,
+                               omp_threads=omp_threads)
         try:
             yield ham
         finally:

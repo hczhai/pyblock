@@ -28,7 +28,7 @@ void pybind_rev(py::module &m) {
           py::arg("state_info"), py::arg("scale") = 1.0);
     
     m.def("tensor_rotate", &block2::TensorRotate, py::arg("a"), py::arg("c"),
-          py::arg("state_info"), py::arg("rotate_matrix"));
+          py::arg("state_info"), py::arg("rotate_matrix"), py::arg("scale") = 1.0);
     
     m.def("tensor_trace_diagonal", &block2::TensorTraceDiagonal, py::arg("a"), py::arg("c"),
           py::arg("state_info"), py::arg("trace_right"), py::arg("scale") = 1.0);

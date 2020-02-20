@@ -115,14 +115,13 @@ class DMRG(object):
             print("\n\n\t\t\t BLOCK CPU  Time (seconds): %.3f" % cputime)
             print("\t\t\t BLOCK Wall Time (seconds): %.3f" % walltime)
 
-    def gen_block_do_one(self, rot_mats=None, implicit_trans=True, do_norms=None, do_comp=None):
+    def gen_block_do_one(self, rot_mats=None, forward=True, implicit_trans=True, do_norms=None, do_comp=None):
         """Perform one sweep for generating blocks from rotation matrices."""
 
         self.system = Block()
         cur_root = self.sweep_params.current_root
         f_size = self.sweep_params.forward_starting_size
         b_size = self.sweep_params.backward_starting_size
-        forward = True
 
         init_starting_block(
             self.system, forward, cur_root, cur_root, f_size, b_size, 0, False,
@@ -146,8 +145,8 @@ class DMRG(object):
                 self.sweep_params.guess_type = GuessWaveTypes.Transform
             
             self.system = self.gen_block_block_and_decimate(
-                dot_with_sys, rot_mats=rot_mats, implicit_trans=implicit_trans,
-                do_norms=do_norms, do_comp=do_comp)
+                dot_with_sys, rot_mats=rot_mats, forward=forward,
+                implicit_trans=implicit_trans, do_norms=do_norms, do_comp=do_comp)
 
             self.system.store(forward, self.system.sites, cur_root, cur_root)
             
@@ -540,11 +539,11 @@ class DMRG(object):
 
         return new_system
 
-    def gen_block_block_and_decimate(self, dot_with_sys, rot_mats=None, implicit_trans=True, do_norms=None, do_comp=None):
+    def gen_block_block_and_decimate(self, dot_with_sys, rot_mats=None, forward=True,
+                                     implicit_trans=True, do_norms=None, do_comp=None):
         """Blocking and renormalization step for generating operators from rotation matrix."""
         new_system = Block()
 
-        forward = True
         su2_used = Global.dmrginp.is_spin_adapted
 
         # figure out the range of dot blocks

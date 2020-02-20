@@ -105,16 +105,16 @@ class StackSparseMatrix : public Baseoperator<StackMatrix>  // the sparse matrix
   std::map< std::pair<int, int>, int> mapToNonZeroBlocks; //the pair of indices will give the element of the nonzeroBlocks with the same pair
 
  public:
- StackSparseMatrix() : totalMemory(0), data(0), fermion(false), orbs(2), initialised(false), built(false), built_on_disk(false), Sign(1), conj('n'){};
+    double symm_scale;
+ StackSparseMatrix() : totalMemory(0), data(0), fermion(false), orbs(2), initialised(false), built(false), built_on_disk(false), Sign(1), conj('n'), symm_scale(1) {};
  StackSparseMatrix(const StackSparseMatrix& a) : 
   orbs(a.get_orbs()), deltaQuantum(a.get_deltaQuantum()), fermion(a.get_fermion()), quantum_ladder(a.quantum_ladder), build_pattern(a.build_pattern),
     initialised(a.get_initialised()), allowedQuantaMatrix(a.get_allowedQuantaMatrix()), 
     Sign(a.get_sign()), totalMemory(a.totalMemory), data(a.data), conj('n'), built(a.built),
     rowCompressedForm(a.rowCompressedForm), built_on_disk(a.built_on_disk),
-    colCompressedForm(a.colCompressedForm), nonZeroBlocks(a.nonZeroBlocks), mapToNonZeroBlocks(a.mapToNonZeroBlocks), filename(a.filename) 
-    {};
+    colCompressedForm(a.colCompressedForm), nonZeroBlocks(a.nonZeroBlocks), mapToNonZeroBlocks(a.mapToNonZeroBlocks), filename(a.filename), symm_scale(1) {};
 
- StackSparseMatrix(double* pData, long pTotalMemory) : totalMemory(pTotalMemory), data(pData), fermion(false), orbs(2), initialised(false), built(false), built_on_disk(false), Sign(1), conj('n'){};
+ StackSparseMatrix(double* pData, long pTotalMemory) : totalMemory(pTotalMemory), data(pData), fermion(false), orbs(2), initialised(false), built(false), built_on_disk(false), Sign(1), conj('n'), symm_scale(1) {};
   void SaveThreadSafe() const;
   void LoadThreadSafe(bool allocate);
   virtual long memoryUsed() const {return totalMemory;}
@@ -133,6 +133,7 @@ class StackSparseMatrix : public Baseoperator<StackMatrix>  // the sparse matrix
   const double* get_data() const {return data;}
   long& set_totalMemory() {return totalMemory;}
   void set_data(double* pData) {data = pData;}
+  virtual void shallowCopy(const StackSparseMatrix& o) ;
   virtual void deepCopy(const StackSparseMatrix& o) ;
   virtual void deepClearCopy(const StackSparseMatrix& o) ;
   virtual string opName() const {return "None";}
@@ -143,10 +144,10 @@ class StackSparseMatrix : public Baseoperator<StackMatrix>  // the sparse matrix
   // added for pybind11
   std::map< std::pair<int, int>, int>& get_mapToNonZeroBlocks() {return mapToNonZeroBlocks;}
   const std::vector<std::pair<std::pair<int, int>, StackMatrix> >& get_nonZeroBlocks() const {return nonZeroBlocks;} 
-  const std::vector<int>& getActiveRows(int i) const {return colCompressedForm[i];}
-  const std::vector<int>& getActiveCols(int i) const {return rowCompressedForm[i];}
-  std::vector<int>& getActiveRows(int i)  {return colCompressedForm[i];}
-  std::vector<int>& getActiveCols(int i) {return rowCompressedForm[i];}
+  const std::vector<int>& getActiveRows(int i) const {return conj == 'n' ? colCompressedForm[i] : rowCompressedForm[i];}
+  const std::vector<int>& getActiveCols(int i) const {return conj == 'n' ? rowCompressedForm[i] : colCompressedForm[i];}
+  std::vector<int>& getActiveRows(int i)  {return conj == 'n' ? colCompressedForm[i] : rowCompressedForm[i];}
+  std::vector<int>& getActiveCols(int i) {return conj == 'n' ? rowCompressedForm[i] : colCompressedForm[i];}
   std::vector<std::vector<int> >& getrowCompressedForm() {return rowCompressedForm;}
   std::vector<std::vector<int> >& getcolCompressedForm() {return colCompressedForm;}
   const StackMatrix& operator_element(int i, int j) const {

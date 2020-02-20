@@ -8,6 +8,9 @@
 #include <cmath>
 #include <vector>
 #include <iostream>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 #define TINY 1.e-20
 
@@ -94,6 +97,8 @@ void TensorTraceElement(const StackSparseMatrix &a, StackSparseMatrix &c,
                         rs->quanta[bq].get_symm().getirrep(),
                         cs->quanta[cq].get_symm().getirrep());
                     
+                    scaleb *= a.get_scaling(ls->quanta[aq], ls->quanta[aqprime]);
+                    
                     // no fermion check for trace right A x I(bigger site index)
 
                     MatrixTensorProduct(a.operator_element(aq, aqprime),
@@ -118,6 +123,8 @@ void TensorTraceElement(const StackSparseMatrix &a, StackSparseMatrix &c,
                         cs->quanta[cq].get_symm().getirrep());
                     
                     // fermion check for trace left I(smaller site index) x A
+                    
+                    scaleb *= a.get_scaling(rs->quanta[aq], rs->quanta[aqprime]);
                     
                     
                     if (a.get_fermion() &&
@@ -202,6 +209,8 @@ void TensorTraceDiagonal(const StackSparseMatrix &a, DiagonalMatrix &c,
                             ls->quanta[aq].get_symm().getirrep(),
                             rs->quanta[bq].get_symm().getirrep(),
                             cs->quanta[cq].get_symm().getirrep());
+                        
+                        scaleb *= a.get_scaling(ls->quanta[aq], ls->quanta[aq]);
 
                         // no fermion check for trace right A x I(bigger site index)
                         
@@ -228,6 +237,8 @@ void TensorTraceDiagonal(const StackSparseMatrix &a, DiagonalMatrix &c,
                             rs->quanta[bq].get_symm().getirrep(),
                             cs->quanta[cq].get_symm().getirrep());
 
+                        scaleb *= a.get_scaling(rs->quanta[bq], rs->quanta[bq]);
+                        
                         // fermion check for trace left I(smaller site index) x A
                         if (a.get_fermion() && IsFermion(ls->quanta[aq]))
                             scaleb *= -1.0;
@@ -420,6 +431,10 @@ void TensorProductDiagonal(const StackSparseMatrix &a, const StackSparseMatrix &
                             ls->quanta[aq].get_symm().getirrep(),
                             rs->quanta[bq].get_symm().getirrep(),
                             cs->quanta[cq].get_symm().getirrep());
+                        
+                        scaleB *= b.get_scaling(rs->quanta[bq], rs->quanta[bq]);
+                        
+                        scaleB *= a.get_scaling(ls->quanta[aq], ls->quanta[aq]);
 
                         if (b.get_fermion() && IsFermion(ls->quanta[aq]))
                             scaleB *= -1.0;
@@ -435,7 +450,7 @@ void TensorProductDiagonal(const StackSparseMatrix &a, const StackSparseMatrix &
     
 void TensorRotate(const StackSparseMatrix &a, StackSparseMatrix &c,
                   const vector<boost::shared_ptr<StateInfo>> &state_info,
-                  const vector<Matrix>& rotate_matrix) {
+                  const vector<Matrix>& rotate_matrix, double scale) {
     
     const StateInfo *olds = state_info[0].get(), *news = state_info[1].get();
     
@@ -457,67 +472,14 @@ void TensorRotate(const StackSparseMatrix &a, StackSparseMatrix &c,
         int q = new_to_old_map[cq],
             qprime = new_to_old_map[cqprime];
         
+        double factor = scale * a.get_scaling(olds->quanta[q], olds->quanta[qprime]);
+        
         MatrixRotate(rotate_matrix[q], a.operator_element(q, qprime),
-            rotate_matrix[qprime], nonZeroBlocks[index].second);
+            rotate_matrix[qprime], nonZeroBlocks[index].second, a.conjugacy(), factor);
         
     }
     
 }
-
-// void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &b,
-//                     const StackWavefunction &c, StackWavefunction &v,
-//                     const StateInfo &state_info, const SpinQuantum op_q, double scale) {
-    
-//     assert(op_q.get_s().getirrep() == 0);
-//     assert(op_q.get_symm().getirrep() == 0);
-    
-//     // cannot be used for situation with different bra and ket
-//     const int leftBraOpSz = state_info.leftStateInfo->quanta.size();
-//     const int leftKetOpSz = state_info.leftStateInfo->quanta.size();
-//     const int rightBraOpSz = state_info.rightStateInfo->quanta.size();
-//     const int rightKetOpSz = state_info.rightStateInfo->quanta.size();
-
-//     const StateInfo *lbraS = state_info.leftStateInfo,
-//                     *lketS = state_info.leftStateInfo;
-//     const StateInfo *rbraS = state_info.rightStateInfo,
-//                     *rketS = state_info.rightStateInfo;
-
-//         for (int lQ = 0; lQ < leftBraOpSz; ++lQ) {
-//             for (int lQPrime = 0; lQPrime < leftKetOpSz; ++lQPrime) {
-//                 if (a.allowed(lQ, lQPrime)) {
-//                     const StackMatrix &aop = a.operator_element(lQ, lQPrime);
-//                     for (int rQ = 0; rQ < rightKetOpSz; ++rQ)
-//                         if (c.allowed(lQPrime, rQ) && v.allowed(lQ, rQ)) {
-//                             double fac = scale;
-//                             fac *= dmrginp.get_ninej()(
-//                                 lketS->quanta[lQPrime].get_s().getirrep(),
-//                                 rketS->quanta[rQ].get_s().getirrep(),
-//                                 c.get_deltaQuantum(0).get_s().getirrep(),
-//                                 a.get_spin().getirrep(), 0,
-//                                 a.get_spin().getirrep(),
-//                                 lbraS->quanta[lQ].get_s().getirrep(),
-//                                 rketS->quanta[rQ].get_s().getirrep(),
-//                                 v.get_deltaQuantum(0).get_s().getirrep());
-//                             // fac *=
-//                             // Symmetry::spatial_ninej(lketS->quanta[lQPrime].get_symm().getirrep()
-//                             // , rketS->quanta[rQ].get_symm().getirrep(),
-//                             // c.get_symm().getirrep(), a.get_symm().getirrep(),
-//                             // 0, a.get_symm().getirrep(),
-//                             // lbraS->quanta[lQ].get_symm().getirrep() ,
-//                             // rketS->quanta[rQ].get_symm().getirrep(),
-//                             // v.get_symm().getirrep());
-//                             fac *= a.get_scaling(lbraS->quanta[lQ],
-//                                                  lketS->quanta[lQPrime]);
-//                             MatrixMultiply(aop, a.conjugacy(),
-//                                            c.operator_element(lQPrime, rQ),
-//                                            c.conjugacy(),
-//                                            v.operator_element(lQ, rQ), fac);
-//                         }
-//                 }
-//             }
-//         }
-    
-// }
     
 // MPO (a x b) act on MPS (c) => MPS (v)
 // v = (lq) a(left) .(lq') c .(rq') b(right) (rq)
@@ -547,12 +509,12 @@ void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &
     const std::vector<std::pair<std::pair<int, int>, StackMatrix>>
         &nonZeroBlocks = v.get_nonZeroBlocks();
 
-    long maxlen = 0;
+    long long maxlen = 0;
     for (int lQ = 0; lQ < leftBraOpSz; lQ++)
         for (int rQPrime = 0; rQPrime < rightKetOpSz; rQPrime++)
             if (maxlen <
-                lbraS->getquantastates(lQ) * rketS->getquantastates(rQPrime))
-                maxlen = lbraS->getquantastates(lQ) *
+                (long long) lbraS->getquantastates(lQ) * rketS->getquantastates(rQPrime))
+                maxlen = (long long) lbraS->getquantastates(lQ) *
                          rketS->getquantastates(rQPrime);
 
     int quanta_thrds = dmrginp.quanta_thrds();
@@ -575,7 +537,7 @@ void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &
             for (int l = 0; l < rowinds.size(); l++) {
                 int lQPrime = rowinds[l];
                 if (leftOp.allowed(lQ, lQPrime)) {
-
+    
                     StackMatrix m(dataArray[omprank],
                                   lketS->getquantastates(lQPrime),
                                   rbraS->getquantastates(rQ));
@@ -607,7 +569,7 @@ void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &
                                      : 1;
                     factor *= rightOp.get_scaling(rbraS->quanta[rQ],
                                                   rketS->quanta[rQPrime]);
-
+                    
                     MatrixMultiply(c.operator_element(lQPrime, rQPrime), 'n',
                                    rightOp.operator_element(rQ, rQPrime),
                                    TransposeOf(rightOp.conjugacy()), m, 1.0,
@@ -739,6 +701,7 @@ void TensorScale(double scale, StackSparseMatrix &a) {
     
 void TensorScaleAdd(double scale, const StackSparseMatrix &a, StackSparseMatrix &c,
                     const StateInfo &state_info) {
+    assert(c.conjugacy() == 'n');
     const StateInfo &s = state_info;
     if (a.conjugacy() == 'n') {
         for (int lQ = 0; lQ < c.nrows(); lQ++)
@@ -770,7 +733,7 @@ void TensorScaleAdd(double scale, const StackSparseMatrix &a, StackSparseMatrix 
 }
 
 void TensorScaleAdd(double scale, const StackSparseMatrix &a, StackSparseMatrix &c) {
-    assert(a.conjugacy() == 'n');
+    assert(a.conjugacy() == 'n' && c.conjugacy() == 'n');
     for (int lQ = 0; lQ < c.nrows(); lQ++)
         for (int rQ = 0; rQ < c.ncols(); rQ++)
             if (c.allowed(lQ, rQ) && a.allowed(lQ, rQ))
@@ -779,6 +742,7 @@ void TensorScaleAdd(double scale, const StackSparseMatrix &a, StackSparseMatrix 
 }
     
 double TensorDotProduct(const StackSparseMatrix &a, const StackSparseMatrix &b) {
+    assert(a.conjugacy() == 'n' && b.conjugacy() == 'n');
     double result = 0.;
     for (int lQ = 0; lQ < a.nrows(); ++lQ)
         for (int rQ = 0; rQ < a.ncols(); ++rQ)

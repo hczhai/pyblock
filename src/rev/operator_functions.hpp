@@ -59,7 +59,7 @@ void TensorTraceMultiply(const StackSparseMatrix &a, const StackWavefunction &c,
 // SparseMatrix ROTATION T^T A T -> C
 void TensorRotate(const StackSparseMatrix &a, StackSparseMatrix &c,
                   const vector<boost::shared_ptr<StateInfo>> &state_info,
-                  const vector<Matrix>& rotate_matrix);
+                  const vector<Matrix>& rotate_matrix, double scale);
 
 //  SparseMatrix scale A *= scale
 void TensorScale(double scale, StackSparseMatrix &a);

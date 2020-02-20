@@ -34,6 +34,7 @@ from block.data_page import set_data_page_pointer
 from ..tensor.tensor import Tensor, SubTensor
 from ..davidson import davidson
 from .core import BlockHamiltonian, BlockEvaluation, BlockSymmetry
+from .simplifier import NoSimplifier
 import numpy as np
 import os
 
@@ -134,9 +135,11 @@ class DMRGDataPage(DataPage):
         """Deallocate memory for all pages."""
         release_data_pages()
 
+class ContractionError(Exception):
+    pass
 
 class DMRGContractor:
-    def __init__(self, mps_info, mpo_info):
+    def __init__(self, mps_info, mpo_info, simplifier=None):
         self.mps_info = mps_info
         self.mpo_info = mpo_info
         self.n_sites = mpo_info.n_sites
@@ -146,6 +149,8 @@ class DMRGContractor:
             self.page = DataPage()
         else:
             self.page = self.mpo_info.hamil.page
+        if simplifier is not None:
+            BlockEvaluation.simplifier = simplifier
     
     def pre_sweep(self):
         """Operations performed at the beginning of each DMRG sweep."""
@@ -214,7 +219,7 @@ class DMRGContractor:
             self.page.unload({i + 1, '_RIGHT'})
             
             if len(es) == 0:
-                raise MPOError('Davidson not converged!!')
+                raise ContractionError('Davidson not converged!!')
             
             e = es[0]
             v = self.mps_info.from_wavefunction_fused(i, vs[0].data)

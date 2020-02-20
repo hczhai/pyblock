@@ -272,6 +272,7 @@ void pybind_operator(py::module &m) {
                 }
             },
             [](StackSparseMatrix *self, const vector<SpinQuantum> &m) {
+                assert(self->conjugacy() == 'n');
                 self->set_deltaQuantum() = m;
             },
             "Allowed change of quantum numbers between states.")
@@ -281,6 +282,7 @@ void pybind_operator(py::module &m) {
             "cols", (int (StackSparseMatrix::*)() const)(&StackSparseMatrix::ncols))
         .def_property(
             "conjugacy", &StackSparseMatrix::conjugacy, &StackSparseMatrix::set_conjugacy)
+        .def_readwrite("symm_scale", &StackSparseMatrix::symm_scale)
         .def("allowed", [](StackSparseMatrix *self, int i, int j) -> bool {
             return (bool) self->allowed(i, j);
         })
@@ -290,6 +292,7 @@ void pybind_operator(py::module &m) {
         })
         .def("clear", &StackSparseMatrix::Clear)
         .def("deep_copy", &StackSparseMatrix::deepCopy)
+        .def("shallow_copy", &StackSparseMatrix::shallowCopy)
         .def("deep_clear_copy", &StackSparseMatrix::deepClearCopy)
         .def("allocate", (void (StackSparseMatrix::*)(const StateInfo &)) &
                              StackSparseMatrix::allocate)

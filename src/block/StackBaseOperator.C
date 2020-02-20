@@ -20,6 +20,10 @@ Sandeep Sharma and Garnet K.-L. Chan
 
 namespace SpinAdapted{
   
+void StackSparseMatrix::shallowCopy(const StackSparseMatrix& o) {
+    *this = o;
+}
+    
 void StackSparseMatrix::deepCopy(const StackSparseMatrix& o) {
     *this = o;
     data = block2::current_page->allocate(totalMemory);

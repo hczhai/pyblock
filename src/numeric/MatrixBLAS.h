@@ -306,16 +306,16 @@ template <class T> void Clear(T &a) {
 }
 
 template <class T1, class T2>
-void MatrixRotate(T1 const &a, T2 const &b, T1 const &c, T2 &d) {
+void MatrixRotate(T1 const &a, T2 const &b, T1 const &c, T2 &d, char conjB='n', double scale=1.) {
     try {
         assert(d.Nrows() == a.Ncols() && d.Ncols() == c.Ncols());
 #ifdef BLAS
-        T1 work(b.Nrows(), c.Ncols());
+        T1 work(conjB == 'n' ? b.Nrows() : b.Ncols(), c.Ncols());
         Clear(work);
-        MatrixMultiply(b, 'n', c, 'n', work, 1.);
+        MatrixMultiply(b, conjB, c, 'n', work, scale);
         MatrixMultiply(a, 't', work, 'n', d, 1.);
 #else
-        d = a.t() * b * c;
+        d = a.t() * (conjB == 'n' ? b : b.t()) * c * scale;
 #endif
     } catch (Exception) {
         pout << Exception::what() << endl;
