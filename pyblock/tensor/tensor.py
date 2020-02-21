@@ -557,14 +557,20 @@ class Tensor:
                                     map_idx_out[outg].reduced += mat
         return Tensor(list(map_idx_out.values()))
     
-    def diag_eigs(self, k=-1):
+    def diag_eigs(self, k=-1, limit=None):
         assert self.rank == 2
         blocks = []
         eigen_values = []
         total_k = 0
         for block in self.blocks:
             assert block.q_labels[0] == block.q_labels[1]
+            if limit is not None and block.q_labels[0] not in limit:
+                continue
             ld, alpha = np.linalg.eigh(block.reduced)
+            if limit is not None and len(ld) > limit[block.q_labels[0]]:
+                ld_idx = np.argsort(ld)[::-1][:limit[block.q_labels[0]]]
+                ld = ld[ld_idx]
+                alpha = alpha[:, ld_idx]
             blocks.append(SubTensor(block.q_labels, alpha))
             eigen_values.append(ld)
             total_k += len(ld)
@@ -696,8 +702,8 @@ class Tensor:
         
         return dm
     
-    def split_using_density_matrix(self, dm, absorb_right, k=-1):
-        ts_p, _, error = dm.diag_eigs(k=k)
+    def split_using_density_matrix(self, dm, absorb_right, k=-1, limit=None):
+        ts_p, _, error = dm.diag_eigs(k=k, limit=limit)
         if absorb_right:
             ts_l = ts_p
             ts_r = Tensor.contract(ts_p, self, [0], [0])

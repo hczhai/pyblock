@@ -199,6 +199,13 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
                     sigma[j] += alpha[i, j] * tmp[i]
         for i in range(m - 1, -1, -1):
             tmp[i].deallocate()
+        for i in range(ck):
+            q.copy_data(sigma[i])
+            q += (-ld[i]) * b[i]
+            qq = q.dot(q)
+            if qq >= conv_thold:
+                ck = i
+                break
         # q = sigma[ck] - b[ck] * ld[ck]
         q.copy_data(sigma[ck])
         q += (-ld[ck]) * b[ck]

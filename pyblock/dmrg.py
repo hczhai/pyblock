@@ -85,7 +85,7 @@ class MovingEnvironment:
         
         self.envs[self.pos] |= (self.envs[self.pos - 1].copy() ^ ('_LEFT', self.pos - 1)).select('_LEFT')
     
-    def prepare_sweep(self):
+    def prepare_sweep(self, dot, pos):
         """Prepare environment for next sweep."""
         
         for i in range(self.n_sites - self.dot, self.pos, -1):
@@ -93,6 +93,27 @@ class MovingEnvironment:
         
         for i in range(0, self.pos):
             self.envs[i].remove({'_RIGHT'}, in_place=True)
+        
+        if dot != self.dot:
+            assert dot == 1 and self.dot == 2
+            self.dot = 1
+            for i in range(self.n_sites - self.dot, self.pos, -1):
+                self.envs[i] = self.envs[i - 1].copy()
+                self.envs[i].remove({'_LEFT'}, in_place=True)
+                self.envs[i].remove({i - 1}, in_place=True)
+            
+            for i in range(0, self.pos):
+                self.envs[i].remove({i + 1}, in_place=True)
+            
+            if pos != self.pos:
+                assert pos == self.n_sites - 1 and self.pos == self.n_sites - 2
+                self.envs[self.n_sites - 1] = self.envs[self.n_sites - 2].copy()
+                self.envs[self.n_sites - 1] ^= ('_LEFT', self.n_sites - 2)
+                self.envs[self.pos].remove({'_RIGHT'}, in_place=True)
+                self.envs[self.pos].remove({self.n_sites - 1}, in_place=True)
+                self.pos = self.n_sites - 1
+            else:
+                self.envs[self.pos] ^= ('_RIGHT', self.pos + self.dot)
     
     def move_to(self, i):
         """
@@ -163,30 +184,15 @@ class DMRG:
             self.construct_envs()
     
     def update_one_dot(self, i, forward, bond_dim, noise):
-        """Update local site in one-dot scheme. Not implemented."""
-        
-        h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
-
-        gs_old = self._k[{i, '_KET'}]
-
-        if h_eff.contractor is not None:
-            energy, gs = h_eff.contractor.eigs(h_eff, gs_old)
-        else:
-            raise DMRGError('general eigenvalue solver is not defined!')
-        
-        self._k[i].modify(gs)
-        self._b[i].modify(gs)
-    
-    def update_two_dot(self, i, forward, bond_dim, noise):
         """
-        Update local site in two-dot scheme.
+        Update local site in one-dot scheme.
         
         Args:
             i : int
                 Site index of left dot
             forward : bool
                 Direction of current sweep. If True, sweep is performed from left to right.
-            bond_dims : int
+            bond_dim : int
                 Bond dimension of current sweep.
             noise : float
                 Noise prefactor of current sweep.
@@ -199,28 +205,139 @@ class DMRG:
             ndav : int
                 Number of Davidson iterations.
         """
-        h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         
-        gs_old = self.eff_ham()[{i, i + 1, '_KET'}]
+        ctr = self._h[{i, '_HAM'}].contractor
         
-        if h_eff.contractor is not None:
-            energy, gs, ndav = h_eff.contractor.eigs(h_eff, gs_old)
+        if ctr is None:
+            raise DMRGError('Need a contractor for updating local site!')
+        
+        fuse_left = i <= self.n_sites // 2
             
-            dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
-            
-            l_fused, r_fused, error = \
-                gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim)
-            
-            if forward:
-                h_eff.contractor.update_local_left_mps_info(i, l_fused)
-            else:
-                h_eff.contractor.update_local_right_mps_info(i, r_fused)
-            
-            l = h_eff.contractor.unfuse_left(i, l_fused)
-            r = h_eff.contractor.unfuse_right(i + 1, r_fused)
-
+        self._k[{i, '_KET'}].contractor = ctr
+        fuse_tags = {'_FUSE_L'} if fuse_left else {'_FUSE_R'}
+        
+        if fuse_left:
+            ctr.fuse_left(i, self._k[{i, '_KET'}], self.canonical_form[i])
         else:
-            raise DMRGError('general eigenvalue solver is not implemented!')
+            ctr.fuse_right(i, self._k[{i, '_KET'}], self.canonical_form[i])
+        
+        self.eff_ham()[{i, '_HAM'}].tags |= fuse_tags
+        h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
+        h_eff.tags |= fuse_tags
+        gs_old = self._k[{i, '_KET'}]
+        energy, gs, ndav = ctr.eigs(h_eff, gs_old)
+        
+        if not fuse_left and forward:
+            gs = ctr.unfuse_right(i, gs)
+            ctr.fuse_left(i, gs, self.canonical_form[i])
+        elif fuse_left and not forward:
+            gs = ctr.unfuse_left(i, gs)
+            ctr.fuse_right(i, gs, self.canonical_form[i])
+        
+        if forward:
+            limit = ctr.bond_upper_limit_left[i]
+        else:
+            limit = ctr.bond_upper_limit_right[i]
+        
+        dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
+        
+        l_fused, r_fused, error = \
+            gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
+        
+        if forward:
+            ctr.update_local_left_mps_info(i, l_fused)
+            gs_new = ctr.unfuse_left(i, l_fused)
+            if i + 1 < self.n_sites:
+                self.canonical_form[i:i + 2] = "LC"
+                adj_new = Tensor.contract(r_fused, self._k[{i + 1, '_KET'}], [1], [0])
+                self._k[{i + 1, '_KET'}].modify(adj_new)
+                self._b[{i + 1, '_BRA'}].modify(adj_new)
+                self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_KET'}].modify(adj_new)
+                self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_BRA'}].modify(adj_new)
+            else:
+                self.canonical_form[i] = 'L'
+        else:
+            ctr.update_local_right_mps_info(i, r_fused)
+            gs_new = ctr.unfuse_right(i, r_fused)
+            if i - 1 >= 0:
+                self.canonical_form[i - 1:i + 1] = "CR"
+                adj_new = Tensor.contract(self._k[{i - 1, '_KET'}], l_fused, [2], [0])
+                self._k[{i - 1, '_KET'}].modify(adj_new)
+                self._b[{i - 1, '_BRA'}].modify(adj_new)
+                self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_KET'}].modify(adj_new)
+                self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_BRA'}].modify(adj_new)
+            else:
+                self.canonical_form[i] = 'R'
+        
+        self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
+        self._k[{i, '_KET'}].modify(gs_new)
+        self._b[{i, '_BRA'}].modify(gs_new)
+        self.eff_ham()[{i, '_KET'}].modify(gs_new)
+        self.eff_ham()[{i, '_BRA'}].modify(gs_new)
+        
+        return energy, error, ndav
+    
+    def update_two_dot(self, i, forward, bond_dim, noise):
+        """
+        Update local sites in two-dot scheme.
+        
+        Args:
+            i : int
+                Site index of left dot
+            forward : bool
+                Direction of current sweep. If True, sweep is performed from left to right.
+            bond_dim : int
+                Bond dimension of current sweep.
+            noise : float
+                Noise prefactor of current sweep.
+        
+        Returns:
+            energy : float
+                Ground state energy.
+            error : float
+                Sum of discarded weights.
+            ndav : int
+                Number of Davidson iterations.
+        """
+        
+        ctr = self._h[{i, '_HAM'}].contractor
+        
+        if ctr is None:
+            raise DMRGError('Need a contractor for updating local site!')
+        
+        if len(self._k.select({i, i + 1, '_KET'}, which='exact')) == 0:
+            
+            self._k[{i, '_KET'}].contractor = ctr
+            ctr.fuse_left(i, self._k[{i, '_KET'}], self.canonical_form[i])
+            ctr.fuse_right(i + 1, self._k[{i + 1, '_KET'}], self.canonical_form[i + 1])
+            twod_ket = self._k.select({i, i + 1}, which='any') ^ ('_KET', i, i + 1)
+            twod_bra = twod_ket.copy().remove_tags({'_KET'}).add_tags({'_BRA'})
+            self._k.replace({i, i + 1}, twod_ket, which='any')
+            self._b.replace({i, i + 1}, twod_bra, which='any')
+            [self.eff_ham().remove({j, t}, in_place=True) for j in [i, i + 1] for t in ['_KET', '_BRA']]
+            self.eff_ham().add(twod_ket | twod_bra)
+        
+        h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
+        gs_old = self.eff_ham()[{i, i + 1, '_KET'}]
+        energy, gs, ndav = ctr.eigs(h_eff, gs_old)
+        
+        if forward:
+            limit = ctr.bond_upper_limit_left[i]
+        else:
+            limit = ctr.bond_upper_limit_right[i + 1]
+        
+        dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
+        
+        l_fused, r_fused, error = \
+            gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
+        
+        if forward:
+            ctr.update_local_left_mps_info(i, l_fused)
+        else:
+            ctr.update_local_right_mps_info(i + 1, r_fused)
+        
+        l = ctr.unfuse_left(i, l_fused)
+        r = ctr.unfuse_right(i + 1, r_fused)
         
         self.canonical_form[i] = 'L' if forward else 'C'
         self.canonical_form[i + 1] = 'R' if not forward else 'C'
@@ -234,13 +351,13 @@ class DMRG:
         self.eff_ham().replace({i, i + 1}, tn_lr_ket | tn_lr_bra)
         
         return energy, error, ndav
-    
+
     def construct_envs(self):
         t = time.perf_counter()
         print(" Constructing environment .. ", end='', flush=True)
         self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
         print("T = %4.2f" % (time.perf_counter() - t))
-    
+
     def blocking(self, i, forward, bond_dim, noise):
         """
         Perform one blocking iteration.
@@ -269,23 +386,6 @@ class DMRG:
         if self.dot == 1:
             return self.update_one_dot(i, forward, bond_dim, noise)
         else:
-            
-            if len(self._k.select({i, i + 1, '_KET'}, which='exact')) == 0:
-                ctr = self._h[{i, '_HAM'}].contractor
-                
-                if ctr is not None:
-                    self._k[{i, '_KET'}].contractor = ctr
-                    ctr.fuse_left(i, self._k[{i, '_KET'}], self.canonical_form[i] == 'L')
-                    ctr.fuse_right(i + 1, self._k[{i + 1, '_KET'}], self.canonical_form[i + 1] == 'R')
-                    twod_ket = self._k.select({i, i + 1}, which='any') ^ ('_KET', i, i + 1)
-                    twod_bra = twod_ket.copy().remove_tags({'_KET'}).add_tags({'_BRA'})
-                    self._k.replace({i, i + 1}, twod_ket, which='any')
-                    self._b.replace({i, i + 1}, twod_bra, which='any')
-                    [self.eff_ham().remove({j, t}, in_place=True) for j in [i, i + 1] for t in ['_KET', '_BRA']]
-                    self.eff_ham().add(twod_ket | twod_bra)
-                else:
-                    raise DMRGError('need a contractor for fusing two-dot object!')
-            
             return self.update_two_dot(i, forward, bond_dim, noise)
 
     def sweep(self, forward, bond_dim, noise):
@@ -309,7 +409,7 @@ class DMRG:
         if self.rebuild:
             self.construct_envs()
         else:
-            self.eff_ham.prepare_sweep()
+            self.eff_ham.prepare_sweep(self.dot, self.center)
 
         # if forward/backward, i is the first dot site
 
@@ -334,7 +434,7 @@ class DMRG:
 
         return sorted(sweep_energies)[0]
 
-    def solve(self, n_sweeps, tol, forward=True):
+    def solve(self, n_sweeps, tol, forward=True, two_dot_to_one_dot=-1):
         """
         Perform DMRG algorithm.
         
@@ -345,6 +445,8 @@ class DMRG:
                 Energy convergence threshold.
             forward : bool
                 Direction of first sweep. If True, sweep is performed from left to right.
+            two_dot_to_one_dot : int or -1
+                Indicating when to switch to one-dot scheme. If -1, no switching.
         
         Returns:
             energy : float
@@ -364,6 +466,12 @@ class DMRG:
 
             print("Sweep = %4d | Direction = %8s | Bond dimension = %4d | Noise = %9.2g"
                 % (iw, "forward" if forward else "backward", self.bond_dims[iw], self.noise[iw]))
+            
+            if two_dot_to_one_dot == iw:
+                assert self.dot == 2
+                self.dot = 1
+                if self.center != 0 and self.center == self.n_sites - 2:
+                    self.center = self.n_sites - 1
 
             energy = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], noise=self.noise[iw])
             self.energies.append(energy)

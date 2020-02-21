@@ -12,6 +12,8 @@
 Installation
 ------------
 
+Python3 package `numpy` (version >= 1.18.1) is required. Older version will produce runtime error.
+
 `cmake` (version >= 3.0) can be used to compile C++ part of the code, as follows:
 
     mkdir build
@@ -28,12 +30,12 @@ If MKL Math library is installed in the system, add `-DUSE_MKL=ON` to use MKL li
 
 If boost (version < 1.56) is used, add `-DBOOST_OLD=ON`. For new boost version no extra options are required.
 
-The root path and `./build` path are required to be added to `PYTHONPATH` so that the python can locate `block` and `pyblock` modules. A cleaner way to run tests is
+The package root path and `./build` path are required to be added to `PYTHONPATH` so that one can import `block` and `pyblock` modules. One way to run tests is
 
     cd tests/hubbard-1d
     PYTHONPATH=../..:../../build python3 dmrg.py
 
-This will only temporarily change the `PYTHONPATH`. One can also install the pyblock by running (in package root directory)
+This will only temporarily change the `PYTHONPATH`. One can also install pyblock by running (in package root directory)
 
     pip3 install .
 

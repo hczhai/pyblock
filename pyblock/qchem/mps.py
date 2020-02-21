@@ -228,7 +228,8 @@ class MPSInfo:
             self.left_block_basis[i].append((k, v))
         
         left = self.update_local_left_state_info(i)
-        self.update_local_left_state_info(i + 1, left=left)
+        if i + 1 < self.n_sites:
+            self.update_local_left_state_info(i + 1, left=left)
         
     # basis is a list of pairs: [(q_label, n_states)]
     def update_local_right_block_basis(self, i, right_block_basis):
@@ -246,12 +247,13 @@ class MPSInfo:
                 Renormalized basis for right block with sites [i+1..:attr:`n_sites`-1].
         """
         
-        self.right_block_basis[i + 1] = []
+        self.right_block_basis[i] = []
         for k, v in sorted(right_block_basis, key=lambda x: x[0]):
-            self.right_block_basis[i + 1].append((k, v))
+            self.right_block_basis[i].append((k, v))
         
-        right = self.update_local_right_state_info(i + 1)
-        self.update_local_right_state_info(i, right=right)
+        right = self.update_local_right_state_info(i)
+        if i - 1 >= 0:
+            self.update_local_right_state_info(i - 1, right=right)
     
     def get_left_state_info(self, i, left=None):
         """Construct StateInfo for left block [0..i] (used internally)"""
@@ -301,7 +303,7 @@ class MPSInfo:
         collected.collect_quanta()
         return left, collected
     
-    def get_wavefunction_fused(self, i, tensor, dot=2):
+    def get_wavefunction_fused(self, i, tensor, dot, sts=None):
         """
         Construct Wavefunction (block code) from rank-2 :class:`Tensor`.
         
@@ -316,31 +318,32 @@ class MPSInfo:
         Returns:
             wfn : Wavefunction
         """
-        if dot == 2:
+        if sts is None:
+            assert dot == 2
             st_l = self.left_state_info_no_trunc[i]
             st_r = self.right_state_info_no_trunc[i + 1]
-            
-            target_state_info = BlockSymmetry.to_state_info([(self.lcp.target, 1)])
-
-            wfn = Wavefunction()
-            wfn.initialize(target_state_info.quanta, st_l, st_r, False)
-            wfn.clear()
-            
-            map_tensor = {block.q_labels: block for block in tensor.blocks}
-            
-            for (il, ir), mat in wfn.non_zero_blocks:
-                q_labels = (BlockSymmetry.from_spin_quantum(st_l.quanta[il]),
-                    BlockSymmetry.from_spin_quantum(st_r.quanta[ir]))
-                if q_labels in map_tensor:
-                    mat.ref[:, :] = map_tensor[q_labels].reduced
-            
-            return wfn
         else:
-            assert False
+            st_l, st_r = sts
+            
+        target_state_info = BlockSymmetry.to_state_info([(self.lcp.target, 1)])
+
+        wfn = Wavefunction()
+        wfn.initialize(target_state_info.quanta, st_l, st_r, dot == 1)
+        wfn.clear()
+        
+        map_tensor = {block.q_labels: block for block in tensor.blocks}
+        
+        for (il, ir), mat in wfn.non_zero_blocks:
+            q_labels = (BlockSymmetry.from_spin_quantum(st_l.quanta[il]),
+                BlockSymmetry.from_spin_quantum(st_r.quanta[ir]))
+            if q_labels in map_tensor:
+                mat.ref[:, :] = map_tensor[q_labels].reduced
+        
+        return wfn
     
     # no cgs will be generated for twodot
     # expressed in 2-index tensor, can be used for svd
-    def from_wavefunction_fused(self, i, wfn):
+    def from_wavefunction_fused(self, i, wfn, sts=None):
         """
         Construct rank-2 :class:`Tensor` with fused indices from Wavefunction (block code).
         
@@ -357,21 +360,24 @@ class MPSInfo:
                 Both left and right rank indices are fused. No CG factor are generated.
                 One-dot scheme is not implemented.
         """
-        if not wfn.onedot:
+        
+        if sts is None:
+            assert not wfn.onedot
             st_l = self.left_state_info_no_trunc[i]
             st_r = self.right_state_info_no_trunc[i + 1]
-            
-            blocks = []
-            for (il, ir), mat in wfn.non_zero_blocks:
-                q_labels = (BlockSymmetry.from_spin_quantum(st_l.quanta[il]),
-                    BlockSymmetry.from_spin_quantum(st_r.quanta[ir]))
-                reduced = mat.ref.copy()
-                assert reduced.shape[0] == st_l.n_states[il]
-                assert reduced.shape[1] == st_r.n_states[ir]
-                blocks.append(SubTensor(q_labels, reduced))
-            return Tensor(blocks)
         else:
-            assert False
+            st_l, st_r = sts
+            
+        blocks = []
+        for (il, ir), mat in wfn.non_zero_blocks:
+            q_labels = (BlockSymmetry.from_spin_quantum(st_l.quanta[il]),
+                BlockSymmetry.from_spin_quantum(st_r.quanta[ir]))
+            reduced = mat.ref.copy()
+            assert reduced.shape[0] == st_l.n_states[il]
+            assert reduced.shape[1] == st_r.n_states[ir]
+            blocks.append(SubTensor(q_labels, reduced))
+        
+        return Tensor(blocks)
     
     def from_left_rotation_matrix(self, i, rot):
         """
@@ -582,11 +588,12 @@ class MPS(TensorNetwork):
             r = lcp.right_dims[i]
         if self.dot == 1:
             ld = lcp.tensor_product(l, lcp.basis[self.center])
-            rd = r
+            tensors.append(Tensor.rank2_init_target(ld, r, lcp.target))
+            tensors[-1].tags = {self.center}
+            tensors[-1].unfuse_index(0, l, lcp.basis[self.center])
         elif self.dot == 2:
             ld = lcp.tensor_product(l, lcp.basis[self.center])
             rd = lcp.tensor_product(lcp.basis[self.center + 1], r)
-        if self.dot != 0:
             tensors.append(Tensor.rank2_init_target(ld, rd, lcp.target))
             tensors[-1].tags = set(range(self.center, self.center + self.dot))
         return tensors
@@ -607,21 +614,21 @@ class MPS(TensorNetwork):
             rs = self[i].left_canonicalize()
             if i + 1 < self.n_sites:
                 ts = self.select({i + 1}).tensors[0]
-                if i + 1 == self.center:
+                if i + 1 == self.center and self.dot == 2:
                     l = self.lcp.left_dims[i]
                     ts.unfuse_index(0, l, self.lcp.basis[i + 1])
                 ts.left_multiply(rs)
-                if i + 1 == self.center:
+                if i + 1 == self.center and self.dot == 2:
                     ld = self.lcp.tensor_product(l, self.lcp.basis[i + 1])
                     ts.fuse_index(0, ld, target=self.lcp.target)
         for i in range(self.n_sites - 1, self.center + self.dot - 1, -1):
             ls = self[i].right_canonicalize()
             if i - 1 >= 0:
                 ts = self.select({i - 1}).tensors[0]
-                if i - 1 == self.center + self.dot - 1:
+                if i - 1 == self.center + self.dot - 1 and self.dot == 2:
                     r = self.lcp.right_dims[i]
                     ts.unfuse_index(1, self.lcp.basis[i - 1], r)
                 ts.right_multiply(ls)
-                if i - 1 == self.center + self.dot - 1:
+                if i - 1 == self.center + self.dot - 1 and self.dot == 2:
                     rd = self.lcp.tensor_product(self.lcp.basis[i - 1], r)
                     ts.fuse_index(1, rd, target=self.lcp.target)
