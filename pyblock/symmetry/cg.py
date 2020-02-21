@@ -35,7 +35,7 @@ class CG:
         NSqrtFact : int
             Number of constants to generate.
         SqrtFact : [float]
-            A list of size :attr:`NSqrtFact`, with element at index :math:`i` being :math:`\sqrt{i!}`.
+            A list of size :attr:`NSqrtFact`, with element at index :math:`i` being :math:`\\sqrt{i!}`.
     """
     NSqrtFact = 200
     SqrtFact = list(accumulate([np.sqrt(x) for x in chain(

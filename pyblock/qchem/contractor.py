@@ -37,6 +37,7 @@ from .core import BlockHamiltonian, BlockEvaluation, BlockSymmetry
 from .simplifier import NoSimplifier
 import numpy as np
 import os
+import shutil
 
 
 class DataPage:
@@ -134,9 +135,18 @@ class DMRGDataPage(DataPage):
     def release(self):
         """Deallocate memory for all pages."""
         release_data_pages()
+    
+    def clean(self):
+        """Delete all temporary files."""
+        shutil.rmtree(self.save_dir)
+       
+    def __repr__(self):
+        return 'MAIN=%d ' % self.main_page + repr(self.current_pages)
+
 
 class ContractionError(Exception):
     pass
+
 
 class DMRGContractor:
     def __init__(self, mps_info, mpo_info, simplifier=None):
@@ -199,33 +209,53 @@ class DMRGContractor:
             ndav : int
                 Number of Davidson iterations.
         """
-        if len(mpst.tags - {'_KET'}) == 2:
+        dot = len(mpst.tags - {'_KET'})
             
-            mpst = mpst.copy()
-            i = self._tag_site(mpst)
-            
+        mpst = mpst.copy()
+        i = self._tag_site(mpst)
+        
+        assert dot == 2 or '_FUSE_L' in opt.tags or '_FUSE_R' in opt.tags
+        
+        sts = None
+        if dot == 2:
             st_l = self.mps_info.left_state_info_no_trunc[i]
             st_r = self.mps_info.right_state_info_no_trunc[i + 1]
+        elif '_FUSE_L' in opt.tags:
+            st_l = self.mps_info.left_state_info_no_trunc[i]
+            if i + 1 < self.n_sites:
+                st_r = self.mps_info.right_state_info[i + 1]
+            else:
+                st_r = BlockSymmetry.to_state_info([(self.mps_info.lcp.empty, 1)])
+            sts = (st_l, st_r)
+        elif '_FUSE_R' in opt.tags:
+            if i - 1 >= 0:
+                st_l = self.mps_info.left_state_info[i - 1]
+            else:
+                st_l = BlockSymmetry.to_state_info([(self.mps_info.lcp.empty, 1)])
+            st_r = self.mps_info.right_state_info_no_trunc[i]
+            sts = (st_l, st_r)
+        
+        wfn = self.mps_info.get_wavefunction_fused(i, mpst, dot=dot, sts=sts)
             
-            wfn = self.mps_info.get_wavefunction_fused(i, mpst, dot=2)
+        st = state_tensor_product_target(st_l, st_r)
+        a = BlockMultiplyH(opt, st)
+        b = [BlockWavefunction(wfn)]
             
-            st = state_tensor_product_target(st_l, st_r)
-            a = BlockMultiplyH(opt, st)
-            b = [BlockWavefunction(wfn)]
-            
-            es, vs, ndav = davidson(a, b, 1)
-            
+        es, vs, ndav = davidson(a, b, 1)
+        
+        if dot == 2 or '_FUSE_L' in opt.tags:
             self.page.unload({i, '_LEFT'})
             self.page.unload({i + 1, '_RIGHT'})
-            
-            if len(es) == 0:
-                raise ContractionError('Davidson not converged!!')
-            
-            e = es[0]
-            v = self.mps_info.from_wavefunction_fused(i, vs[0].data)
-            return e + self.mpo_info.hamil.e, v, ndav
         else:
-            assert False
+            self.page.unload({i - 1, '_LEFT'})
+            self.page.unload({i, '_RIGHT'})
+            
+        if len(es) == 0:
+            raise ContractionError('Davidson not converged!!')
+            
+        e = es[0]
+        v = self.mps_info.from_wavefunction_fused(i, vs[0].data, sts=sts)
+        return e + self.mpo_info.hamil.e, v, ndav
     
     def update_local_left_mps_info(self, i, l_fused):
         """Update :attr:`info` for site i using the left tensor from SVD."""
@@ -237,20 +267,28 @@ class DMRGContractor:
         block_basis = [(b.q_labels[0], b.reduced.shape[0]) for b in r_fused.blocks]
         self.mps_info.update_local_right_block_basis(i, block_basis)
     
-    def fuse_left(self, i, tensor, q_label_left):
+    def fuse_left(self, i, tensor, original_form):
         st_l = self.mps_info.left_state_info_no_trunc[i]
         stlq = BlockSymmetry.from_state_info(st_l)
-        if q_label_left:
+        if original_form == 'L':
             tensor.fuse_index(0, dict(stlq), equal=True)
         else:
+            if original_form == 'R':
+                for block in tensor.blocks:
+                    assert block.q_labels[0] == self.mps_info.lcp.target
+                    block.q_labels = (self.mps_info.lcp.empty, ) + block.q_labels[1:]
             tensor.fuse_index(0, dict(stlq), target=self.mps_info.lcp.target)
     
-    def fuse_right(self, i, tensor, q_label_right):
+    def fuse_right(self, i, tensor, original_form):
         st_r = self.mps_info.right_state_info_no_trunc[i]
         strq = BlockSymmetry.from_state_info(st_r)
-        if q_label_right:
+        if original_form == 'R':
             tensor.fuse_index(1, dict(strq), equal=True)
         else:
+            if original_form == 'L':
+                for block in tensor.blocks:
+                    assert block.q_labels[2] == self.mps_info.lcp.target
+                    block.q_labels = block.q_labels[:2] + (self.mps_info.lcp.empty, )
             tensor.fuse_index(1, dict(strq), target=self.mps_info.lcp.target)
     
     def unfuse_left(self, i, tensor):
@@ -266,6 +304,14 @@ class DMRGContractor:
         tensor = tensor.copy()
         tensor.unfuse_index(1, l, r)
         return tensor.set_tags({i}).set_contractor(self)
+    
+    @property
+    def bond_upper_limit_left(self):
+        return self.mps_info.lcp.left_dims_fci
+    
+    @property
+    def bond_upper_limit_right(self):
+        return self.mps_info.lcp.right_dims_fci
     
     def contract(self, tn, tags):
         """
@@ -327,8 +373,10 @@ class DMRGContractor:
             self.page.save({i, '_RIGHT'})
             return ham_rot
         elif dir == '_HAM':
+            dot = len(tn) - 2
             ts = sorted(tn.tensors, key=self._tag_site)
-            if len(tn) == 4:
+            assert (dot == 2) ^ ('_FUSE_L' in ts[1].tags or '_FUSE_R' in ts[1].tags)
+            if dot == 2:
                 if self._tag_site(ts[0]) != -1:
                     self.page.activate({self._tag_site(ts[1]), '_LEFT'}, reset=True)
                     self.page.load({self._tag_site(ts[0]), '_LEFT'})
@@ -343,10 +391,34 @@ class DMRGContractor:
                     self.page.unload({self._tag_site(ts[3]), '_RIGHT'})
                 else:
                     ham_right = ts[2]
-                self.page.activate({'_BASE'}, reset=False)
-                return BlockEvaluation.left_right_contract(ham_left, ham_right)
-            else:
-                assert False
+            elif '_FUSE_L' in ts[1].tags:
+                if self._tag_site(ts[0]) != -1:
+                    self.page.activate({self._tag_site(ts[1]), '_LEFT'}, reset=True)
+                    self.page.load({self._tag_site(ts[0]), '_LEFT'})
+                    ham_left = BlockEvaluation.left_contract(ts[0], ts[1], self.mps_info, self.mpo_info, self._tag_site(ts[1]))
+                    self.page.unload({self._tag_site(ts[0]), '_LEFT'})
+                else:
+                    ham_left = ts[1]
+                if self._tag_site(ts[2]) != self.n_sites:
+                    self.page.load({self._tag_site(ts[2]), '_RIGHT'})
+                    ham_right = ts[2]
+                else:
+                    ham_right = ts[2]
+            elif '_FUSE_R' in ts[1].tags:
+                if self._tag_site(ts[0]) != -1:
+                    self.page.load({self._tag_site(ts[0]), '_LEFT'})
+                    ham_left = ts[0]
+                else:
+                    ham_left = ts[0]
+                if self._tag_site(ts[2]) != self.n_sites:
+                    self.page.activate({self._tag_site(ts[1]), '_RIGHT'}, reset=True)
+                    self.page.load({self._tag_site(ts[2]), '_RIGHT'})
+                    ham_right = BlockEvaluation.right_contract(ts[2], ts[1], self.mps_info, self.mpo_info, self._tag_site(ts[1]))
+                    self.page.unload({self._tag_site(ts[2]), '_RIGHT'})
+                else:
+                    ham_right = ts[1]
+            self.page.activate({'_BASE'}, reset=False)
+            return BlockEvaluation.left_right_contract(ham_left, ham_right)
         elif dir == '_KET':
             ts = sorted(tn.tensors, key=self._tag_site)
             at = 1
@@ -368,6 +440,7 @@ class DMRGContractor:
             return Tensor(blocks=blocks).set_tags({dir, i, j})
         else:
             assert False
+
 
 class BlockWavefunction:
     """A wrapper of Wavefunction (block code) for Davidson algorithm."""
@@ -435,6 +508,7 @@ class BlockWavefunction:
     
     def __repr__(self):
         return repr(self.factor) + " * " + repr(self.data)
+
 
 class BlockMultiplyH:
     """

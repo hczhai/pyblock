@@ -46,7 +46,7 @@ class TestDavidson:
             e, v = np.linalg.eigh(a)
 
             assert len(ld) == k
-            assert np.allclose(e[:k], ld, atol=1E-3)
+            assert np.allclose(e[:k], ld, atol=1E-6)
             for ik in range(k):
                 assert np.linalg.norm(v[:, ik] - nb[ik].data) / n < 1E-3 \
                     or np.linalg.norm(v[:, ik] + nb[ik].data) / n < 1E-3
