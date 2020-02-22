@@ -88,30 +88,3 @@ class SU2CG:
             factor = -factor
         
         return r
-
-if __name__ == "__main__":
-    
-    from fractions import Fraction
-    from sympy.physics.quantum.cg import Wigner3j
-    from sympy.physics.quantum.cg import CG as SCG
-
-    jmax = 10
-
-    for _ in range(100):
-        ja = Fraction(np.random.randint(jmax), 2)
-        jb = Fraction(np.random.randint(jmax), 2)
-        jc = abs(ja - jb) + np.random.randint(ja + jb - abs(ja - jb) + 1)
-        print(ja, jb, jc)
-
-        ma = -ja + np.random.randint(2 * ja + 1)
-        mb = -jb + np.random.randint(2 * jb + 1)
-        mc = ma + mb
-
-        w3j = SU2CG.wigner_3j(ja, jb, jc, ma, mb, -mc)
-        cg = SU2CG.clebsch_gordan(ja, jb, jc, ma, mb, mc)
-
-        sw3j = Wigner3j(ja, ma, jb, mb, jc, -mc).doit()
-        scg = SCG(ja, ma, jb, mb, jc, mc).doit()
-        print('CG = ', cg, 'SCG = ', float(scg))
-        print('W3J = ', w3j, 'SW3J = ', float(sw3j))
-        assert (abs(cg - scg) < 1E-12)

@@ -25,7 +25,7 @@ class TestDMRGMID:
         page = DMRGDataPage(tmp_path / 'node0')
         simpl = Simplifier(AllRules())
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
-                                  memory=2000, page=page, omp_threads=2) as hamil:
+                                  memory=3000, page=page, omp_threads=1) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(100)
             mps = MPS(lcp, center=starting, dot=2)
@@ -45,7 +45,7 @@ class TestDMRGMID:
         page = DMRGDataPage(tmp_path / 'node0')
         simpl = Simplifier(AllRules())
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
-                                  memory=2000, page=page, omp_threads=2) as hamil:
+                                  memory=3000, page=page, omp_threads=1) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(100)
             mps = MPS(lcp, center=starting, dot=1)

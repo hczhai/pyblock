@@ -53,6 +53,9 @@ class TInt:
 
     def __setitem__(self, idx, val):
         self.data[self.__class__.find_index(*idx)] = val
+    
+    def __eq__(self, other):
+        return self.n == other.n and np.allclose(self.data, other.data)
 
     def __repr__(self):
         return [(i, j, self[i, j]) for i in range(self.n) for j in range(i + 1)].__repr__()
@@ -115,7 +118,7 @@ def read_fcidump(filename):
             pars, ints = ff.split('/')
         elif '&end' in ff:
             pars, ints = ff.split('&end')
-        cont = ' '.join(pars.split()[1:])
+        cont = ','.join(pars.split()[1:])
         cont = cont.split(',')
         cont_dict = {}
         p_key = None
@@ -124,7 +127,10 @@ def read_fcidump(filename):
                 p_key, b = c.split('=')
                 cont_dict[p_key.strip().lower()] = b.strip()
             elif len(c.strip()) != 0:
-                cont_dict[p_key.strip().lower()] += ',' + c.strip()
+                if len(cont_dict[p_key.strip().lower()]) != 0:
+                    cont_dict[p_key.strip().lower()] += ',' + c.strip()
+                else:
+                    cont_dict[p_key.strip().lower()] = c.strip()
         
         for k, v in cont_dict.items():
             if ',' in v:

@@ -122,7 +122,7 @@ IF (${BUILD_LIB})
 
 ELSE()
     LIST(REMOVE_ITEM SRCS ${RM_PYBIND_SRCS})
-    SET(SRCS ${SRCS} src/main.C)
+    SET(SRCS ${SRCS} src/main.C src/rev/data_page.cpp)
     ADD_EXECUTABLE(${PROJECT_NAME} ${SRCS})
 ENDIF()
 

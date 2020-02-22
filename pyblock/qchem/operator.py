@@ -70,7 +70,7 @@ class OpElement(OpExpression):
         self.name = name
         assert isinstance(site_index, tuple)
         self.site_index = site_index
-        self.factor = factor
+        self.factor = float(factor)
         self.q_label = q_label
     
     def __repr__(self):
@@ -86,36 +86,42 @@ class OpElement(OpExpression):
     def __mul__(self, other):
         if other == 0:
             return 0
-        elif isinstance(other, float):
-            return OpElement(self.name, self.site_index, self.factor * other, self.q_label)
         elif isinstance(other, OpSum):
             return OpSum([OpString([self] + st.ops, st.factor) for st in other.strings])
-        else:
+        elif isinstance(other, OpElement):
             return OpString([self, other])
+        elif isinstance(other, float):
+            return OpElement(self.name, self.site_index, self.factor * other, self.q_label)
+        else:
+            return NotImplemented
     
     def __rmul__(self, other):
         if other == 0:
             return 0
         elif isinstance(other, float):
             return OpElement(self.name, self.site_index, self.factor * other, self.q_label)
+        elif isinstance(other, OpSum):
+            return OpSum([OpString(st.ops + [self], st.factor) for st in other.strings])
         else:
-            return OpString([other, self])
+            return NotImplemented
     
     def __add__(self, other):
-        if other == 0:
-            return self
-        if isinstance(other, OpSum):
-            return OpSum(OpString([self]) + other.strings)
-        else:
+        if isinstance(other, OpElement):
             return OpSum([OpString([self]), OpString([other])])
+        elif other == 0:
+            return self
+        elif isinstance(other, OpSum):
+            return OpSum([OpString([self])] + other.strings)
+        else:
+            return NotImplemented
     
     def __radd__(self, other):
         if other == 0:
             return self
         if isinstance(other, OpSum):
-            return OpSum(other.strings + OpString([self]))
+            return OpSum(other.strings + [OpString([self])])
         else:
-            return OpSum([OpString([other]), OpString([self])])
+            return NotImplemented
     
     def __abs__(self):
         return OpElement(self.name, self.site_index, 1, self.q_label)
@@ -176,8 +182,7 @@ class OpString(OpExpression):
         if isinstance(other, float):
             return OpString(self.ops, self.factor / other)
         else:
-            print(other.__class__)
-            assert False
+            return NotImplemented
     
     def __abs__(self):
         return OpString(self.ops, 1)
@@ -187,27 +192,47 @@ class OpString(OpExpression):
             return OpString(self.ops + [other], self.factor)
         elif other == 0:
             return 0
-        elif isinstance(other, float):
+        elif isinstance(other, float) or isinstance(other, int):
+            return OpString(self.ops, self.factor * other)
+        elif isinstance(other, OpString):
+            return OpString(self.ops + other.ops, self.factor * other.factor)
+        else:
+            return NotImplemented
+    
+    def __rmul__(self, other):
+        if isinstance(other, OpElement):
+            return OpString([other] + self.ops, self.factor)
+        elif other == 0:
+            return 0
+        elif isinstance(other, float) or isinstance(other, int):
             return OpString(self.ops, self.factor * other)
         else:
-            print(other.__class__)
-            assert False
+            return NotImplemented
     
     def __add__(self, other):
         if other == 0:
             return self
         if isinstance(other, OpSum):
             return OpSum([self] + other.strings)
-        else:
+        elif isinstance(other, OpString):
             return OpSum([self, other])
+        else:
+            return NotImplemented
     
     def __radd__(self, other):
         if other == 0:
             return self
-        if isinstance(other, OpSum):
-            return OpSum(other.strings + [self])
         else:
-            return OpSum([other, self])
+            return NotImplemented
+    
+    def __eq__(self, other):
+        if not isinstance(other, OpString):
+            return False
+        else:
+            return (len(other.ops) == len(self.ops) and
+                    self.factor == other.factor and
+                    all([pa == pb for pa, pb in zip(self.ops, other.ops)]))
+    
 
 class OpSum(OpExpression):
     """
@@ -218,59 +243,53 @@ class OpSum(OpExpression):
     """
     __slots__ = ['strings']
     def __init__(self, strings):
+        assert isinstance(strings, list)
         self.strings = strings
     
     def __repr__(self):
         return " + ".join([repr(x) for x in self.strings])
     
     def __add__(self, other):
-        if isinstance(other, OpString):
+        if other == 0:
+            return self
+        elif isinstance(other, OpString):
             return OpSum(self.strings + [other])
         elif isinstance(other, OpSum):
             return OpSum(self.strings + other.strings)
-        elif other == 0:
-            return self
         else:
-            print(other.__class__)
-            assert False
+            return NotImplemented
     
     def __radd__(self, other):
         if other == 0:
             return self
-        elif isinstance(other, OpString):
-            return OpSum([other] + self.strings)
-        elif isinstance(other, OpSum):
-            return OpSum(other.strings + self.strings)
         else:
-            print(other.__class__)
-            assert False
+            return NotImplemented
     
     def __truediv__(self, other):
         if isinstance(other, float):
             return OpSum([x / other for x in self.strings])
         else:
-            print(other.__class__)
-            assert False
+            return NotImplemented
     
     def __mul__(self, other):
-        if isinstance(other, OpElement):
-            return OpSum([x * other for x in self.strings])
-        elif other == 0:
+        if other == 0:
             return 0
         elif isinstance(other, float):
             return OpSum([x * other for x in self.strings])
         else:
-            print(other.__class__)
-            assert False
+            return NotImplemented
     
     def __rmul__(self, other):
-        if isinstance(other, OpElement):
-            return OpSum([other * x for x in self.strings])
-        elif other == 0:
+        if other == 0:
             return 0
         elif isinstance(other, float):
             return OpSum([x * other for x in self.strings])
         else:
-            print(other.__class__)
-            assert False
-
+            return NotImplemented
+    
+    def __eq__(self, other):
+        if not isinstance(other, OpSum):
+            return False
+        else:
+            return (len(other.strings) == len(self.strings) and
+                    all([sa == sb for sa, sb in zip(self.strings, other.strings)]))

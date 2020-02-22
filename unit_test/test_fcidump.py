@@ -55,3 +55,22 @@ class TestFCIDUMP:
             assert e.__class__ == float
             assert t.n == n
             assert v.n == n
+        
+        # test alternate form and comment lines
+        cont_dict_a, (ta, va, ea) = read_fcidump(os.path.join(data_dir, 'N2.STO3G.FCIDUMP'))
+        cont_dict_b, (tb, vb, eb) = read_fcidump(os.path.join(data_dir, 'N2.STO3G-ALT.FCIDUMP'))
+        assert cont_dict_a == cont_dict_b
+        n = int(cont_dict_a['norb'])
+        assert ta == tb
+        assert ea == eb
+        assert va != vb
+        assert repr(va) != repr(vb)
+        for i in range(n):
+            assert va[i, i, i, i] == vb[i, i, i, i]
+        for m in range(25):
+            i = np.random.randint(n)
+            j = np.random.randint(n)
+            k = np.random.randint(n)
+            l = np.random.randint(n)
+            if i != j or j != k or k != l:
+                assert np.isclose(vb[i, j, k, l], 0)

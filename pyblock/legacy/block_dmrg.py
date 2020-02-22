@@ -64,7 +64,7 @@ class DMRG(object):
         """Release stack memory."""
         release_stack_memory()
 
-    def dmrg(self, gen_block=False, rot_mats=None):
+    def dmrg(self, gen_block=False, rot_mats=None, tol=None, forward=True):
         """Perform DMRG."""
 
         global_timer = Timer()
@@ -72,15 +72,18 @@ class DMRG(object):
         # 0 = backward 1 = forward
         last_energies = [1E7] * 2
         old_energies = [0.0] * 2
-
-        sweep_tol = Global.dmrginp.sweep_tol
+        final_energy = 0.0
+        
+        sweep_tol = Global.dmrginp.sweep_tol if tol is None else tol
 
         # warm up sweep
 
         if not gen_block:
-            last_energies[1] = self.do_one(warm_up=True, forward=True)
+            last_energies[1] = self.do_one(warm_up=True, forward=forward)
         else:
-            self.gen_block_do_one(rot_mats=rot_mats)
+            self.gen_block_do_one(rot_mats=rot_mats, forward=forward)
+        
+        forward = not forward
 
         # --- Start Sweep Loop ---
 
@@ -100,11 +103,15 @@ class DMRG(object):
                     break
 
                 last_energies[idir] = self.do_one(
-                    warm_up=False, forward=idir == 1)
+                    warm_up=False, forward=forward)
+                
+                final_energy = last_energies[idir]
 
                 if self.output_level >= 0:
                     print("\t\t\t Finished Sweep Iteration %d"
                           % self.sweep_params.sweep_iter)
+                
+                forward = not forward
 
         # --- End Sweep Loop ---
 
@@ -114,6 +121,8 @@ class DMRG(object):
         if self.output_level >= 0:
             print("\n\n\t\t\t BLOCK CPU  Time (seconds): %.3f" % cputime)
             print("\t\t\t BLOCK Wall Time (seconds): %.3f" % walltime)
+        
+        return final_energy
 
     def gen_block_do_one(self, rot_mats=None, forward=True, implicit_trans=True, do_norms=None, do_comp=None):
         """Perform one sweep for generating blocks from rotation matrices."""
@@ -157,6 +166,11 @@ class DMRG(object):
                     self.system, self.sweep_params.one_dot, forward)
 
             self.sweep_params.block_iter += 1
+        
+        if Global.dmrginp.is_spin_adapted:
+            self.sweep_params.save_state(not forward, 1)
+        else:
+            self.sweep_params.save_state(not forward, 2)
 
         self.system.deallocate()
         self.system.clear()
@@ -280,21 +294,20 @@ class DMRG(object):
         # figure out the range of dot blocks and environment block - start
 
         if forward:
-            sys_dot_start = self.system.sites[-1] + \
-                1 if su2_used else self.system.sites[-1] // 2 + 1
-            sys_dot_end = sys_dot_start + self.sweep_params.sys_add - \
-                1  # end means the index of last site
+            sys_dot_start = self.system.sites[-1] + 1 \
+                if su2_used else self.system.sites[-1] // 2 + 1
+            # end means the index of last site
+            sys_dot_end = sys_dot_start + self.sweep_params.sys_add - 1
             env_dot_start = sys_dot_end + 1
             env_dot_end = env_dot_start + self.sweep_params.env_add - 1
         else:
-            sys_dot_start = self.system.sites[0] - \
-                1 if su2_used else self.system.sites[0] // 2 + 1
+            sys_dot_start = self.system.sites[0] - 1 \
+                if su2_used else self.system.sites[0] // 2 - 1
             sys_dot_end = sys_dot_start - (self.sweep_params.sys_add - 1)
             env_dot_start = sys_dot_end - 1
             env_dot_end = env_dot_start - (self.sweep_params.env_add - 1)
 
-        system_dot = Block(sys_dot_start, sys_dot_end,
-                           self.integral_index, True)
+        system_dot = Block(sys_dot_start, sys_dot_end, self.integral_index, True)
         environment_dot = Block(
             env_dot_start, env_dot_end, self.integral_index, True)
 
@@ -549,13 +562,13 @@ class DMRG(object):
         # figure out the range of dot blocks
 
         if forward:
-            sys_dot_start = self.system.sites[-1] + \
-                1 if su2_used else self.system.sites[-1] // 2 + 1
+            sys_dot_start = self.system.sites[-1] + 1 \
+                if su2_used else self.system.sites[-1] // 2 + 1
             sys_dot_end = sys_dot_start + self.sweep_params.sys_add - \
                 1  # end means the index of last site
         else:
-            sys_dot_start = self.system.sites[0] - \
-                1 if su2_used else self.system.sites[0] // 2 + 1
+            sys_dot_start = self.system.sites[0] - 1 \
+                if su2_used else self.system.sites[0] // 2 - 1
             sys_dot_end = sys_dot_start - (self.sweep_params.sys_add - 1)
 
         system_dot = Block(sys_dot_start, sys_dot_end,
