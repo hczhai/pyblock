@@ -1,4 +1,5 @@
 build/
+build-exe/
 build-cmake/
 docs/build/
 my_test/

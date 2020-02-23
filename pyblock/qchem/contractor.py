@@ -86,7 +86,6 @@ class DMRGDataPage(DataPage):
         """Return the data page filename for the given data tags."""
         return os.path.join(self.save_dir, ".".join(sorted(map(str, tags))) + '.page.tmp')
 
-    # this only for load for read
     def load(self, tags):
         """Load data page from disk to memory, for reading data."""
         ip = self._get_page(tags)
@@ -96,7 +95,6 @@ class DMRGDataPage(DataPage):
         else:
             assert self.current_pages[ip] == tags
     
-    # this only for unload for read
     def unload(self, tags):
         """Unload data page in memory for reading data."""
         ip = self._get_page(tags)
@@ -104,7 +102,6 @@ class DMRGDataPage(DataPage):
             assert self.current_pages[ip] == tags
             del self.current_pages[ip]
     
-    # for writing data
     def activate(self, tags, reset=False):
         """Activate one data page in memory for writing data."""
         ip = self._get_page(tags)
@@ -117,7 +114,6 @@ class DMRGDataPage(DataPage):
             if reset:
                 set_data_page_pointer(ip, 0)
     
-    # finish writing, but still loaded
     def save(self, tags):
         """Save the data page in memory to disk."""
         ip = self._get_page(tags)

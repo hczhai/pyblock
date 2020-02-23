@@ -418,7 +418,6 @@ class MPSInfo:
                 blocks.append(SubTensor(q_labels, reduced.reshape(red_shape)))
             assert idx_rot == rot[k].rows
         t = Tensor(blocks)
-        t.build_rank3_cg()
         t.sort()
         return t
     
@@ -464,7 +463,6 @@ class MPSInfo:
                 blocks.append(SubTensor(q_labels, reduced.reshape(red_shape)))
             assert idx_rot == rot[k].rows
         t = Tensor(blocks)
-        t.build_rank3_cg()
         t.sort()
         return t
     
@@ -606,7 +604,9 @@ class MPS(TensorNetwork):
     def fill_identity(self):
         """Fill MPS reduced matrices with identity matrices whenever possible."""
         for ts in self.tensors:
-            ts.build_identity()
+            if ts.rank == 3:
+                ts.build_zero()
+                ts.build_identity()
             
     def canonicalize(self):
         """Canonicalization."""

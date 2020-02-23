@@ -44,13 +44,13 @@ class HashIrrep:
 
     # direct product of subspaces
     def __mul__(self, o):
-        return DirectProdGroup(self, o)
+        return DirectProdGroup(self) * o
 
 
 class ParticleN(HashIrrep):
     """Irreducible representation for particle number symmetry."""
     def __init__(self, n):
-        self.ir = n
+        HashIrrep.__init__(self, n)
 
     # group multiplication
     def __add__(self, o):
@@ -97,7 +97,7 @@ class SU2(HashIrrep):
     def clebsch_gordan(a, b, c):
         """Return rank-3 numpy.ndarray for CG coefficients with all possible projected quantum numbers."""
         if c not in a + b:
-            return np.array([[0]], dtype=float)
+            return np.array([[[0]]], dtype=float)
         else:
             na = a.ir + 1
             nb = b.ir + 1

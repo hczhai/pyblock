@@ -105,7 +105,9 @@ class SubTensor:
     
     def __eq__(self, o):
         return self.q_labels == o.q_labels and np.allclose(self.reduced, o.reduced) \
-            and all(np.allclose(cgx, cgy) for cgx, cgy in zip(self.cgs, o.cgs))
+            and ((self.cgs is not None and o.cgs is not None and
+                  all(np.allclose(cgx, cgy) for cgx, cgy in zip(self.cgs, o.cgs))) or
+                 (self.cgs is None and o.cgs is None))
 
     def __repr__(self):
         reduced = self.reduced if self.reduced is not None else self.reduced_shape
