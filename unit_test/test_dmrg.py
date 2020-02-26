@@ -14,17 +14,6 @@ def data_dir(request):
     filename = request.module.__file__
     return os.path.join(os.path.dirname(filename), 'data')
 
-@pytest.fixture(scope="module", params=[1, 2, 3, 4])
-def dot_scheme(request):
-    return request.param
-
-@pytest.fixture(scope="module", params=[1, 2, 4])
-def openmp_scheme(request):
-    return request.param
-
-@pytest.fixture(scope="module", params=[3, 4, 7])
-def starting(request):
-    return request.param
 
 class TestDMRG:
     def test_hubbard(self, data_dir):

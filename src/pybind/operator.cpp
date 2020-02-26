@@ -20,6 +20,9 @@ using namespace std;
 using namespace Eigen;
 using namespace SpinAdapted;
 
+py::tuple pickle_stack_sparse_matrix(StackSparseMatrix *self);
+StackSparseMatrix unpickle_stack_sparse_matrix(py::tuple t);
+
 typedef vector<pair<pair<int, int>, StackMatrix>> nz_blocks;
 typedef map<pair<int, int>, int> nz_map;
 
@@ -200,6 +203,15 @@ void pybind_operator(py::module &m) {
         .def_property(
             "cols", (const int &(StackMatrix::*)() const)(&StackMatrix::Ncols),
             [](StackMatrix *self, int m) { self->Ncols() = m; })
+        .def(py::pickle(
+            [](StackMatrix *self) {
+                return py::make_tuple((size_t)self->Store(), self->Nrows(), self->Ncols());
+            },
+            [](py::tuple t) {
+                StackMatrix p((double*)t[0].cast<size_t>(), t[1].cast<int>(), t[2].cast<int>());
+                return p;
+            }
+        ))
         .def("__repr__", [](StackMatrix *self) {
             stringstream ss;
             ss << Map<Eigen::Matrix<double, Dynamic, Dynamic, RowMajor>>(
@@ -237,6 +249,33 @@ void pybind_operator(py::module &m) {
             },
             "A list of non zero blocks. Each element in the list is a pair of "
             "a pair of bra and ket indices, and :class:`StackMatrix`.")
+        .def_property(
+            "ref",
+            [](StackSparseMatrix *self) {
+                return Map<Eigen::Matrix<double, Dynamic, Dynamic, RowMajor>>(
+                    self->get_data(), 1, self->set_totalMemory());
+            },
+            [](StackSparseMatrix *self,
+               Ref<Eigen::Matrix<double, Dynamic, Dynamic, RowMajor>> mat) {
+                   assert(self->set_totalMemory() == mat.rows() * mat.cols());
+                   memcpy(self->get_data(), mat.data(),
+                       sizeof(double) * mat.rows() * mat.cols());
+            },
+            "A numpy.ndarray reference.")
+        .def("allocate_memory", [](StackSparseMatrix *self, long m) {
+            assert(self->set_totalMemory() == 0);
+            self->set_totalMemory() = m;
+            self->set_data(block2::current_page->allocate(m));
+            self->allocateOperatorMatrix();
+        })
+        .def(py::pickle(
+            [](StackSparseMatrix *self) {
+                return pickle_stack_sparse_matrix(self);
+            },
+            [](py::tuple t) {
+                return unpickle_stack_sparse_matrix(t);
+            }
+        ))
         .def("__repr__", [](StackSparseMatrix *self) {
             stringstream ss;
             for (auto &r: self->get_nonZeroBlocks()) {

@@ -241,8 +241,6 @@ class MPSInfo:
         Args:
             i : int
                 Center site, for determining assocated left and right blocks.
-            left_block_basis : [(DirectProdGroup, int)]
-                Renormalized basis for left block with sites [0..i].
             right_block_basis : [(DirectProdGroup, int)]
                 Renormalized basis for right block with sites [i+1..:attr:`n_sites`-1].
         """
@@ -564,23 +562,27 @@ class MPSInfo:
                     
 class MPS(TensorNetwork):
     """Matrix Product State."""
-    def __init__(self, lcp, center, dot=2):
+    def __init__(self, lcp, center, dot=2, iprint=False):
         self.lcp = lcp
         self.n_sites = lcp.n_sites
         self.center = center
         self.dot = dot
-        tensors = self._init_mps_tensors(lcp)
+        tensors = self._init_mps_tensors(lcp, iprint=iprint)
         super().__init__(tensors)
     
-    def _init_mps_tensors(self, lcp):
+    def _init_mps_tensors(self, lcp, iprint):
         tensors = []
         l = collections.Counter({lcp.empty: 1})
         for i in range(0, self.center):
+            if iprint:
+                print("\r%3d%% " % ((i + 1) * 100 // self.n_sites), end='')
             tensors.append(Tensor.rank3_init_left(l, lcp.basis[i], lcp.left_dims[i]))
             tensors[-1].tags = {i}
             l = lcp.left_dims[i]
         r = collections.Counter({lcp.empty: 1})
         for i in range(lcp.n_sites - 1, self.center + self.dot - 1, -1):
+            if iprint:
+                print("\r%3d%% " % ((lcp.n_sites - i + self.center) * 100 // self.n_sites), end='')
             tensors.append(Tensor.rank3_init_right(r, lcp.basis[i], lcp.right_dims[i]))
             tensors[-1].tags = {i}
             r = lcp.right_dims[i]

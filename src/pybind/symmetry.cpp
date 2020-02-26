@@ -69,6 +69,22 @@ void pybind_symmetry(py::module &m) {
         .def(py::self + py::self)
         .def(py::self - py::self)
         .def(-py::self)
+        .def(py::pickle(
+            [](SpinQuantum *self) {
+                py::list x(3);
+                x[0] = self->particleNumber;
+                x[1] = self->totalSpin.getirrep();
+                x[2] = self->orbitalSymmetry.getirrep();
+                return py::make_tuple(x);
+            },
+            [](py::tuple t) {
+                py::list tt(t[0].cast<py::list>());
+                SpinQuantum p(tt[0].cast<int>(),
+                              SpinSpace(tt[1].cast<int>()),
+                              IrrepSpace(tt[2].cast<int>()));
+                return p;
+            }
+        ))
         .def("__repr__", [](SpinQuantum *self) {
             stringstream ss;
             ss << *self;

@@ -25,9 +25,14 @@ DMRG algorithm.
 
 from .tensor.tensor import Tensor, TensorNetwork
 import time
+from mpi4py import MPI
 
 class DMRGError(Exception):
     pass
+
+def pprint(*args, **kwargs):
+    if MPI.COMM_WORLD.Get_rank() == 0:
+        print(*args, **kwargs)
 
 class MovingEnvironment:
     """
@@ -65,6 +70,8 @@ class MovingEnvironment:
         # i = 0, dot = 1 :: [sys=][sdot=0][env=1,2..]
         # i = 0, dot = 2 :: [sys=][sdot=0][edot=1][env=2,3..]
         for i in range(self.n_sites - self.dot - 1, self.pos - 1, -1):
+            pprint("\r Constructing environment .. %3d%% " % ((self.n_sites - self.dot - i) * 100 // self.n_sites),
+                   end="", flush=True)
             # add a new site to previous env, and contract one site
             self.envs[i] = self.envs[i + 1].copy()
             self.envs[i].remove({i}, in_place=True)
@@ -77,6 +84,9 @@ class MovingEnvironment:
         # i = n - 1, dot = 1 :: [env=..n-2][sdot=n-1][sys=]
         # i = n - 2, dot = 2 :: [env=..n-3][edot=n-2][sdot=n-1][sys=]
         for i in range(0, self.pos):
+            pprint("\r Constructing environment .. %3d%% " %
+                   ((self.n_sites - self.dot - self.pos + i + 1) * 100 // self.n_sites),
+                   end="", flush=True)
             # add a new site to previous env, and contract one site
             self.envs[i] = self.envs[i - 1].copy()
             self.envs[i].remove({i + self.dot - 1}, in_place=True)
@@ -354,9 +364,9 @@ class DMRG:
 
     def construct_envs(self):
         t = time.perf_counter()
-        print(" Constructing environment .. ", end='', flush=True)
+        pprint(" Constructing environment .. ", end='', flush=True)
         self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
-        print("T = %4.2f" % (time.perf_counter() - t))
+        pprint("T = %4.2f" % (time.perf_counter() - t))
 
     def blocking(self, i, forward, bond_dim, noise):
         """
@@ -422,12 +432,12 @@ class DMRG:
 
         for i in sweep_range:
             if self.dot == 2:
-                print(" %3s Site = %4d-%4d .. " % ('-->' if forward else '<--', i, i + 1), end='', flush=True)
+                pprint(" %3s Site = %4d-%4d .. " % ('-->' if forward else '<--', i, i + 1), end='', flush=True)
             else:
-                print(" %3s Site = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
+                pprint(" %3s Site = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
             t = time.perf_counter()
             energy, error, ndav = self.blocking(i, forward=forward, bond_dim=bond_dim, noise=noise)
-            print("Ndav = %4d E = %15.8f Error = %15.8f T = %4.2f" % (ndav, energy, error, time.perf_counter() - t))
+            pprint("Ndav = %4d E = %15.8f Error = %15.8f T = %4.2f" % (ndav, energy, error, time.perf_counter() - t))
             sweep_energies.append(energy)
         
         self._post_sweep()
@@ -464,7 +474,7 @@ class DMRG:
         
         for iw in range(n_sweeps):
 
-            print("Sweep = %4d | Direction = %8s | Bond dimension = %4d | Noise = %9.2g"
+            pprint("Sweep = %4d | Direction = %8s | Bond dimension = %4d | Noise = %9.2g"
                 % (iw, "forward" if forward else "backward", self.bond_dims[iw], self.noise[iw]))
             
             if two_dot_to_one_dot == iw:
@@ -482,7 +492,7 @@ class DMRG:
 
             forward = not forward
             
-            print('Time elapsed = %10.2f' % (time.perf_counter() - start))
+            pprint('Time elapsed = %10.2f' % (time.perf_counter() - start))
             
             if converged:
                 break

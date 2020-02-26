@@ -145,7 +145,7 @@ class ContractionError(Exception):
 
 
 class DMRGContractor:
-    def __init__(self, mps_info, mpo_info, simplifier=None):
+    def __init__(self, mps_info, mpo_info, simplifier=None, parallelizer=None):
         self.mps_info = mps_info
         self.mpo_info = mpo_info
         self.n_sites = mpo_info.n_sites
@@ -157,6 +157,9 @@ class DMRGContractor:
             self.page = self.mpo_info.hamil.page
         if simplifier is not None:
             BlockEvaluation.simplifier = simplifier
+        if parallelizer is not None:
+            BlockEvaluation.parallelizer = parallelizer
+        self.is_parallel = parallelizer is not None
     
     def pre_sweep(self):
         """Operations performed at the beginning of each DMRG sweep."""
@@ -236,8 +239,8 @@ class DMRGContractor:
         st = state_tensor_product_target(st_l, st_r)
         a = BlockMultiplyH(opt, st)
         b = [BlockWavefunction(wfn)]
-            
-        es, vs, ndav = davidson(a, b, 1)
+        
+        es, vs, ndav = davidson(a, b, 1, mpi=self.is_parallel)
         
         if dot == 2 or '_FUSE_L' in opt.tags:
             self.page.unload({i, '_LEFT'})
@@ -414,7 +417,13 @@ class DMRGContractor:
                 else:
                     ham_right = ts[1]
             self.page.activate({'_BASE'}, reset=False)
-            return BlockEvaluation.left_right_contract(ham_left, ham_right)
+            if dot == 2:
+                tag = '_FUSE_LR'
+            elif '_FUSE_L' in ts[1].tags:
+                tag = '_FUSE_L'
+            elif '_FUSE_R' in ts[1].tags:
+                tag = '_FUSE_R'
+            return BlockEvaluation.left_right_contract(ham_left, ham_right, self.mpo_info, self._tag_site(ts[1]), tag)
         elif dir == '_KET':
             ts = sorted(tn.tensors, key=self._tag_site)
             at = 1
@@ -502,6 +511,10 @@ class BlockWavefunction:
         self.data.deallocate()
         self.data = None
     
+    @property
+    def ref(self):
+        return self.data.ref
+    
     def __repr__(self):
         return repr(self.factor) + " * " + repr(self.data)
 
@@ -538,6 +551,7 @@ class BlockMultiplyH:
                 Output vector/wavefunction.
         """
         assert isinstance(result, BlockWavefunction)
+        result.data.clear()
         result.factor = 1.0
         BlockEvaluation.expr_multiply_eval(self.opt.mat[0, 0], self.opt.ops[0], self.opt.ops[1],
             other.data, result.data, self.st)

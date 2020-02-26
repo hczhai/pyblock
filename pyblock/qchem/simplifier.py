@@ -28,17 +28,34 @@ import contextlib
 import numpy as np
 
 
+class OpCollection:
+    def __init__(self, uniq, linked=None):
+        self.uniq = uniq
+        self.uniq_list = sorted(self.uniq.items(), key=lambda x: x[0])
+        self.linked = linked if linked is not None else []
+    
+    @contextlib.contextmanager
+    def __call__(self):
+        new_ops = {}
+        yield self.uniq_list, new_ops
+        for op, _, link in self.linked:
+            if op not in self.uniq:
+                new_ops[op] = link(new_ops)
+
+
 class NoSimplifier:
     """No simplification is performed."""
     def __init__(self):
         pass
     
     def simplify(self, zipped):
-        return lambda zipped=zipped: self._simplify(zipped)
-    
-    @contextlib.contextmanager
-    def _simplify(self, zipped):
-        yield zipped, {}
+        return OpCollection(dict(zipped))
+
+
+class OpShell:
+    def __init__(self, data):
+        self.data = data
+
 
 class OpLink:
     def __init__(self, op, trans, scale):
@@ -170,12 +187,4 @@ class Simplifier:
         for op, expr, link in linked:
             if link.op not in uniq:
                 uniq[op] = expr
-        return lambda uniq=uniq, linked=linked: self._simplify(uniq, linked)
-    
-    @contextlib.contextmanager
-    def _simplify(self, uniq, linked):
-        new_ops = {}
-        yield uniq.items(), new_ops
-        for op, _, link in linked:
-            if op not in uniq:
-                new_ops[op] = link(new_ops)
+        return OpCollection(uniq, linked)

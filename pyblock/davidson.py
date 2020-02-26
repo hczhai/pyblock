@@ -90,6 +90,10 @@ class Vector:
         assert self.data is not None
         self.data = None
     
+    @property
+    def ref(self):
+        return self.data
+    
     def __repr__(self):
         return repr(self.factor) + " * " + repr(self.data)
 
@@ -126,7 +130,7 @@ def olsen_precondition(q, c, ld, diag):
     t.deallocate()
 
 # E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
-def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, deflation_max_size=50, iprint=False):
+def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, deflation_max_size=20, iprint=False, mpi=False):
     """
     Davidson diagonalization.
     
@@ -154,14 +158,29 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
         b : list(Vector)
             List of eigenvectors.
     """
+    
+    if mpi:
+        from mpi4py import MPI
+        rank = MPI.COMM_WORLD.Get_rank()
+        comm = MPI.COMM_WORLD
+    else:
+        rank = 0
+    
+    if iprint and rank == 0:
+        print("")
+    
     assert len(b) == k
     if deflation_min_size < k:
         deflation_min_size = k
     aa = a.diag()
-    for i in range(k):
-        for j in range(i):
-            b[i] += (-b[j].dot(b[i])) * b[j]
-        b[i].normalize()
+    if rank == 0:
+        for i in range(k):
+            for j in range(i):
+                b[i] += (-b[j].dot(b[i])) * b[j]
+            b[i].normalize()
+    if mpi:
+        for i in range(k):
+            comm.Bcast(b[i].ref, root=0)
     sigma = [ib.clear_copy() for ib in b[:k]]
     q = b[0].clear_copy()
     l = k
@@ -174,31 +193,43 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
         for i in range(msig, m):
             a.apply(b[i], sigma[i])
             msig += 1
-        atilde = np.zeros((m, m))
-        for i in range(m):
-            for j in range(i + 1):
-                atilde[i, j] = b[i].dot(sigma[j])
-                atilde[j, i] = atilde[i, j]
-        ld, alpha = np.linalg.eigh(atilde)
-        # b[1:m] = np.dot(b[:], alpha[:, 1:m])
-        tmp = [ib.copy() for ib in b[:m]]
-        for j in range(m):
-            b[j] *= alpha[j, j]
-        for j in range(m):
+        if rank == 0:
+            atilde = np.zeros((m, m))
             for i in range(m):
-                if i != j:
-                    b[j] += alpha[i, j] * tmp[i]
-        # sigma[1:m] = np.dot(sigma[:], alpha[:, 1:m])
-        for i in range(m):
-            tmp[i].copy_data(sigma[i])
-        for j in range(m):
-            sigma[j] *= alpha[j, j]
-        for j in range(m):
+                for j in range(i + 1):
+                    atilde[i, j] = b[i].dot(sigma[j])
+                    atilde[j, i] = atilde[i, j]
+            ld, alpha = np.linalg.eigh(atilde)
+        else:
+            ld = np.zeros((m, ))
+            alpha = np.zeros((m, m))
+        if mpi:
+            comm.Bcast(ld, root=0)
+            comm.Bcast(alpha, root=0)
+        if rank == 0:
+            # b[1:m] = np.dot(b[:], alpha[:, 1:m])
+            tmp = [ib.copy() for ib in b[:m]]
+            for j in range(m):
+                b[j] *= alpha[j, j]
+            for j in range(m):
+                for i in range(m):
+                    if i != j:
+                        b[j] += alpha[i, j] * tmp[i]
+            # sigma[1:m] = np.dot(sigma[:], alpha[:, 1:m])
             for i in range(m):
-                if i != j:
-                    sigma[j] += alpha[i, j] * tmp[i]
-        for i in range(m - 1, -1, -1):
-            tmp[i].deallocate()
+                tmp[i].copy_data(sigma[i])
+            for j in range(m):
+                sigma[j] *= alpha[j, j]
+            for j in range(m):
+                for i in range(m):
+                    if i != j:
+                        sigma[j] += alpha[i, j] * tmp[i]
+            for i in range(m - 1, -1, -1):
+                tmp[i].deallocate()
+        if mpi:
+            for j in range(m):
+                comm.Bcast(b[j].ref, root=0)
+                comm.Bcast(sigma[j].ref, root=0)
         for i in range(ck):
             q.copy_data(sigma[i])
             q += (-ld[i]) * b[i]
@@ -210,11 +241,14 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
         q.copy_data(sigma[ck])
         q += (-ld[ck]) * b[ck]
         qq = q.dot(q)
-        if iprint:
+        if iprint and rank == 0:
             print("%5d %5d %5d %15.8f %9.2e" % (xiter, m, ck, ld[ck], qq))
         
-        # precondition
-        olsen_precondition(q, b[ck], ld[ck], aa)
+        if rank == 0:
+            # precondition
+            olsen_precondition(q, b[ck], ld[ck], aa)
+        if mpi:
+            comm.Bcast(b[ck].ref, root=0)
         
         if qq < conv_thold:
             ck += 1
@@ -224,9 +258,12 @@ def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, defla
             if m >= deflation_max_size:
                 m = deflation_min_size
                 msig = deflation_min_size
-            for j in range(m):
-                q += (-b[j].dot(q)) * b[j]
-            q.normalize()
+            if rank == 0:
+                for j in range(m):
+                    q += (-b[j].dot(q)) * b[j]
+                q.normalize()
+            if mpi:
+                comm.Bcast(q.ref, root=0)
             
             if m >= len(b):
                 b.append(b[0].clear_copy())

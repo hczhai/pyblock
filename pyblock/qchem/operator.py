@@ -45,6 +45,12 @@ class OpNames(Enum):
     
     def __repr__(self):
         return self.name
+    
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        else:
+            return NotImplemented
 
 op_names = list(OpNames.__members__.items())
 
@@ -132,6 +138,20 @@ class OpElement(OpExpression):
         else:
             return self.name == other.name and self.site_index == other.site_index \
                 and self.factor == other.factor
+    
+    def __lt__(self, other):
+        if other == 0:
+            return False
+        elif not isinstance(other, OpElement):
+            return NotImplemented
+        elif self.name != other.name:
+            return self.name < other.name
+        elif self.site_index != other.site_index:
+            return self.site_index < other.site_index
+        elif self.factor != other.factor:
+            return self.factor < other.factor
+        else:
+            return False
     
     def __hash__(self):
         return hash((self.name, self.site_index, self.factor))

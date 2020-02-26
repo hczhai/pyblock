@@ -41,7 +41,7 @@ from block.rev import tensor_scale_add_no_trans
 from ..symmetry.symmetry import ParticleN, SU2, SZ, PointGroup, point_group
 from ..symmetry.symmetry import DirectProdGroup
 from .operator import OpElement, OpNames, OpString, OpSum
-from .simplifier import NoSimplifier
+from .simplifier import NoSimplifier, OpCollection, OpShell
 from .fcidump import read_fcidump
 from fractions import Fraction
 import contextlib
@@ -54,6 +54,7 @@ class BlockError(Exception):
 
 class BlockEvaluation:
     simplifier = NoSimplifier()
+    parallelizer = None
     """Explicit evaluation of symbolic expression for operators."""
     @classmethod
     def tensor_rotate(self, opt, old_st, new_st, rmat):
@@ -62,7 +63,7 @@ class BlockEvaluation:
         
         Args:
             opt : OperatorTensor
-                One-site operator tensor in (untruncated) old basis.
+                Operator tensor in (untruncated) old basis.
             old_st : StateInfo
                 Old (untruncated) basis.
             new_st : StateInfo
@@ -71,21 +72,29 @@ class BlockEvaluation:
                 Rotation matrix.
         
         Returns:
-            new_mpo : BlockMPO
-                One-site MPO in (truncated) new basis.
+            new_opt : OperatorTensor
+                Operator tensor in (truncated) new basis.
         """
-        with self.simplifier.simplify(opt.ops.items())() as (zipped, new_ops):
+        exprs = self.simplifier.simplify(opt.ops.items())
+        if self.parallelizer is not None:
+            exprs = self.parallelizer.parallelize(exprs)
+        with exprs() as (zipped, new_ops):
             for op, mat in zipped:
                 if mat == 0:
                     new_ops[op] = 0
                 else:
                     nmat = StackSparseMatrix()
-                    nmat.delta_quantum = mat.delta_quantum
-                    nmat.fermion = mat.fermion
+                    if isinstance(mat, OpShell):
+                        nmat.delta_quantum = mat.data.delta_quantum
+                        nmat.fermion = mat.data.fermion
+                    else:
+                        nmat.delta_quantum = mat.delta_quantum
+                        nmat.fermion = mat.fermion
                     nmat.allocate(new_st)
                     nmat.initialized = True
-                    state_info = VectorStateInfo([old_st, new_st])
-                    tensor_rotate(mat, nmat, state_info, rmat, mat.symm_scale)
+                    if not isinstance(mat, OpShell):
+                        state_info = VectorStateInfo([old_st, new_st])
+                        tensor_rotate(mat, nmat, state_info, rmat, mat.symm_scale)
                     new_ops[op] = nmat
         return opt.__class__(mat=opt.mat, ops=new_ops, tags=opt.tags,
                              contractor=opt.contractor)
@@ -96,7 +105,7 @@ class BlockEvaluation:
         
         Args:
             opt : OperatorTensor
-                One-site operator tensor in (untruncated) old basis.
+                Operator tensor in (untruncated) old basis.
             mpst : Tensor
                 MPS tensor
             mps_info : MPSInfo
@@ -105,8 +114,8 @@ class BlockEvaluation:
                 Site index.
         
         Returns:
-            new_mpo : BlockMPO
-                One-site MPO in (truncated) new basis.
+            new_opt : OperatorTensor
+                Operator tensor in (truncated) new basis.
         """
         old_st = mps_info.left_state_info_no_trunc[i]
         new_st = mps_info.left_state_info[i]
@@ -118,18 +127,18 @@ class BlockEvaluation:
         """Perform rotation <MPS|MPO|MPS> for right block.
         
         Args:
-            mpo : BlockMPO
-                One-site MPO in (untruncated) old basis.
-            mps : MPS
-                One-site MPS.
-            info : MPSInfo
+            opt : OperatorTensor
+                Operator tensor in (untruncated) old basis.
+            mpst : Tensor
+                MPS tensor
+            mps_info : MPSInfo
                 MPSInfo object.
             i : int
                 Site index.
         
         Returns:
-            new_mpo : BlockMPO
-                One-site MPO in (truncated) new basis.
+            new_opt : OperatorTensor
+                Operator tensor in (truncated) new basis.
         """
         old_st = mps_info.right_state_info_no_trunc[i]
         new_st = mps_info.right_state_info[i]
@@ -141,18 +150,20 @@ class BlockEvaluation:
         """Perform blocking MPO x MPO for left block.
         
         Args:
-            mpol: BlockMPO
-                MPO at previous left block.
-            mpo : BlockMPO
-                MPO at dot block.
-            info : MPSInfo
+            optl: OperatorTensor
+                Contracted MPO operator tensor at previous left block.
+            optd : OperatorTensor
+                MPO operator tensor at dot block.
+            mps_info : MPSInfo
                 MPSInfo object.
+            mpo_info : MPOInfo
+                MPOInfo object.
             i : int
                 Site index.
         
         Returns:
-            new_mpo : BlockMPO
-                MPO in untruncated basis in current left block.
+            new_opt : OperatorTensor
+                Operator tensor in untruncated basis in current left block.
         """
         st = mps_info.left_state_info_no_trunc[i]
         op_names = mpo_info.right_operator_names[i]
@@ -162,6 +173,8 @@ class BlockEvaluation:
             zipped = [(op, expr) if op.factor == 1 else (abs(op), expr / op.factor)
                       for op, expr in zip(op_names, new_mat[0, :])]
             exprs = self.simplifier.simplify(zipped)
+            if self.parallelizer is not None:
+                exprs = self.parallelizer.parallelize(exprs, do_partial=True)
             if mpo_info.cache_contraction:
                 mpo_info.cached_exprs[(i, '_LEFT')] = exprs
         with exprs() as (zipped, new_ops):
@@ -176,18 +189,20 @@ class BlockEvaluation:
         """Perform blocking MPO x MPO for right block.
         
         Args:
-            mpor: BlockMPO
-                MPO at previous right block.
-            mpo : BlockMPO
-                MPO at dot block.
-            info : MPSInfo
+            optr: OperatorTensor
+                Contracted MPO operator tensor at previous right block.
+            optd : OperatorTensor
+                MPO operator tensor at dot block.
+            mps_info : MPSInfo
                 MPSInfo object.
+            mpo_info : MPOInfo
+                MPOInfo object.
             i : int
                 Site index.
         
         Returns:
-            new_mpo : BlockMPO
-                MPO in untruncated basis in current right block.
+            new_opt : OperatorTensor
+                Operator tensor in untruncated basis in current right block.
         """
         st = mps_info.right_state_info_no_trunc[i]
         op_names = mpo_info.left_operator_names[i]
@@ -197,6 +212,8 @@ class BlockEvaluation:
             zipped = [(op, expr) if op.factor == 1 else (abs(op), expr / op.factor)
                       for op, expr in zip(op_names, new_mat[:, 0])]
             exprs = self.simplifier.simplify(zipped)
+            if self.parallelizer is not None:
+                exprs = self.parallelizer.parallelize(exprs, do_partial=True)
             if mpo_info.cache_contraction:
                 mpo_info.cached_exprs[(i, '_RIGHT')] = exprs
         with exprs() as (zipped, new_ops):
@@ -207,26 +224,36 @@ class BlockEvaluation:
                               contractor=optd.contractor)
     
     @classmethod
-    def left_right_contract(self, optl, optr):
+    def left_right_contract(self, optl, optr, mpo_info, i, tag):
         """Symbolically construct the super block MPO.
         
         Args:
-            mpol: BlockMPO
-                MPO at (enlarged) left block.
-            mpor : BlockMPO
-                MPO at (enlarged) right block.
-            info : MPSInfo
-                MPSInfo object.
+            optl: OperatorTensor
+                Contracted MPO operator at (enlarged) left block.
+            optr: OperatorTensor
+                Contracted MPO operator at (enlarged) right block.
+            mpo_info : MPOInfo
+                MPOInfo object.
             i : int
                 Site index of first/left dot block.
+            tag : str
+                Extra tag for caching.
         
         Returns:
-            mpo : BlockMPO
-                MPO for super block.
-                This method does not evaluate the super block MPO experssion.
+            new_opt : OperatorTensor
+                Operator tensor for super block.
+                This method does not evaluate the super block operator experssion.
         """
-        new_mat = optl.mat @ optr.mat
-        assert new_mat.shape == (1, 1)
+        exprs = mpo_info.cached_exprs.get((i, tag, '_HAM'), None)
+        if exprs is None:
+            new_mat = optl.mat @ optr.mat
+            assert new_mat.shape == (1, 1)
+            exprs = self.simplifier.simplify([(OpElement(OpNames.H, ()), new_mat[0, 0])])
+            if self.parallelizer is not None:
+                exprs = self.parallelizer.parallelize(exprs, do_partial=True, bcast_all=True)
+            if mpo_info.cache_contraction:
+                mpo_info.cached_exprs[(i, tag, '_HAM')] = exprs
+        new_mat = np.array([[exprs]], dtype=object)
         return optl.__class__(mat=new_mat, ops=(optl.ops, optr.ops),
                               tags={'_HAM'}, contractor=optl.contractor)
     
@@ -237,7 +264,7 @@ class BlockEvaluation:
         The diagonal elements are required for perconditioning in Davidson algorithm.
         
         Args:
-            expr : OpString or OpSum
+            expr : OpString or OpCollection or ParaOpCollection
                 The operator expression to evaluate.
             a : dict(OpElement -> StackSparseMatrix)
                 A map from operator symbol in left block to its matrix representation.
@@ -265,10 +292,14 @@ class BlockEvaluation:
             else:
                 tensor_product_diagonal(a[expr.ops[0]], b[expr.ops[1]], diag, state_info, factor)
             return diag
-        elif isinstance(expr, OpSum):
-            diag = self.expr_diagonal_eval(expr.strings[0], a, b, st)
-            for x in expr.strings[1:]:
-                diag = diag + self.expr_diagonal_eval(x, a, b, st)
+        elif isinstance(expr, OpCollection):
+            with expr() as (zipped, new_ops):
+                (op, expr), = zipped
+                assert op == OpElement(OpNames.H, ())
+                if expr != 0:
+                    for x in expr.strings:
+                        diag = diag + self.expr_diagonal_eval(x, a, b, st)
+                new_ops[op] = diag
             return diag
         else:
             assert False
@@ -279,7 +310,7 @@ class BlockEvaluation:
         Evaluate the result of a symbolic operator expression applied on a wavefunction.
         
         Args:
-            expr : OpString or OpSum
+            expr : OpString or OpCollection or ParaOpCollection
                 The operator expression.
             a : dict(OpElement -> StackSparseMatrix)
                 A map from operator symbol in left block to its matrix representation.
@@ -305,9 +336,14 @@ class BlockEvaluation:
                 aq, bq = a[expr.ops[0]].delta_quantum[0], b[expr.ops[1]].delta_quantum[0]
                 op_q = (aq + bq)[0]
                 tensor_product_multiply(a[expr.ops[0]], b[expr.ops[1]], c, nwave, st, op_q, factor)
-        elif isinstance(expr, OpSum):
-            for x in expr.strings:
-                self.expr_multiply_eval(x, a, b, c, nwave, st)
+        elif isinstance(expr, OpCollection):
+            with expr() as (zipped, new_ops):
+                (op, expr), = zipped
+                assert op == OpElement(OpNames.H, ())
+                if expr != 0:
+                    for x in expr.strings:
+                        self.expr_multiply_eval(x, a, b, c, nwave, st)
+                new_ops[op] = nwave
         else:
             assert False
     
@@ -344,12 +380,7 @@ class BlockEvaluation:
                 nmat = StackSparseMatrix()
                 cq = BlockSymmetry.to_spin_quantum(q_label)
                 nmat.delta_quantum = VectorSpinQuantum([cq])
-                if expr.ops[0] == OpElement(OpNames.I, ()):
-                    nmat.fermion = b[expr.ops[1]].fermion
-                elif expr.ops[1] == OpElement(OpNames.I, ()):
-                    nmat.fermion = a[expr.ops[0]].fermion
-                else:
-                    nmat.fermion = a[expr.ops[0]].fermion ^ b[expr.ops[1]].fermion
+                nmat.fermion = a[expr.ops[0]].fermion ^ b[expr.ops[1]].fermion
                 nmat.allocate(st)
                 nmat.initialized = True
             if expr.ops[0] == OpElement(OpNames.I, ()):
@@ -367,7 +398,14 @@ class BlockEvaluation:
                 nmat = self.expr_eval(x, a, b, st, q_label, nmat)
             return nmat
         else:
-            assert False
+            assert isinstance(expr, OpShell)
+            nmat = StackSparseMatrix()
+            cq = BlockSymmetry.to_spin_quantum(q_label)
+            nmat.delta_quantum = VectorSpinQuantum([cq])
+            nmat.fermion = a[expr.data.ops[0]].fermion ^ b[expr.data.ops[1]].fermion
+            nmat.allocate(st)
+            nmat.initialized = True
+            return nmat
     
     @classmethod
     def eigen_values(self, mat):

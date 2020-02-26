@@ -152,13 +152,13 @@ class MPOInfo:
 
 
 class MPO(TensorNetwork):
-    def __init__(self, hamil):
+    def __init__(self, hamil, iprint=False):
         self.n_sites = hamil.n_sites
         self.hamil = hamil
-        tensors = self._init_mpo_tensors()
+        tensors = self._init_mpo_tensors(iprint=iprint)
         super().__init__(tensors)
     
-    def _init_mpo_tensors(self, symmetrized_p=True):
+    def _init_mpo_tensors(self, iprint, symmetrized_p=True):
         """Generate :attr:`tensors`."""
         tensors = []
         op_h = OpElement(OpNames.H, ())
@@ -166,6 +166,8 @@ class MPO(TensorNetwork):
         op_c = OpElement(OpNames.C, ())
         op_d = OpElement(OpNames.D, ())
         for m in range(self.n_sites):
+            if iprint:
+                print("\r%3d%% " % ((m + 1) * 100 // self.n_sites), end='')
             lshape = 2 + 2 * self.n_sites + 6 * m * m if m != 0 else 1
             rshape = 2 + 2 * self.n_sites + 6 * (m + 1) * (m + 1) if m != self.n_sites - 1 else 1
             mat = np.zeros((lshape, rshape), dtype=object)
