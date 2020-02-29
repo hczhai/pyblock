@@ -39,3 +39,23 @@ class TestDMRGOneSite:
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=tto)
             assert abs(ener - (-107.648250974014)) < 5E-6
         page.clean()
+    
+    def test_n2_sto3g_simpl_exact(self, data_dir, tmp_path):
+        fcidump = 'N2.STO3G.FCIDUMP'
+        pg = 'd2h'
+        page = DMRGDataPage(tmp_path / 'node0')
+        simpl = Simplifier(AllRules())
+        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
+                                  memory=2000, page=page) as hamil:
+            lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
+            lcp.set_bond_dimension(50, exact=True)
+            mps = MPS(lcp, center=0, dot=2)
+            mps.randomize()
+            mps.canonicalize()
+            mpo = MPO(hamil)
+            ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
+            dmrg = DMRG(mpo, mps, bond_dim=[50, 100, 150, 200, 400, 500],
+                        noise=[1E-3, 1E-4, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
+            ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=-1)
+            assert abs(ener - (-107.648250974014)) < 5E-6
+        page.clean()

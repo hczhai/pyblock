@@ -56,16 +56,15 @@ class TestSU2CG:
             for ij, J in enumerate(Js[::-1]):
                 M = SU2Proj.random_from_multi(J)
                 m1 = SU2Proj.random_from_multi(j1)
-                m1.pir = M.pir - 1
-                if abs(m1.jz) <= j1.j:
-                    m2.pir = 1
-                    print(j1, m1, j2, m2, J, M)
+                if abs(M.pir - 1) <= m1.ir:
+                    m1 = SU2Proj(m1.ir, M.pir - 1)
+                    m2 = SU2Proj(m2.ir, 1)
                     cg = SU2.clebsch_gordan(j1, j2, J)[int(m1.jz + j1.j), int(m2.jz + j2.j), int(M.jz + J.j)]
                     x = (-1) ** ij * np.sqrt(0.5 * (1 + (-1) ** ij * float(M.jz / (j1.j + 0.5))))
                     assert np.isclose(cg, x)
-                m1.pir = M.pir + 1
-                if abs(m1.jz) <= j1.j:
-                    m2.pir = -1
+                if abs(M.pir + 1) <= m1.ir:
+                    m1 = SU2Proj(m1.ir, M.pir + 1)
+                    m2 = SU2Proj(m2.ir, -1)
                     cg = SU2.clebsch_gordan(j1, j2, J)[int(m1.jz + j1.j), int(m2.jz + j2.j), int(M.jz + J.j)]
                     x = np.sqrt(0.5 * (1 - (-1) ** ij * float(M.jz / (j1.j + 0.5))))
                     assert np.isclose(cg, x)

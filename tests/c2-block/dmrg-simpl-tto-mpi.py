@@ -1,6 +1,7 @@
 
 # PYTHONPATH=../..:../../build mpirun -n 4 python dmrg-simpl-tto-mpi.py
 # E(dmrg) = -75.728386566258
+# E(dmrg) = -75.72850291326984 (M=750)
 
 
 from pyblock.qchem import *

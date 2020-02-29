@@ -34,6 +34,34 @@ import numpy as np
 import bisect
 import collections
 
+def random_choice(data, m):
+    x = data.sum()
+    if x < 1000000 and m * 100 >= x:
+        ch = np.random.choice(x, m, replace=False)
+        ch.sort()
+    elif m * 10 < x:
+        while True:
+            ch = np.random.choice(x, m * 2, replace=True)
+            ch = np.unique(ch)
+            if len(ch) < m:
+                continue
+#             np.random.shuffle(ch)
+            ch = ch[:m]
+            ch.sort()
+            break
+    else:
+        raise RuntimeError('Number too big for random choice!')
+    r = np.zeros_like(data)
+    ir, ix = 0, 0
+    for i in range(len(r)):
+        pir = ir
+        while ir < m and ch[ir] - ix < data[i]:
+            ir += 1
+        r[i] = ir - pir
+        ix += data[i]
+    assert r.sum() == m
+    return r
+
 class LineCoupling:
     def __init__(self, n_sites, basis, empty, target):
         self.n_sites = n_sites
@@ -55,9 +83,11 @@ class LineCoupling:
                 dd = self.tensor_product(None, self.basis[d])
             else:
                 dd = self.tensor_product(self.left_dims[d - 1], self.basis[d])
-            for k, v in self.left_dims[d].items():
+            for k, v in self.left_dims[d].copy().items():
                 if k in dd and self.left_dims[d][k] > dd[k]:
                     self.left_dims[d][k] = dd[k]
+                elif k not in dd:
+                    del self.left_dims[d][k]
     
     def _post_check_right(self):
         for d in range(self.n_sites - 1, -1, -1):
@@ -65,9 +95,11 @@ class LineCoupling:
                 dd = self.tensor_product(self.basis[d], None)
             else:
                 dd = self.tensor_product(self.basis[d], self.right_dims[d + 1])
-            for k, v in self.right_dims[d].items():
+            for k, v in self.right_dims[d].copy().items():
                 if k in dd and self.right_dims[d][k] > dd[k]:
                     self.right_dims[d][k] = dd[k]
+                elif k not in dd:
+                    del self.right_dims[d][k]
     
     def _fill_from_left(self):
         dim_l = [None] * self.n_sites
@@ -119,7 +151,7 @@ class LineCoupling:
                 else:
                     rd[k] = min(rd[k], x)
     
-    def set_bond_dimension(self, m):
+    def set_bond_dimension(self, m, exact=False):
         """
         Truncate the renormalized basis, using the given bond dimension.
         Note that the ceiling is used for rounding for each quantum number,
@@ -131,13 +163,31 @@ class LineCoupling:
         for i in range(0, self.n_sites):
             x = sum(self.left_dims[i].values())
             if x > m:
-                for k, v in self.left_dims[i].items():
-                    self.left_dims[i][k] = int(np.ceil(v * m / x))
+                if exact:
+                    ch = np.array(list(self.left_dims[i].values()))
+                    ch = random_choice(ch, m)
+                    for ik, k in enumerate(self.left_dims[i].copy().keys()):
+                        if ch[ik] != 0:
+                            self.left_dims[i][k] = ch[ik]
+                        else:
+                            del self.left_dims[i][k]
+                else:
+                    for k, v in self.left_dims[i].items():
+                        self.left_dims[i][k] = int(np.ceil(v * m / x))
         for i in range(self.n_sites - 1, -1, -1):
             x = sum(self.right_dims[i].values())
             if x > m:
-                for k, v in self.right_dims[i].items():
-                    self.right_dims[i][k] = int(np.ceil(v * m / x))
+                if exact:
+                    ch = np.array(list(self.right_dims[i].values()))
+                    ch = random_choice(ch, m)
+                    for ik, k in enumerate(self.right_dims[i].copy().keys()):
+                        if ch[ik] != 0:
+                            self.right_dims[i][k] = ch[ik]
+                        else:
+                            del self.right_dims[i][k]
+                else:
+                    for k, v in self.right_dims[i].items():
+                        self.right_dims[i][k] = int(np.ceil(v * m / x))
         self._post_check_left()
         self._post_check_right()
 

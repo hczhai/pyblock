@@ -15,14 +15,14 @@ page = DMRGDataPage(save_dir='node0')
 memory = 2000
 
 with BlockHamiltonian.get(fcidump='C2.BLOCK.FCIDUMP', pg='d2h', su2=True, output_level=0,
-                          memory=memory, page=page, omp_threads=4) as hamil:
+                          memory=memory, page=page, omp_threads=2) as hamil:
     lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
     lcp.set_bond_dimension(50)
-    mps = MPS(lcp, center=0, dot=2)
+    mps = MPS(lcp, center=0, dot=2, iprint=True)
     mps.randomize()
     mps.canonicalize()
     print('mps ok')
-    mpo = MPO(hamil)
+    mpo = MPO(hamil, iprint=True)
     print('mpo ok')
     ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), Simplifier(AllRules()))
     dmrg = DMRG(mpo, mps, bond_dim=[50, 80, 100, 200, 250], noise=[1E-5, 1E-6, 1E-7, 1E-7, 1E-7, 0], contractor=ctr)

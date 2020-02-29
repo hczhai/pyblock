@@ -72,12 +72,24 @@ class OpElement(OpExpression):
             Quantum label of the operator.
     """
     __slots__ = ['name', 'site_index', 'factor', 'q_label']
+    Cashed = {}
     def __init__(self, name, site_index, factor=1, q_label=None):
-        self.name = name
         assert isinstance(site_index, tuple)
+        factor = float(factor)
+        if (name, site_index, factor, q_label) in self.__class__.Cashed:
+            return
+        self.__class__.Cashed[(name, site_index, factor, q_label)] = self
+        self.name = name
         self.site_index = site_index
-        self.factor = float(factor)
+        self.factor = factor
         self.q_label = q_label
+    
+    def __new__(cls, name, site_index, factor=1, q_label=None, *args, **kwargs):
+        factor = float(factor)
+        if (name, site_index, factor, q_label) in cls.Cashed:
+            return cls.Cashed[(name, site_index, factor, q_label)]
+        else:
+            return super().__new__(cls)
     
     def __repr__(self):
         if self.factor != 1:

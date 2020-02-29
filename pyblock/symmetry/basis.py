@@ -79,6 +79,8 @@ def basis_transform(mat, q_label, old_basis, new_basis):
                 elif tr[1] == "old is proj":
                     found = False
                     for iork_jz in range(0, cgmat.shape[0]):
+                        ork = ork.copy()
+                        orb = orb.copy()
                         ork.jz = -irk.j + iork_jz
                         orb.jz = -irk.j + iork_jz + iq.jz
                         if abs(orb.jz) <= irb.j and \
