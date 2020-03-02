@@ -297,7 +297,7 @@ class BlockEvaluation:
                 (op, expr), = zipped
                 assert op == OpElement(OpNames.H, ())
                 if expr != 0:
-                    for x in expr.strings:
+                    for x in expr.strings if isinstance(expr, OpSum) else [expr]:
                         diag = diag + self.expr_diagonal_eval(x, a, b, st)
                 new_ops[op] = diag
             return diag
@@ -341,7 +341,7 @@ class BlockEvaluation:
                 (op, expr), = zipped
                 assert op == OpElement(OpNames.H, ())
                 if expr != 0:
-                    for x in expr.strings:
+                    for x in expr.strings if isinstance(expr, OpSum) else [expr]:
                         self.expr_multiply_eval(x, a, b, c, nwave, st)
                 new_ops[op] = nwave
         else:
@@ -862,11 +862,11 @@ class BlockHamiltonian:
     
     @staticmethod
     @contextlib.contextmanager
-    def get(fcidump, pg, su2, dot=2, output_level=0, memory=2000, page=None, omp_threads=1):
+    def get(fcidump, pg, su2, dot=2, output_level=0, memory=2000, page=None, omp_threads=1, **kwargs):
         ham = BlockHamiltonian(fcidump=fcidump, point_group=pg,
                                dot=dot, spin_adapted=su2, page=page,
                                output_level=output_level, memory=memory,
-                               omp_threads=omp_threads)
+                               omp_threads=omp_threads, **kwargs)
         try:
             yield ham
         finally:

@@ -20,146 +20,24 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """
-DMRG algorithm.
+Imaginary time evolution algorithm.
 """
 
 from .tensor.tensor import Tensor, TensorNetwork
+from .dmrg import MovingEnvironment
 import time
 from mpi4py import MPI
 
-class DMRGError(Exception):
+class TEError(Exception):
     pass
 
 def pprint(*args, **kwargs):
     if MPI.COMM_WORLD.Get_rank() == 0:
         print(*args, **kwargs)
 
-class MovingEnvironment:
+class ExpoApply:
     """
-    Environment blocks in DMRG.
-    
-    Attributes:
-        n_sites : int
-            Number of sites/orbitals.
-        dot : int
-            Two-dot (2) or one-dot (1) scheme.
-        tnc : TensorNetwork
-            The tensor network <bra|H|ket> before contraction.
-        pos : int
-            Current site position of left dot.
-        envs : dict(int -> TensorNetwork)
-            DMRG Environment for different positions of left dot.
-    """
-    def __init__(self, n_sites, center, dot, tn):
-        self.pos = center
-        self.dot = dot
-        self.n_sites = n_sites
-        self.tnc = tn.copy()
-        self.init_environments()
-    
-    def init_environments(self):
-        """Initialize DMRG Environment blocks by contraction."""
-
-        self.tnc |= Tensor(blocks=None, tags={'_LEFT', '_HAM'})
-        self.tnc |= Tensor(blocks=None, tags={'_RIGHT', '_HAM'})
-        
-        tags_initial = {'_RIGHT'} | set(range(self.n_sites - self.dot, self.n_sites))
-        self.envs = {self.n_sites - self.dot: self.tnc.select(tags_initial, which='any')}
-        
-        # sites inside [env=] are contracted. there is extra one dot site not contracted
-        # i = 0, dot = 1 :: [sys=][sdot=0][env=1,2..]
-        # i = 0, dot = 2 :: [sys=][sdot=0][edot=1][env=2,3..]
-        for i in range(self.n_sites - self.dot - 1, self.pos - 1, -1):
-            pprint("\r Constructing environment .. %3d%% " % ((self.n_sites - self.dot - i) * 100 // self.n_sites),
-                   end="", flush=True)
-            # add a new site to previous env, and contract one site
-            self.envs[i] = self.envs[i + 1].copy()
-            self.envs[i].remove({i}, in_place=True)
-            self.envs[i] |= self.tnc.select(i)
-            self.envs[i] ^= ('_RIGHT', i + self.dot)
-        
-        tags_initial = {'_LEFT'} | set(range(0, self.dot - 1))
-        self.envs[-1] = self.tnc.select(tags_initial, which='any')
-        
-        # i = n - 1, dot = 1 :: [env=..n-2][sdot=n-1][sys=]
-        # i = n - 2, dot = 2 :: [env=..n-3][edot=n-2][sdot=n-1][sys=]
-        for i in range(0, self.pos):
-            pprint("\r Constructing environment .. %3d%% " %
-                   ((self.n_sites - self.dot - self.pos + i + 1) * 100 // self.n_sites),
-                   end="", flush=True)
-            # add a new site to previous env, and contract one site
-            self.envs[i] = self.envs[i - 1].copy()
-            self.envs[i].remove({i + self.dot - 1}, in_place=True)
-            self.envs[i] |= self.tnc.select(i + self.dot - 1)
-            self.envs[i] ^= ('_LEFT', i - 1)
-        
-        self.envs[self.pos] |= (self.envs[self.pos - 1].copy() ^ ('_LEFT', self.pos - 1)).select('_LEFT')
-    
-    def prepare_sweep(self, dot, pos):
-        """Prepare environment for next sweep."""
-        
-        for i in range(self.n_sites - self.dot, self.pos, -1):
-            self.envs[i].remove({'_LEFT'}, in_place=True)
-        
-        for i in range(0, self.pos):
-            self.envs[i].remove({'_RIGHT'}, in_place=True)
-        
-        if dot != self.dot:
-            assert dot == 1 and self.dot == 2
-            self.dot = 1
-            for i in range(self.n_sites - self.dot, self.pos, -1):
-                self.envs[i] = self.envs[i - 1].copy()
-                self.envs[i].remove({'_LEFT'}, in_place=True)
-                self.envs[i].remove({i - 1}, in_place=True)
-            
-            for i in range(0, self.pos):
-                self.envs[i].remove({i + 1}, in_place=True)
-            
-            if pos != self.pos:
-                assert pos == self.n_sites - 1 and self.pos == self.n_sites - 2
-                self.envs[self.n_sites - 1] = self.envs[self.n_sites - 2].copy()
-                self.envs[self.n_sites - 1] ^= ('_LEFT', self.n_sites - 2)
-                self.envs[self.pos].remove({'_RIGHT'}, in_place=True)
-                self.envs[self.pos].remove({self.n_sites - 1}, in_place=True)
-                self.pos = self.n_sites - 1
-            else:
-                self.envs[self.pos] ^= ('_RIGHT', self.pos + self.dot)
-    
-    def move_to(self, i):
-        """
-        Change the current left dot site to ``i`` (by zero or one site).
-        """
-        if i > self.pos:
-            # move right
-            new_sys = self.envs[self.pos].select({'_LEFT', self.pos}, which='any')
-            self.envs[self.pos + 1] |= new_sys.copy() ^ ('_LEFT', self.pos)
-            if self.dot == 2:
-                self.envs[self.pos + 1].remove({self.pos + 1}, in_place=True)
-                self.envs[self.pos + 1] |= self.envs[self.pos].select({self.pos + 1})
-            self.pos += 1
-            if self.dot == 1:
-                return self.envs[self.pos].select({'_LEFT'}) | self.envs[self.pos - 1].select({'_RIGHT'})
-            else:
-                return self.envs[self.pos].select({'_LEFT', self.pos}, which='any') | self.envs[self.pos - 1].select({'_RIGHT'})
-        elif i < self.pos:
-            # move left
-            new_sys = self.envs[self.pos].select({'_RIGHT', self.pos + self.dot - 1}, which='any')
-            self.envs[self.pos - 1] |= new_sys.copy() ^ ('_RIGHT', self.pos + self.dot - 1)
-            if self.dot == 2:
-                self.envs[self.pos - 1].remove({self.pos}, in_place=True)
-                self.envs[self.pos - 1] |= self.envs[self.pos].select({self.pos})
-            self.pos -= 1
-            if self.dot == 1:
-                return self.envs[self.pos].select({'_RIGHT'}) | self.envs[self.pos + 1].select({'_LEFT'})
-            else:
-                return self.envs[self.pos].select({'_RIGHT', self.pos + 1}, which='any') | self.envs[self.pos + 1].select({'_LEFT'})
-    
-    def __call__(self):
-        return self.envs[self.pos]
-
-class DMRG:
-    """
-    DMRG algorithm.
+    Apply exp(beta H) to MPS.
     
     Attributes:
         n_sites : int
@@ -168,17 +46,14 @@ class DMRG:
             Two-dot (2) or one-dot (1) scheme.
         bond_dims : list(int) or int
             Bond dimension for each sweep.
-        noise : list(float) or float
-            Noise prefactor for each sweep.
         energies : list(float)
             Energies collected for all sweeps.
     """
-    def __init__(self, mpo, mps, bond_dim, noise=0.0, contractor=None):
+    def __init__(self, mpo, mps, beta, bond_dim, contractor=None):
         self.n_sites = len(mpo)
         self.dot = mps.dot
         self.center = mps.center
         self.bond_dims = bond_dim if isinstance(bond_dim, list) else [bond_dim]
-        self.noise = noise if isinstance(noise, list) else [noise]
 
         self._k = mps.deep_copy().add_tags({'_KET'})
         self._b = mps.deep_copy().add_tags({'_BRA'})
@@ -196,12 +71,14 @@ class DMRG:
         self._pre_sweep = contractor.pre_sweep if contractor is not None else lambda: None
         self._post_sweep = contractor.post_sweep if contractor is not None else lambda: None
         
+        self.beta = beta
+
         self.rebuild = contractor.rebuild
         
         if not self.rebuild:
             self.construct_envs()
     
-    def update_one_dot(self, i, forward, bond_dim, noise):
+    def update_one_dot(self, i, forward, bond_dim, beta):
         """
         Update local site in one-dot scheme.
         
@@ -212,16 +89,16 @@ class DMRG:
                 Direction of current sweep. If True, sweep is performed from left to right.
             bond_dim : int
                 Bond dimension of current sweep.
-            noise : float
-                Noise prefactor of current sweep.
+            beta : float
+                Time step.
         
         Returns:
             energy : float
                 Ground state energy.
             error : float
                 Sum of discarded weights.
-            ndav : int
-                Number of Davidson iterations.
+            nexpos : (int, int)
+                Number of Expokit iterations.
         """
         
         ctr = self._h[{i, '_HAM'}].contractor
@@ -243,7 +120,7 @@ class DMRG:
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         h_eff.tags |= fuse_tags
         gs_old = self._k[{i, '_KET'}]
-        energy, gs, ndav = ctr.eigs(h_eff, gs_old)
+        energy, gs, nexpo = ctr.expo(h_eff, gs_old, beta)
         
         if not fuse_left and forward:
             gs = ctr.unfuse_right(i, gs)
@@ -257,7 +134,7 @@ class DMRG:
         else:
             limit = ctr.bond_upper_limit_right[i]
         
-        dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
+        dm = gs.get_diag_density_matrix(trace_right=forward)
         
         l_fused, r_fused, error = \
             gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
@@ -265,37 +142,53 @@ class DMRG:
         if forward:
             ctr.update_local_left_mps_info(i, l_fused)
             gs_new = ctr.unfuse_left(i, l_fused)
-            if i + 1 < self.n_sites:
-                self.canonical_form[i:i + 2] = "LC"
-                adj_new = Tensor.contract(r_fused, self._k[{i + 1, '_KET'}], [1], [0])
-                self._k[{i + 1, '_KET'}].modify(adj_new)
-                self._b[{i + 1, '_BRA'}].modify(adj_new)
-                self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_KET'}].modify(adj_new)
-                self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_BRA'}].modify(adj_new)
-            else:
-                self.canonical_form[i] = 'L'
         else:
             ctr.update_local_right_mps_info(i, r_fused)
             gs_new = ctr.unfuse_right(i, r_fused)
-            if i - 1 >= 0:
-                self.canonical_form[i - 1:i + 1] = "CR"
-                adj_new = Tensor.contract(self._k[{i - 1, '_KET'}], l_fused, [2], [0])
-                self._k[{i - 1, '_KET'}].modify(adj_new)
-                self._b[{i - 1, '_BRA'}].modify(adj_new)
-                self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_KET'}].modify(adj_new)
-                self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_BRA'}].modify(adj_new)
-            else:
-                self.canonical_form[i] = 'R'
         
         self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
         self._k[{i, '_KET'}].modify(gs_new)
         self._b[{i, '_BRA'}].modify(gs_new)
         self.eff_ham()[{i, '_KET'}].modify(gs_new)
         self.eff_ham()[{i, '_BRA'}].modify(gs_new)
+ 
+        nexpok = 0
+        if forward:
+            if i + 1 < self.n_sites:
+                self.canonical_form[i:i + 2] = "LC"
+                k_tn = self.eff_ham.move_to(i + 1).add_tags({'_NO_FUSE'})
+                k_eff = (k_tn ^ '_HAM')['_HAM']
+                k_eff.tags |= {'_NO_FUSE'}
+                r_fused.tags |= {i}
+                _, r_back, nexpok = ctr.expo(k_eff, r_fused, -beta)
+                k_tn.remove_tags({'_NO_FUSE'})
+                adj_new = Tensor.contract(r_back, self._k[{i + 1, '_KET'}], [1], [0])
+                self._k[{i + 1, '_KET'}].modify(adj_new)
+                self._b[{i + 1, '_BRA'}].modify(adj_new)
+                self.eff_ham()[{i + 1, '_KET'}].modify(adj_new)
+                self.eff_ham()[{i + 1, '_BRA'}].modify(adj_new)
+            else:
+                self.canonical_form[i] = 'L'
+        else:
+            if i - 1 >= 0:
+                self.canonical_form[i - 1:i + 1] = "CR"
+                k_tn = self.eff_ham.move_to(i - 1).add_tags({'_NO_FUSE'})
+                k_eff = (k_tn ^ '_HAM')['_HAM']
+                k_eff.tags |= {'_NO_FUSE'}
+                l_fused.tags |= {i - 1}
+                _, l_back, nexpok = ctr.expo(k_eff, l_fused, -beta)
+                k_tn.remove_tags({'_NO_FUSE'})
+                adj_new = Tensor.contract(self._k[{i - 1, '_KET'}], l_back, [2], [0])
+                self._k[{i - 1, '_KET'}].modify(adj_new)
+                self._b[{i - 1, '_BRA'}].modify(adj_new)
+                self.eff_ham()[{i - 1, '_KET'}].modify(adj_new)
+                self.eff_ham()[{i - 1, '_BRA'}].modify(adj_new)
+            else:
+                self.canonical_form[i] = 'R'
         
-        return energy, error, ndav
+        return energy, error, (nexpo, nexpok)
     
-    def update_two_dot(self, i, forward, bond_dim, noise):
+    def update_two_dot(self, i, forward, bond_dim, beta):
         """
         Update local sites in two-dot scheme.
         
@@ -306,16 +199,16 @@ class DMRG:
                 Direction of current sweep. If True, sweep is performed from left to right.
             bond_dim : int
                 Bond dimension of current sweep.
-            noise : float
-                Noise prefactor of current sweep.
+            beta : float
+                Temperature step.
         
         Returns:
             energy : float
                 Ground state energy.
             error : float
                 Sum of discarded weights.
-            ndav : int
-                Number of Davidson iterations.
+            nexpos : (int, int)
+                Number of Expokit iterations.
         """
         
         ctr = self._h[{i, '_HAM'}].contractor
@@ -337,14 +230,14 @@ class DMRG:
         
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         gs_old = self.eff_ham()[{i, i + 1, '_KET'}]
-        energy, gs, ndav = ctr.eigs(h_eff, gs_old)
+        energy, gs, nexpo = ctr.expo(h_eff, gs_old, beta)
         
         if forward:
             limit = ctr.bond_upper_limit_left[i]
         else:
             limit = ctr.bond_upper_limit_right[i + 1]
         
-        dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
+        dm = gs.get_diag_density_matrix(trace_right=forward)
         
         l_fused, r_fused, error = \
             gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
@@ -356,10 +249,10 @@ class DMRG:
         
         l = ctr.unfuse_left(i, l_fused)
         r = ctr.unfuse_right(i + 1, r_fused)
-        
+
         self.canonical_form[i] = 'L' if forward else 'C'
         self.canonical_form[i + 1] = 'R' if not forward else 'C'
-            
+
         tn_lr = TensorNetwork(tensors=[l, r])
         tn_lr_ket = tn_lr.copy().add_tags({'_KET'})
         tn_lr_bra = tn_lr.copy().add_tags({'_BRA'})
@@ -367,8 +260,34 @@ class DMRG:
         self._k.replace({i, i + 1}, tn_lr_ket)
         self._b.replace({i, i + 1}, tn_lr_bra)
         self.eff_ham().replace({i, i + 1}, tn_lr_ket | tn_lr_bra)
+
+        nexpok = 0
+        if forward:
+            if i + 1 != self.n_sites - 1:
+                k_tn = self.eff_ham.move_to(i + 1).add_tags({'_FUSE_R'})
+                k_eff = (k_tn ^ '_HAM')['_HAM']
+                k_eff.tags |= {'_FUSE_R'}
+                r_fused.tags |= {i + 1}
+                _, r_fused, nexpok = ctr.expo(k_eff, r_fused, -beta)
+                k_tn.remove_tags({'_FUSE_R'})
+                r = ctr.unfuse_right(i + 1, r_fused)
+                self._k[{i + 1, '_KET'}].modify(r)
+                self._b[{i + 1, '_BRA'}].modify(r)
+                self.eff_ham()[{i + 1, '_KET'}].modify(r)
+        else:
+            if i != 0:
+                k_tn = self.eff_ham.move_to(i - 1).add_tags({'_FUSE_L'})
+                k_eff = (k_tn ^ '_HAM')['_HAM']
+                k_eff.tags |= {'_FUSE_L'}
+                l_fused.tags |= {i}
+                _, l_fused, nexpok = ctr.expo(k_eff, l_fused, -beta)
+                k_tn.remove_tags({'_FUSE_L'})
+                l = ctr.unfuse_left(i, l_fused)
+                self._k[{i, '_KET'}].modify(l)
+                self._b[{i, '_BRA'}].modify(l)
+                self.eff_ham()[{i, '_KET'}].modify(l)
         
-        return energy, error, ndav
+        return energy, error, (nexpo, nexpok)
 
     def construct_envs(self):
         t = time.perf_counter()
@@ -376,7 +295,7 @@ class DMRG:
         self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
         pprint("T = %4.2f" % (time.perf_counter() - t))
 
-    def blocking(self, i, forward, bond_dim, noise):
+    def blocking(self, i, forward, bond_dim, beta):
         """
         Perform one blocking iteration.
         
@@ -402,11 +321,11 @@ class DMRG:
         self.center = i
 
         if self.dot == 1:
-            return self.update_one_dot(i, forward, bond_dim, noise)
+            return self.update_one_dot(i, forward, bond_dim, beta)
         else:
-            return self.update_two_dot(i, forward, bond_dim, noise)
+            return self.update_two_dot(i, forward, bond_dim, beta)
 
-    def sweep(self, forward, bond_dim, noise):
+    def sweep(self, forward, bond_dim, beta):
         """
         Perform one sweep iteration.
         
@@ -444,17 +363,17 @@ class DMRG:
             else:
                 pprint(" %3s Site = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
             t = time.perf_counter()
-            energy, error, ndav = self.blocking(i, forward=forward, bond_dim=bond_dim, noise=noise)
-            pprint("Ndav = %4d E = %15.8f Error = %15.8f T = %4.2f" % (ndav, energy, error, time.perf_counter() - t))
+            energy, error, nexpos = self.blocking(i, forward=forward, bond_dim=bond_dim, beta=beta)
+            pprint("Nexpo = %4d/%4d E = %15.8f Error = %15.8f T = %4.2f" % (nexpos[0], nexpos[1], energy, error, time.perf_counter() - t))
             sweep_energies.append(energy)
         
         self._post_sweep()
 
-        return sorted(sweep_energies)[0]
+        return sweep_energies[-1]
 
-    def solve(self, n_sweeps, tol, forward=True, two_dot_to_one_dot=-1):
+    def solve(self, n_sweeps, forward=True, two_dot_to_one_dot=-1):
         """
-        Perform DMRG algorithm.
+        Perform TDVP time evolution algorithm.
         
         Args:
             n_sweeps : int
@@ -470,20 +389,18 @@ class DMRG:
             energy : float
                 Final ground state energy.
         """
-        converged = False
-
         if len(self.bond_dims) < n_sweeps:
             self.bond_dims.extend([self.bond_dims[-1]] * (n_sweeps - len(self.bond_dims)))
-            
-        if len(self.noise) < n_sweeps:
-            self.noise.extend([self.noise[-1]] * (n_sweeps - len(self.noise)))
         
         start = time.perf_counter()
         
+        current_beta = 0.0
+
         for iw in range(n_sweeps):
 
-            pprint("Sweep = %4d | Direction = %8s | Bond dimension = %4d | Noise = %9.2g"
-                % (iw, "forward" if forward else "backward", self.bond_dims[iw], self.noise[iw]))
+            current_beta += self.beta / 2
+            pprint("Sweep = %4d | Direction = %8s | Bond dimension = %4d | Beta = %9.2g"
+                % (iw, "forward" if forward else "backward", self.bond_dims[iw], current_beta))
             
             if two_dot_to_one_dot == iw:
                 assert self.dot == 2
@@ -491,18 +408,13 @@ class DMRG:
                 if self.center != 0 and self.center == self.n_sites - 2:
                     self.center = self.n_sites - 1
 
-            energy = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], noise=self.noise[iw])
+            energy = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], beta=self.beta / 2)
             self.energies.append(energy)
-
-            converged = (len(self.energies) >= 2 and tol is not None
-                and abs(self.energies[-1] - self.energies[-2]) < tol
-                and self.noise[iw] == self.noise[-1] and self.bond_dims[iw] == self.bond_dims[-1])
 
             forward = not forward
             
             pprint('Time elapsed = %10.2f' % (time.perf_counter() - start))
-            
-            if converged:
-                break
+            if iw % 2 == 1:
+                pprint('Beta = %10.5f Energy = %15.8f' % (current_beta, energy))
         
         return energy

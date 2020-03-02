@@ -374,7 +374,7 @@ class DMRGContractor:
         elif dir == '_HAM':
             dot = len(tn) - 2
             ts = sorted(tn.tensors, key=self._tag_site)
-            assert (dot == 2) ^ ('_FUSE_L' in ts[1].tags or '_FUSE_R' in ts[1].tags)
+            assert (dot == 2) ^ ('_FUSE_L' in ts[1].tags or '_FUSE_R' in ts[1].tags or '_NO_FUSE' in ts[1].tags)
             if dot == 2:
                 if self._tag_site(ts[0]) != -1:
                     self.page.activate({self._tag_site(ts[1]), '_LEFT'}, reset=True)
@@ -416,6 +416,11 @@ class DMRGContractor:
                     self.page.unload({self._tag_site(ts[2]), '_RIGHT'})
                 else:
                     ham_right = ts[1]
+            elif '_NO_FUSE' in ts[1].tags:
+                self.page.load({self._tag_site(ts[0]), '_LEFT'})
+                self.page.load({self._tag_site(ts[1]), '_RIGHT'})
+                ham_left = ts[0]
+                ham_right = ts[1]
             self.page.activate({'_BASE'}, reset=False)
             if dot == 2:
                 tag = '_FUSE_LR'
@@ -423,6 +428,8 @@ class DMRGContractor:
                 tag = '_FUSE_L'
             elif '_FUSE_R' in ts[1].tags:
                 tag = '_FUSE_R'
+            elif '_NO_FUSE' in ts[1].tags:
+                tag = '_NO_FUSE'
             return BlockEvaluation.left_right_contract(ham_left, ham_right, self.mpo_info, self._tag_site(ts[1]), tag)
         elif dir == '_KET':
             ts = sorted(tn.tensors, key=self._tag_site)
@@ -539,6 +546,9 @@ class BlockMultiplyH:
     def diag(self):
         """Returns Diagonal elements (for preconditioning)."""
         return self.diag_mat
+    
+    def diag_norm(self):
+        return np.linalg.norm(self.diag().ref)
     
     def apply(self, other, result):
         """

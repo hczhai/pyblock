@@ -161,10 +161,6 @@ class MPO(TensorNetwork):
     def _init_mpo_tensors(self, iprint, symmetrized_p=True):
         """Generate :attr:`tensors`."""
         tensors = []
-        op_h = OpElement(OpNames.H, ())
-        op_i = OpElement(OpNames.I, ())
-        op_c = OpElement(OpNames.C, ())
-        op_d = OpElement(OpNames.D, ())
         for m in range(self.n_sites):
             if iprint:
                 print("\r%3d%% " % ((m + 1) * 100 // self.n_sites), end='')

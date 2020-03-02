@@ -106,6 +106,9 @@ class Matrix:
         """Diagonal elements."""
         return np.diag(self.data)
     
+    def diag_norm(self):
+        return np.linalg.norm(self.diag())
+    
     def apply(self, other, result):
         """
         Perform :math:`\\hat{H}|\\psi\\rangle`.
