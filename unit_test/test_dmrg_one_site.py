@@ -2,7 +2,7 @@
 from pyblock.qchem import BlockHamiltonian, LineCoupling, DMRGContractor
 from pyblock.qchem import MPSInfo, MPOInfo, MPS, MPO
 from pyblock.qchem import DMRGDataPage, Simplifier, AllRules
-from pyblock.dmrg import DMRG
+from pyblock.algorithm import DMRG
 
 import numpy as np
 import pytest

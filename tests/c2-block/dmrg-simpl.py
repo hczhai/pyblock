@@ -4,7 +4,7 @@
 
 
 from pyblock.qchem import *
-from pyblock.dmrg import DMRG
+from pyblock.algorithm import DMRG
 import numpy as np
 import time
 t = time.perf_counter()

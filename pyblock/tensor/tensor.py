@@ -725,6 +725,10 @@ class Tensor:
         for b in self.blocks:
             r += (b.reduced * b.reduced).sum()
         return np.sqrt(r)
+    
+    def to_scalar(self):
+        assert len(self.blocks) == 1 and self.blocks[0].reduced.size == 1
+        return self.blocks[0].reduced.reshape((1, ))[0]
 
     # split rank-2 block-diagonal Tensor to two tensors
     # using svd
@@ -862,6 +866,11 @@ class Tensor:
     def set_tags(self, tags):
         """Change the tags, return ``self`` for chain notation."""
         self.tags = tags
+        return self
+    
+    def add_tags(self, tags):
+        """Add the tags, return ``self`` for chain notation."""
+        self.tags |= tags
         return self
 
     def set_contractor(self, contractor):

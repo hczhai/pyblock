@@ -3,7 +3,7 @@
 
 from pyblock.qchem import *
 from pyblock.qchem.ancilla import *
-from pyblock.time_evolution import ExpoApply
+from pyblock.algorithm import ExpoApply
 import numpy as np
 
 np.random.seed(3)

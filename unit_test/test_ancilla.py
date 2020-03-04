@@ -3,8 +3,7 @@ from pyblock.qchem import BlockHamiltonian, DMRGContractor
 from pyblock.qchem import MPSInfo, IdentityMPOInfo, IdentityMPO
 from pyblock.qchem import DMRGDataPage, Simplifier, AllRules, NoTransposeRules
 from pyblock.qchem.ancilla import LineCoupling, MPOInfo, MPS, MPO
-from pyblock.time_evolution import ExpoApply
-from pyblock.compress import Compress
+from pyblock.algorithm import ExpoApply, Compress
 
 import numpy as np
 import pytest
@@ -15,6 +14,10 @@ import os
 def data_dir(request):
     filename = request.module.__file__
     return os.path.join(os.path.dirname(filename), 'data')
+
+@pytest.fixture(scope="module", params=[1, 2, 3, 4])
+def dot_scheme(request):
+    return request.param
 
 class TestDMRGOneSite:
     def test_hubbard_ancilla(self, data_dir, tmp_path):
@@ -37,7 +40,7 @@ class TestDMRGOneSite:
             assert abs(ener - (-5.76826262)) < 1E-3
         page.clean()
     
-    def test_hubbard_nnn_ancilla(self, data_dir, tmp_path):
+    def test_hubbard_nnn_ancilla(self, data_dir, tmp_path, dot_scheme):
         fcidump = 'HUBBARD-L8-U2-NNN.FCIDUMP'
         pg = 'c1'
         page = DMRGDataPage(tmp_path / 'node0', n_frames=2)
@@ -53,10 +56,10 @@ class TestDMRGOneSite:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(bdims)
             # MPS
-            mps_thermal = MPS(lcp_thermal, center=0, dot=2, iprint=True)
+            mps_thermal = MPS(lcp_thermal, center=0, dot=1 if dot_scheme == 1 else 2, iprint=True)
             mps_thermal.fill_thermal_limit()
             mps_thermal.canonicalize()
-            mps = MPS(lcp, center=0, dot=2, iprint=True)
+            mps = MPS(lcp, center=0, dot=1 if dot_scheme == 1 else 2, iprint=True)
             mps.randomize()
             mps.canonicalize()
             mps_info_thermal = MPSInfo(lcp_thermal)
@@ -78,7 +81,8 @@ class TestDMRGOneSite:
             mps0.set_contractor(None)
             mps0_form = cps.bra_canonical_form
             ctr = DMRGContractor(mps_info, mpo_info, Simplifier(AllRules()))
+            tto = dot_scheme if dot_scheme >= 3 else -1
             te = ExpoApply(mpo, mps0, bond_dims=bdims, beta=beta, contractor=ctr, canonical_form=mps0_form)
-            ener = te.solve(10, forward=cps.forward)
-            assert abs(ener - (-8.30251649)) <= 1E-3
+            ener = te.solve(10, forward=cps.forward, two_dot_to_one_dot=tto)
+            assert abs(ener - (-8.30251649)) <= 5E-3
 

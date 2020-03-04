@@ -32,8 +32,7 @@ from block.data_page import load_data_page, save_data_page
 from block.data_page import set_data_page_pointer, get_data_page_pointer
 
 from ..tensor.tensor import Tensor, SubTensor
-from ..davidson import davidson
-from ..expo import expo
+from ..numerical import davidson, expo
 from .core import BlockHamiltonian, BlockEvaluation, BlockSymmetry
 from .simplifier import NoSimplifier
 import numpy as np
@@ -263,7 +262,7 @@ class DMRGContractor:
         
         bbwfn.deallocate()
         
-        return norm, v, 0
+        return norm, v, 1
     
     def expo_apply(self, opt, mpst, beta):
         
@@ -385,10 +384,10 @@ class DMRGContractor:
         mps_info = self._get_mps_info(tensor.tags)
         st_l = mps_info.left_state_info_no_trunc[i]
         stlq = BlockSymmetry.from_state_info(st_l)
-        if original_form == 'L':
+        if original_form in ['L', 'K']:
             tensor.fuse_index(0, dict(stlq), equal=True)
         else:
-            if original_form == 'R':
+            if original_form in ['R', 'S']:
                 for block in tensor.blocks:
                     assert block.q_labels[0] == mps_info.lcp.target
                     block.q_labels = (mps_info.lcp.empty, ) + block.q_labels[1:]
@@ -398,10 +397,10 @@ class DMRGContractor:
         mps_info = self._get_mps_info(tensor.tags)
         st_r = mps_info.right_state_info_no_trunc[i]
         strq = BlockSymmetry.from_state_info(st_r)
-        if original_form == 'R':
+        if original_form in ['R', 'S']:
             tensor.fuse_index(1, dict(strq), equal=True)
         else:
-            if original_form == 'L':
+            if original_form in ['L', 'K']:
                 for block in tensor.blocks:
                     assert block.q_labels[2] == mps_info.lcp.target
                     block.q_labels = block.q_labels[:2] + (mps_info.lcp.empty, )

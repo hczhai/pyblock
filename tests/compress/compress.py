@@ -4,8 +4,7 @@
 # E = -12.966715281726584 (L16)
 
 from pyblock.qchem import *
-from pyblock.dmrg import DMRG
-from pyblock.compress import Compress
+from pyblock.algorithm import DMRG, Compress
 
 page = DMRGDataPage(save_dir='node0', n_frames=2)
 bond_dim = 100

@@ -5,7 +5,7 @@
 
 
 from pyblock.qchem import *
-from pyblock.dmrg import DMRG
+from pyblock.algorithm import DMRG
 from mpi4py import MPI
 import numpy as np
 import time

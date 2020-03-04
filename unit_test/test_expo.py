@@ -1,6 +1,6 @@
 
-from pyblock.davidson import Vector, Matrix
-from pyblock.expo import expo
+from pyblock.numerical.davidson import Vector, Matrix
+from pyblock.numerical import expo
 
 import numpy as np
 import pytest

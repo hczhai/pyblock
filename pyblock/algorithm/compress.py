@@ -18,18 +18,21 @@
 #
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+#    Author: Seunghoon Lee, Huanchen Zhai
+#
 
 """
 Compression algorithm.
 """
 
-from .tensor.tensor import Tensor, TensorNetwork
+from ..tensor.tensor import Tensor, TensorNetwork
 from .dmrg import MovingEnvironment
 import time
 from mpi4py import MPI
 import numpy as np
 
-class CompressError(Exception):
+class CompressionError(Exception):
     pass
 
 def pprint(*args, **kwargs):
@@ -38,7 +41,7 @@ def pprint(*args, **kwargs):
         
 class Compress:
     """
-    Compression.
+    Compression after apply MPO on MPS.
     
     Attributes:
         n_sites : int
@@ -84,6 +87,125 @@ class Compress:
         if not self.rebuild:
             self.construct_envs()
     
+    def update_one_dot(self, i, forward, bond_dim, noise, beta):
+        """
+        Update local sites in one-dot scheme.
+        
+        Args:
+            i : int
+                Site index of left dot
+            forward : bool
+                Direction of current sweep. If True, sweep is performed from left to right.
+            bond_dim : int
+                Bond dimension of current sweep.
+            beta : float
+                Not used.
+        
+        Returns:
+            norm : float
+                Norm of compressed state.
+            error : float
+                Sum of discarded weights.
+            nexpos : (int, int)
+                Number of operator multiplication steps.
+        """
+        ctr = self._h[{i, '_HAM'}].contractor
+        
+        if ctr is None:
+            raise CompressionError('Need a contractor for updating local site!')
+        
+        fuse_left = i <= self.n_sites // 2
+        fuse_tags = {'_FUSE_L'} if fuse_left else {'_FUSE_R'}
+        
+        for kb, tag, cf in [(self._k, '_KET', self.ket_canonical_form), (self._b, '_BRA', self.bra_canonical_form)]:
+            kb[{i, tag}].contractor = ctr
+            if fuse_left:
+                ctr.fuse_left(i, kb[{i, tag}], cf[i])
+            else:
+                ctr.fuse_right(i, kb[{i, tag}], cf[i])
+        
+        self.eff_ham()[{i, '_HAM'}].tags |= fuse_tags
+        h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
+        h_eff.tags |= fuse_tags
+        psi_ket = self._k[{i, '_KET'}]
+        energy, psi_bra, nexpo = ctr.apply(h_eff, psi_ket)
+
+        if not fuse_left and forward:
+            psi_bra = ctr.unfuse_right(i, psi_bra.add_tags({'_BRA'})).add_tags({'_BRA'})
+            ctr.fuse_left(i, psi_bra, self.bra_canonical_form[i])
+            psi_ket = ctr.unfuse_right(i, psi_ket.add_tags({'_KET'})).add_tags({'_KET'})
+            ctr.fuse_left(i, psi_ket, self.ket_canonical_form[i])
+        elif fuse_left and not forward:
+            psi_bra = ctr.unfuse_left(i, psi_bra.add_tags({'_BRA'})).add_tags({'_BRA'})
+            ctr.fuse_right(i, psi_bra, self.bra_canonical_form[i])
+            psi_ket = ctr.unfuse_left(i, psi_ket.add_tags({'_KET'})).add_tags({'_KET'})
+            ctr.fuse_right(i, psi_ket, self.ket_canonical_form[i])
+        
+        if forward:
+            ket_limit = ctr.bond_left({'_KET'})[i]
+            bra_limit = ctr.bond_upper_limit_left({'_BRA'})[i]
+        else:
+            ket_limit = ctr.bond_right({'_KET'})[i]
+            bra_limit = ctr.bond_upper_limit_right({'_BRA'})[i]
+        
+        dm_ket = psi_ket.get_diag_density_matrix(trace_right=forward)
+        l_fused_ket, r_fused_ket, error_ket = \
+            psi_ket.split_using_density_matrix(dm_ket, absorb_right=forward, k=-1, limit=ket_limit)
+        assert np.isclose(error_ket, 0.0)
+        
+        dm_bra = psi_bra.get_diag_density_matrix(trace_right=forward, noise=noise)
+        l_fused_bra, r_fused_bra, error_bra = \
+            psi_bra.split_using_density_matrix(dm_bra, absorb_right=forward, k=bond_dim, limit=bra_limit)
+        
+        TensorNetwork(tensors=[l_fused_bra, r_fused_bra]).add_tags({'_BRA'})
+        TensorNetwork(tensors=[l_fused_ket, r_fused_ket]).add_tags({'_KET'})
+        
+        if forward:
+            ctr.update_local_left_mps_info(i, l_fused_bra)
+            ctr.update_local_left_mps_info(i, l_fused_ket)
+        else:
+            ctr.update_local_right_mps_info(i, r_fused_bra)
+            ctr.update_local_right_mps_info(i, r_fused_ket)
+        
+        if forward:
+            l_bra = ctr.unfuse_left(i, l_fused_bra)
+            l_ket = ctr.unfuse_left(i, l_fused_ket)
+            if i + 1 < self.n_sites:
+                self.bra_canonical_form[i:i + 2] = self.ket_canonical_form[i:i + 2] = "LC"
+                adj_bra = Tensor.contract(r_fused_bra, self._b[{i + 1, '_BRA'}], [1], [0])
+                adj_ket = Tensor.contract(r_fused_ket, self._k[{i + 1, '_KET'}], [1], [0])
+                self._b[{i + 1, '_BRA'}].modify(adj_bra)
+                self._k[{i + 1, '_KET'}].modify(adj_ket)
+                self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_BRA'}].modify(adj_bra)
+                self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_KET'}].modify(adj_ket)
+            else:
+                l_bra *= r_fused_bra.to_scalar()
+                l_ket *= r_fused_ket.to_scalar()
+                self.bra_canonical_form[i] = self.ket_canonical_form[i] = 'K'
+        else:
+            r_bra = ctr.unfuse_right(i, r_fused_bra)
+            r_ket = ctr.unfuse_right(i, r_fused_ket)
+            if i - 1 >= 0:
+                self.bra_canonical_form[i - 1:i + 1] = self.ket_canonical_form[i - 1:i + 1] = "CR"
+                adj_bra = Tensor.contract(self._b[{i - 1, '_BRA'}], l_fused_bra, [2], [0])
+                adj_ket = Tensor.contract(self._k[{i - 1, '_KET'}], l_fused_ket, [2], [0])
+                self._b[{i - 1, '_BRA'}].modify(adj_bra)
+                self._k[{i - 1, '_KET'}].modify(adj_ket)
+                self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_BRA'}].modify(adj_bra)
+                self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_KET'}].modify(adj_ket)
+            else:
+                r_bra *= l_fused_bra.to_scalar()
+                r_ket *= l_fused_ket.to_scalar()
+                self.bra_canonical_form[i] = self.ket_canonical_form[i] = 'S'
+        
+        self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
+        self._b[{i, '_BRA'}].modify(l_bra if forward else r_bra)
+        self._k[{i, '_KET'}].modify(l_ket if forward else r_ket)
+        self.eff_ham()[{i, '_BRA'}].modify(l_bra if forward else r_bra)
+        self.eff_ham()[{i, '_KET'}].modify(l_ket if forward else r_ket)
+        
+        return energy, error_bra, nexpo
+    
     def update_two_dot(self, i, forward, bond_dim, noise, beta):
         """
         Update local sites in two-dot scheme.
@@ -110,7 +232,7 @@ class Compress:
         ctr = self._h[{i, '_HAM'}].contractor
         
         if ctr is None:
-            raise CompressError('Need a contractor for updating local site!')
+            raise CompressionError('Need a contractor for updating local site!')
         
         for kb, tag, cf in [(self._k, '_KET', self.ket_canonical_form), (self._b, '_BRA', self.bra_canonical_form)]:
             if len(kb.select({i, i + 1, tag}, which='exact')) == 0:
@@ -259,7 +381,7 @@ class Compress:
 
     def solve(self, n_sweeps, tol, forward=True, two_dot_to_one_dot=-1):
         """
-        Perform DMRG algorithm.
+        Perform Compression algorithm.
         
         Args:
             n_sweeps : int
@@ -312,4 +434,3 @@ class Compress:
         
         self.forward = forward
         return energy
-

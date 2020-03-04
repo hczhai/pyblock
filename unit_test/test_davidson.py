@@ -1,5 +1,5 @@
 
-from pyblock.davidson import Vector, Matrix, davidson
+from pyblock.numerical.davidson import Vector, Matrix, davidson
 
 import numpy as np
 import pytest

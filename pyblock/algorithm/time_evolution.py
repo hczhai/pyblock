@@ -23,7 +23,7 @@
 Imaginary time evolution algorithm.
 """
 
-from .tensor.tensor import Tensor, TensorNetwork
+from ..tensor.tensor import Tensor, TensorNetwork
 from .dmrg import MovingEnvironment
 import time
 from mpi4py import MPI
@@ -103,6 +103,8 @@ class ExpoApply:
         Returns:
             energy : float
                 Energy of state exp(-beta H) |psi>.
+            normsq : float
+                Self inner product of state exp(-beta H) |psi>.
             error : float
                 Sum of discarded weights.
             nexpos : (int, int)
@@ -129,7 +131,7 @@ class ExpoApply:
         h_eff.tags |= fuse_tags
         ket = self._k[{i, '_KET'}]
         
-        energy, bra, nexpo = ctr.expo_apply(h_eff, ket, beta)
+        energy, normsq, bra, nexpo = ctr.expo_apply(h_eff, ket, beta)
         
         if not fuse_left and forward:
             bra = ctr.unfuse_right(i, bra)
@@ -155,6 +157,11 @@ class ExpoApply:
             ctr.update_local_right_mps_info(i, r_fused)
             bra_new = ctr.unfuse_right(i, r_fused)
         
+        if forward and i == self.n_sites - 1:
+            bra_new *= r_fused.to_scalar()
+        elif not forward and i == 0:
+            bra_new *= l_fused.to_scalar()
+        
         self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
         self._k[{i, '_KET'}].modify(bra_new)
         self._b[{i, '_BRA'}].modify(bra_new)
@@ -169,7 +176,7 @@ class ExpoApply:
                 k_eff = (k_tn ^ '_HAM')['_HAM']
                 k_eff.tags |= {'_NO_FUSE'}
                 r_fused.tags |= {i}
-                _, r_back, nexpok = ctr.expo_apply(k_eff, r_fused, -beta)
+                _, _, r_back, nexpok = ctr.expo_apply(k_eff, r_fused, -beta)
                 k_tn.remove_tags({'_NO_FUSE'})
                 adj_new = Tensor.contract(r_back, self._k[{i + 1, '_KET'}], [1], [0])
                 self._k[{i + 1, '_KET'}].modify(adj_new)
@@ -177,7 +184,7 @@ class ExpoApply:
                 self.eff_ham()[{i + 1, '_KET'}].modify(adj_new)
                 self.eff_ham()[{i + 1, '_BRA'}].modify(adj_new)
             else:
-                self.canonical_form[i] = 'L'
+                self.canonical_form[i] = 'K' # L form but times a scalar
         else:
             if i - 1 >= 0:
                 self.canonical_form[i - 1:i + 1] = "CR"
@@ -185,7 +192,7 @@ class ExpoApply:
                 k_eff = (k_tn ^ '_HAM')['_HAM']
                 k_eff.tags |= {'_NO_FUSE'}
                 l_fused.tags |= {i - 1}
-                _, l_back, nexpok = ctr.expo(k_eff, l_fused, -beta)
+                _, _, l_back, nexpok = ctr.expo_apply(k_eff, l_fused, -beta)
                 k_tn.remove_tags({'_NO_FUSE'})
                 adj_new = Tensor.contract(self._k[{i - 1, '_KET'}], l_back, [2], [0])
                 self._k[{i - 1, '_KET'}].modify(adj_new)
@@ -193,9 +200,9 @@ class ExpoApply:
                 self.eff_ham()[{i - 1, '_KET'}].modify(adj_new)
                 self.eff_ham()[{i - 1, '_BRA'}].modify(adj_new)
             else:
-                self.canonical_form[i] = 'R'
+                self.canonical_form[i] = 'S' # R form but times a scalar
         
-        return energy, error, (nexpo, nexpok)
+        return energy, normsq, error, (nexpo, nexpok)
     
     def update_two_dot(self, i, forward, bond_dim, beta):
         """
@@ -223,7 +230,7 @@ class ExpoApply:
         """
         
         ctr = self._h[{i, '_HAM'}].contractor
-        
+            
         if ctr is None:
             raise TimeEvolutionError('Need a contractor for updating local site!')
         
@@ -271,7 +278,7 @@ class ExpoApply:
         self._k.replace({i, i + 1}, tn_lr_ket)
         self._b.replace({i, i + 1}, tn_lr_bra)
         self.eff_ham().replace({i, i + 1}, tn_lr_ket | tn_lr_bra)
-
+        
         nexpok = 0
         if forward:
             if i + 1 != self.n_sites - 1:
@@ -432,8 +439,14 @@ class ExpoApply:
             if iw % 2 == 1:
                 pprint('Beta = %10.5f Energy = %15.8f Norm^2 = %15.8f' % (current_beta, energy, normsq))
             
-            assert self.canonical_form.count('C') == 1
-            cc = self.canonical_form.index('C')
+            if self.canonical_form.count('C') != 0:
+                cc = self.canonical_form.index('C')
+            elif self.canonical_form.count('K') != 0:
+                cc = self.canonical_form.index('K')
+            elif self.canonical_form.count('S') != 0:
+                cc = self.canonical_form.index('S')
+            else:
+                raise TimeEvolutionError('Unknown canonical form!!')
             normalized = self._k[{cc, '_KET'}] * (1 / np.sqrt(normsq))
             self._k[{cc, '_KET'}].modify(normalized)
             self._b[{cc, '_BRA'}].modify(normalized)

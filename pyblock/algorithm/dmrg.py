@@ -23,7 +23,7 @@
 DMRG algorithm.
 """
 
-from .tensor.tensor import Tensor, TensorNetwork
+from ..tensor.tensor import Tensor, TensorNetwork
 import time
 from mpi4py import MPI
 
@@ -62,10 +62,12 @@ class MovingEnvironment:
 
         self.tnc |= Tensor(blocks=None, tags={'_LEFT', '_HAM'})
         self.tnc |= Tensor(blocks=None, tags={'_RIGHT', '_HAM'})
-        
-        tags_initial = {'_RIGHT'} | set(range(self.n_sites - self.dot, self.n_sites))
-        self.envs = {self.n_sites - self.dot: self.tnc.select(tags_initial, which='any')}
-        
+
+        self.envs = {}
+        for i in range(1, self.dot + 1):
+            tags_initial = {'_RIGHT'} | set(range(self.n_sites - i, self.n_sites))
+            self.envs[self.n_sites - i] = self.tnc.select(tags_initial, which='any')
+
         # sites inside [env=] are contracted. there is extra one dot site not contracted
         # i = 0, dot = 1 :: [sys=][sdot=0][env=1,2..]
         # i = 0, dot = 2 :: [sys=][sdot=0][edot=1][env=2,3..]
@@ -77,10 +79,10 @@ class MovingEnvironment:
             self.envs[i].remove({i}, in_place=True)
             self.envs[i] |= self.tnc.select(i)
             self.envs[i] ^= ('_RIGHT', i + self.dot)
-        
+
         tags_initial = {'_LEFT'} | set(range(0, self.dot - 1))
         self.envs[-1] = self.tnc.select(tags_initial, which='any')
-        
+
         # i = n - 1, dot = 1 :: [env=..n-2][sdot=n-1][sys=]
         # i = n - 2, dot = 2 :: [env=..n-3][edot=n-2][sdot=n-1][sys=]
         for i in range(0, self.pos):
@@ -98,21 +100,21 @@ class MovingEnvironment:
     def prepare_sweep(self, dot, pos):
         """Prepare environment for next sweep."""
         
-        for i in range(self.n_sites - self.dot, self.pos, -1):
+        for i in range(self.n_sites - 1, self.pos, -1):
             self.envs[i].remove({'_LEFT'}, in_place=True)
         
-        for i in range(0, self.pos):
+        for i in range(-1, self.pos):
             self.envs[i].remove({'_RIGHT'}, in_place=True)
         
         if dot != self.dot:
             assert dot == 1 and self.dot == 2
             self.dot = 1
-            for i in range(self.n_sites - self.dot, self.pos, -1):
+            for i in range(self.n_sites - 1, self.pos, -1):
                 self.envs[i] = self.envs[i - 1].copy()
                 self.envs[i].remove({'_LEFT'}, in_place=True)
                 self.envs[i].remove({i - 1}, in_place=True)
             
-            for i in range(0, self.pos):
+            for i in range(-1, self.pos):
                 self.envs[i].remove({i + 1}, in_place=True)
             
             if pos != self.pos:
@@ -273,7 +275,8 @@ class DMRG:
                 self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_KET'}].modify(adj_new)
                 self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_BRA'}].modify(adj_new)
             else:
-                self.canonical_form[i] = 'L'
+                gs_new *= r_fused.to_scalar()
+                self.canonical_form[i] = 'K'
         else:
             ctr.update_local_right_mps_info(i, r_fused)
             gs_new = ctr.unfuse_right(i, r_fused)
@@ -285,7 +288,8 @@ class DMRG:
                 self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_KET'}].modify(adj_new)
                 self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_BRA'}].modify(adj_new)
             else:
-                self.canonical_form[i] = 'R'
+                gs_new *= l_fused.to_scalar()
+                self.canonical_form[i] = 'S'
         
         self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
         self._k[{i, '_KET'}].modify(gs_new)

@@ -3,8 +3,7 @@
 
 from pyblock.qchem import *
 from pyblock.qchem.ancilla import *
-from pyblock.time_evolution import ExpoApply
-from pyblock.compress import Compress
+from pyblock.algorithm import ExpoApply, Compress
 import numpy as np
 
 np.random.seed(3)
@@ -22,6 +21,7 @@ opts = dict(
 
 bdims = 50
 beta = 0.02
+dot = 2
 simpl = Simplifier(AllRules())
 # simpl = None
 
@@ -40,10 +40,10 @@ with BlockHamiltonian.get(**opts) as hamil:
     print('right min dims = ', [len(p) for p in lcp.right_dims_fci])
     
     # MPS
-    mps_thermal = MPS(lcp_thermal, center=0, dot=2, iprint=True)
+    mps_thermal = MPS(lcp_thermal, center=0, dot=dot, iprint=True)
     mps_thermal.fill_thermal_limit()
     mps_thermal.canonicalize()
-    mps = MPS(lcp, center=0, dot=2, iprint=True)
+    mps = MPS(lcp, center=0, dot=dot, iprint=True)
     mps.randomize()
     mps.canonicalize()
     mps_info_thermal = MPSInfo(lcp_thermal)
