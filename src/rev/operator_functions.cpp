@@ -43,9 +43,10 @@ void TensorTraceElement(const StackSparseMatrix &a, StackSparseMatrix &c,
 
     int aq, aqprime, bq, bqprime, bstates;
     
-    const StateInfo *ls = state_info[0].get();
-    const StateInfo *rs = state_info[1].get();
-    const StateInfo *cs = state_info[2].get();
+    assert(state_info.size() == 1);
+    const StateInfo *cs = state_info[0].get();
+    const StateInfo *ls = cs->leftStateInfo;
+    const StateInfo *rs = cs->rightStateInfo;
     
     const char conjC = trace_right ? 'n' : 't';
     const std::vector<int> oldToNewI = cs->oldToNewState.at(cq);
@@ -177,8 +178,8 @@ void TensorTraceDiagonal(const StackSparseMatrix &a, DiagonalMatrix &c,
     
     assert(a.get_initialised());
     
-    const StateInfo *ls = state_info[0].get(), *rs = state_info[1].get();
-    const StateInfo *cs = state_info[2].get();
+    const StateInfo *cs = state_info[0].get();
+    const StateInfo *ls = state_info[0]->leftStateInfo, *rs = state_info[0]->rightStateInfo;
 
     for (int aq = 0; aq < ls->quanta.size(); ++aq)
         if (!trace_right || a.allowed(aq, aq))
@@ -259,18 +260,29 @@ void TensorProductElement(const StackSparseMatrix &a, const StackSparseMatrix &b
     if (fabs(scale) < TINY)
         return;
 
-    const StateInfo *ketstateinfo = state_info[2].get(),
-                    *brastateinfo = state_info[2].get();
+    const StateInfo *brastateinfo, *ketstateinfo;
+    const StateInfo *lbraS, *rbraS, *lketS, *rketS;
+    
+    if (state_info.size() == 1) {
+        // same bra/ket case
+        brastateinfo = ketstateinfo = state_info[0].get();
+        lbraS = lketS = ketstateinfo->leftStateInfo;
+        rbraS = rketS = ketstateinfo->rightStateInfo;
+    } else {
+        // different bra/ket case
+        brastateinfo = state_info[0].get();
+        lbraS = brastateinfo->leftStateInfo;
+        rbraS = brastateinfo->rightStateInfo;
+        ketstateinfo = state_info[1].get();
+        lketS = ketstateinfo->leftStateInfo;
+        rketS = ketstateinfo->rightStateInfo;
+    }
 
     const std::vector<int> &oldToNewI = brastateinfo->oldToNewState.at(cq);
     const std::vector<int> &oldToNewJ = ketstateinfo->oldToNewState.at(cqprime);
 
     const char conjC = 'n';
 
-    const StateInfo *lbraS = state_info[0].get(),
-                    *rbraS = state_info[1].get();
-    const StateInfo *lketS = state_info[0].get(),
-                    *rketS = state_info[1].get();
     int rowstride = 0, colstride = 0;
 
     int aq, aqprime, bq, bqprime;
@@ -400,8 +412,9 @@ void TensorProductDiagonal(const StackSparseMatrix &a, const StackSparseMatrix &
     
     assert(a.get_initialised() && b.get_initialised());
     
-    const StateInfo *ls = state_info[0].get(), *rs = state_info[1].get();
-    const StateInfo *cs = state_info[2].get();
+    assert(state_info.size() == 1);
+    const StateInfo *cs = state_info[0].get();
+    const StateInfo *ls = cs->leftStateInfo, *rs = cs->rightStateInfo;
 
     for (int aq = 0; aq < ls->quanta.size(); ++aq)
         if (a.allowed(aq, aq))
@@ -450,32 +463,52 @@ void TensorProductDiagonal(const StackSparseMatrix &a, const StackSparseMatrix &
     
 void TensorRotate(const StackSparseMatrix &a, StackSparseMatrix &c,
                   const vector<boost::shared_ptr<StateInfo>> &state_info,
-                  const vector<Matrix>& rotate_matrix, double scale) {
+                  const vector<boost::shared_ptr<vector<Matrix>>> &rotate_matrices, double scale) {
     
-    const StateInfo *olds = state_info[0].get(), *news = state_info[1].get();
+    const StateInfo *old_bras, *old_kets, *new_bras, *new_kets;
+    const vector<Matrix> *rotate_bra, *rotate_ket;
+    if (state_info.size() == 2) {
+        old_bras = old_kets = state_info[0].get();
+        new_bras = new_kets = state_info[1].get();
+        rotate_bra = rotate_ket = rotate_matrices[0].get();
+    } else {
+        old_bras = state_info[0].get();
+        new_bras = state_info[1].get();
+        old_kets = state_info[2].get();
+        new_kets = state_info[3].get();
+        rotate_bra = rotate_matrices[0].get();
+        rotate_ket = rotate_matrices[1].get();
+    }
     
     assert(a.get_initialised() && c.get_initialised());
 
     std::vector<std::pair<std::pair<int, int>, StackMatrix>> &nonZeroBlocks =
         c.get_nonZeroBlocks();
     
-    vector<int> new_to_old_map;
-    for (int old_q = 0; old_q < rotate_matrix.size(); ++old_q)
-        if (rotate_matrix[old_q].Ncols() != 0)
-            new_to_old_map.push_back(old_q);
+    vector<int> new_to_old_map_bra, new_to_old_map_ket;
+    for (int old_q = 0; old_q < rotate_bra->size(); ++old_q)
+        if ((*rotate_bra)[old_q].Ncols() != 0)
+            new_to_old_map_bra.push_back(old_q);
+    
+    for (int old_q = 0; old_q < rotate_ket->size(); ++old_q)
+        if ((*rotate_ket)[old_q].Ncols() != 0)
+            new_to_old_map_ket.push_back(old_q);
+    
+    assert(new_bras->quanta.size() == new_to_old_map_bra.size());
+    assert(new_kets->quanta.size() == new_to_old_map_ket.size());
     
     int quanta_thrds = dmrginp.quanta_thrds();
 #pragma omp parallel for schedule(dynamic) num_threads(quanta_thrds)
     for (int index = 0; index < nonZeroBlocks.size(); index++) {
         int cq = nonZeroBlocks[index].first.first,
             cqprime = nonZeroBlocks[index].first.second;
-        int q = new_to_old_map[cq],
-            qprime = new_to_old_map[cqprime];
+        int q = new_to_old_map_bra[cq],
+            qprime = new_to_old_map_ket[cqprime];
         
-        double factor = scale * a.get_scaling(olds->quanta[q], olds->quanta[qprime]);
+        double factor = scale * a.get_scaling(old_bras->quanta[q], old_kets->quanta[qprime]);
         
-        MatrixRotate(rotate_matrix[q], a.operator_element(q, qprime),
-            rotate_matrix[qprime], nonZeroBlocks[index].second, a.conjugacy(), factor);
+        MatrixRotate((*rotate_bra)[q], a.operator_element(q, qprime),
+            (*rotate_ket)[qprime], nonZeroBlocks[index].second, a.conjugacy(), factor);
         
     }
     
@@ -487,10 +520,16 @@ void TensorRotate(const StackSparseMatrix &a, StackSparseMatrix &c,
 // bra state info = v staet info in lq x rq
 void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &b,
                     const StackWavefunction &c, StackWavefunction &v,
-                    const StateInfo &state_info, const SpinQuantum op_q, double scale) {
+                    const vector<boost::shared_ptr<StateInfo>> &state_info, const SpinQuantum op_q, double scale) {
     
-    const StateInfo *brastateinfo = &state_info;
-    const StateInfo *ketstateinfo = &state_info;
+    const StateInfo *brastateinfo, *ketstateinfo;
+    
+    if (state_info.size() == 1) {
+        brastateinfo = ketstateinfo = state_info[0].get();
+    } else {
+        brastateinfo = state_info[0].get();
+        ketstateinfo = state_info[1].get();
+    }
     
     const int leftBraOpSz = brastateinfo->leftStateInfo->quanta.size();
     const int leftKetOpSz = ketstateinfo->leftStateInfo->quanta.size();
@@ -508,6 +547,13 @@ void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &
     const char rightConj = b.conjugacy();
     const std::vector<std::pair<std::pair<int, int>, StackMatrix>>
         &nonZeroBlocks = v.get_nonZeroBlocks();
+    
+    if (state_info.size() == 2) {
+        assert(c.ncols() == rightOp.ncols() && v.ncols() == rightOp.nrows());
+        assert(c.nrows() == leftOp.ncols() && v.nrows() == leftOp.nrows());
+        assert(lbraS->quanta.size() == leftOp.nrows() && lketS->quanta.size() == leftOp.ncols());
+        assert(rbraS->quanta.size() == rightOp.nrows() && rketS->quanta.size() == rightOp.ncols());
+    }
 
     long long maxlen = 0;
     for (int lQ = 0; lQ < leftBraOpSz; lQ++)
@@ -516,7 +562,7 @@ void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &
                 (long long) lbraS->getquantastates(lQ) * rketS->getquantastates(rQPrime))
                 maxlen = (long long) lbraS->getquantastates(lQ) *
                          rketS->getquantastates(rQPrime);
-
+    
     int quanta_thrds = dmrginp.quanta_thrds();
 
     double *dataArray[quanta_thrds];
@@ -585,6 +631,7 @@ void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &
     for (int q = quanta_thrds - 1; q > -1; q--) {
         block2::current_page->deallocate(dataArray[q], maxlen);
     }
+    
 }
 
 // MPO (a x I | I x a) act on MPS (c) => MPS (v)
@@ -700,9 +747,19 @@ void TensorScale(double scale, StackSparseMatrix &a) {
 }
     
 void TensorScaleAdd(double scale, const StackSparseMatrix &a, StackSparseMatrix &c,
-                    const StateInfo &state_info) {
+                    const vector<boost::shared_ptr<StateInfo>> &state_info) {
+    
+    const StateInfo *brastateinfo, *ketstateinfo;
+    
+    if (state_info.size() == 1) {
+        brastateinfo = ketstateinfo = state_info[0].get();
+    } else {
+        brastateinfo = state_info[0].get();
+        ketstateinfo = state_info[1].get();
+    }
+    
     assert(c.conjugacy() == 'n');
-    const StateInfo &s = state_info;
+    
     if (a.conjugacy() == 'n') {
         for (int lQ = 0; lQ < c.nrows(); lQ++)
             for (int rQ = 0; rQ < c.ncols(); rQ++)
@@ -719,7 +776,8 @@ void TensorScaleAdd(double scale, const StackSparseMatrix &a, StackSparseMatrix 
 
                     double scaling =
                         getStandAlonescaling(a.get_deltaQuantum(0),
-                                             s.quanta[lQ], s.quanta[rQ]);
+                                             brastateinfo->quanta[lQ],
+                                             ketstateinfo->quanta[rQ]);
 
                     int nrows = c.operator_element(lQ, rQ).Nrows();
                     int ncols = c.operator_element(lQ, rQ).Ncols();
@@ -740,7 +798,7 @@ void TensorScaleAdd(double scale, const StackSparseMatrix &a, StackSparseMatrix 
                 MatrixScaleAdd(scale,
                     a.operator_element(lQ, rQ), c.operator_element(lQ, rQ));
 }
-    
+
 double TensorDotProduct(const StackSparseMatrix &a, const StackSparseMatrix &b) {
     assert(a.conjugacy() == 'n' && b.conjugacy() == 'n');
     double result = 0.;

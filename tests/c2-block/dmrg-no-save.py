@@ -24,6 +24,6 @@ with BlockHamiltonian.get(fcidump='C2.BLOCK.FCIDUMP', pg='d2h', su2=True, output
     mpo = MPO(hamil)
     print('mpo ok')
     ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil))
-    dmrg = DMRG(mpo, mps, bond_dim=[50, 80, 100, 200, 250], noise=[1E-3, 1E-4, 1E-5, 1E-5, 1E-5, 0], contractor=ctr)
+    dmrg = DMRG(mpo, mps, bond_dims=[50, 80, 100, 200, 250], noise=[1E-3, 1E-4, 1E-5, 1E-5, 1E-5, 0], contractor=ctr)
     ener = dmrg.solve(20, 1E-6)
     print('final energy = ', ener)

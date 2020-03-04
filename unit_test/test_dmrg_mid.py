@@ -33,7 +33,7 @@ class TestDMRGMID:
             mps.canonicalize()
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
-            dmrg = DMRG(mpo, mps, bond_dim=[100, 150, 200, 400, 500],
+            dmrg = DMRG(mpo, mps, bond_dims=[100, 150, 200, 400, 500],
                         noise=[1E-3, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=3)
             assert abs(ener - (-107.648250974014)) < 5E-6
@@ -53,7 +53,7 @@ class TestDMRGMID:
             mps.canonicalize()
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
-            dmrg = DMRG(mpo, mps, bond_dim=[100, 150, 200, 400, 500],
+            dmrg = DMRG(mpo, mps, bond_dims=[100, 150, 200, 400, 500],
                         noise=[1E-3, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6)
             assert abs(ener - (-107.648250974014)) < 5E-6

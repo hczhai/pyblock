@@ -52,7 +52,7 @@ with BlockHamiltonian.get(**opts) as hamil:
     mpo = MPO(hamil, iprint=is_root)
     pprint('mpo ok')
     ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
-    dmrg = DMRG(mpo, mps, bond_dim=bdims, noise=noise, contractor=ctr)
+    dmrg = DMRG(mpo, mps, bond_dims=bdims, noise=noise, contractor=ctr)
     pprint('init time = ', time.perf_counter() - t)
     ener = dmrg.solve(20, 1E-6, two_dot_to_one_dot=8)
     pprint('final energy = ', ener)

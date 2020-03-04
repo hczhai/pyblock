@@ -16,7 +16,10 @@ using namespace std;
 using namespace Eigen;
 using namespace SpinAdapted;
 
+PYBIND11_DECLARE_HOLDER_TYPE(T, boost::shared_ptr<T>);
+
 PYBIND11_MAKE_OPAQUE(vector<::Matrix>);
+PYBIND11_MAKE_OPAQUE(vector<boost::shared_ptr<vector<::Matrix>>>);
 
 void pybind_matrix(py::module &m) {
 
@@ -47,12 +50,14 @@ void pybind_matrix(py::module &m) {
             "cols", (int (::Matrix::*)() const)(&::Matrix::Ncols))
         .def("__repr__", [](::Matrix *self) {
             stringstream ss;
+            ss << "[" << self->Nrows() << "x" << self->Ncols() << "]";
             ss << Map<Eigen::Matrix<double, Dynamic, Dynamic, RowMajor>>(
                 self->data(), self->Nrows(), self->Ncols());
             return ss.str();
         });
     
-    py::bind_vector<vector<::Matrix>>(m, "VectorMatrix");
+    py::bind_vector<vector<::Matrix>, boost::shared_ptr<vector<::Matrix>>>(m, "VectorMatrix");
+    py::bind_vector<vector<boost::shared_ptr<vector<::Matrix>>>>(m, "VectorVectorMatrix");
 
     m.def("load_rotation_matrix", &LoadRotationMatrix, "Load rotation matrix.");
 
@@ -90,6 +95,7 @@ void pybind_matrix(py::module &m) {
         .def("resize", (void (::DiagonalMatrix::*)(int))&::DiagonalMatrix::ReSize, py::arg("nr"))
         .def("__repr__", [](::DiagonalMatrix *self) {
             stringstream ss;
+            ss << "[" << self->Nrows() << "x" << self->Ncols() << "]";
             ss << Map<Eigen::Matrix<double, Dynamic, Dynamic, RowMajor>>(
                 self->data(), 1, self->Ncols());
             return ss.str();

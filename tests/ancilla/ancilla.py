@@ -28,6 +28,7 @@ with BlockHamiltonian.get(**opts) as hamil:
     print('target = ', hamil.target)
     assert hamil.n_electrons == hamil.n_sites * 2
     lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
+    lcp.set_thermal_limit()
     print('left dims = ', [len(p) for p in lcp.left_dims])
     print('right dims = ', [len(p) for p in lcp.right_dims])
     print('left min dims = ', [len(p) for p in lcp.left_dims_fci])
@@ -38,8 +39,8 @@ with BlockHamiltonian.get(**opts) as hamil:
     print('mps ok')
     mpo = MPO(hamil, iprint=True)
     print('mpo ok')
-    ctr = TEContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
-    te = ExpoApply(mpo, mps, bond_dim=bdims, beta=beta, contractor=ctr)
+    ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
+    te = ExpoApply(mpo, mps, bond_dims=bdims, beta=beta, contractor=ctr)
     ener = te.solve(400)
     print('final energy = ', ener)
 

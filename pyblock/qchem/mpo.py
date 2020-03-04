@@ -60,7 +60,7 @@ class OperatorTensor(Tensor):
         assert isinstance(self.ops, dict)
         return OperatorTensor(mat=self.mat.copy(), ops=self.ops.copy(),
             tags=self.tags.copy(), contractor=self.contractor)
-
+    
 class MPOInfo:
     def __init__(self, hamil, cache_contraction=True):
         self.hamil = hamil
@@ -398,3 +398,36 @@ class MPO(TensorNetwork):
         ops = { k : v for k, v in ops.items() if v != 0 }
         
         return mat, ops
+
+
+class IdentityMPOInfo(MPOInfo):
+    def __init__(self, mpo_info, cache_contraction=True):
+        self.hamil = mpo_info.hamil
+        self.n_sites = mpo_info.n_sites
+        self._init_operator_names()
+        self.cache_contraction = cache_contraction
+        self.cached_exprs = {}
+    
+    def _init_operator_names(self):
+        self.left_operator_names = [None] * self.n_sites
+        self.right_operator_names = [None] * self.n_sites
+        
+        for i in range(self.n_sites):
+            self.left_operator_names[i] = np.array([OpElement(OpNames.I, (), q_label=self.hamil.empty)], dtype=object)
+            self.right_operator_names[i] = np.array([OpElement(OpNames.I, (), q_label=self.hamil.empty)], dtype=object)
+
+
+class IdentityMPO(MPO):
+    def __init__(self, mpo):
+        self.n_sites = mpo.n_sites
+        self.hamil = mpo.hamil
+        self.tensors = self._init_mpo_tensors(mpo=mpo)
+    
+    def _init_mpo_tensors(self, mpo):
+        tensors = []
+        for m in range(self.n_sites):
+            iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            mat = np.array([[iop]], dtype=object)
+            ops = { iop : mpo[m].ops[iop] }
+            tensors.append(OperatorTensor(mat=mat, tags={m}, ops=ops))
+        return tensors

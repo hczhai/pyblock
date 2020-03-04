@@ -101,8 +101,11 @@ class SubTensor:
                          cgs=[np.transpose(cg, (2, 1, 0)) for cg in self.cgs])
 
     def __mul__(self, o):
-        return SubTensor(q_labels=self.q_labels, reduced=o * reduced, cgs=self.cgs)
-    
+        return SubTensor(q_labels=self.q_labels, reduced=o * self.reduced, cgs=self.cgs)
+   
+    def equal_shape(self, o):
+        return self.q_labels == o.q_labels and self.reduced.shape == o.reduced.shape
+ 
     def __eq__(self, o):
         return self.q_labels == o.q_labels and np.allclose(self.reduced, o.reduced) \
             and ((self.cgs is not None and o.cgs is not None and
@@ -717,6 +720,12 @@ class Tensor:
                 block.reduced_shape = block.reduced.shape
         return ts_l, ts_r, error
     
+    def norm(self):
+        r = 0.0
+        for b in self.blocks:
+            r += (b.reduced * b.reduced).sum()
+        return np.sqrt(r)
+
     # split rank-2 block-diagonal Tensor to two tensors
     # using svd
     # k: maximal bond length; k == -1 -> no truncation
@@ -756,7 +765,7 @@ class Tensor:
     # left normalization needs to collect all left indices for each specific right index
     # so that we will only have one R, but left dim of q is unchanged
     # at: where to divide the tensor into matrix => (0, at) x (at, n_ranks)
-    def left_canonicalize(self):
+    def left_canonicalize(self, mode='reduced'):
         """
         Left canonicalization (using QR factorization).
         
@@ -778,7 +787,7 @@ class Tensor:
                                  for id in range(at)]) for b in blocks]
             mat = np.concatenate([b.reduced.reshape((sh, -1))
                                   for sh, b in zip(l_shapes, blocks)], axis=0)
-            q, r = np.linalg.qr(mat)
+            q, r = np.linalg.qr(mat, mode)
             r_blocks[q_labels_r] = r
             qs = np.split(q, list(accumulate(l_shapes[:-1])), axis=0)
             assert(len(qs) == len(blocks))
@@ -787,7 +796,7 @@ class Tensor:
                 b.reduced_shape = b.reduced.shape
         return r_blocks
 
-    def right_canonicalize(self):
+    def right_canonicalize(self, mode='reduced'):
         """
         Right canonicalization (using LQ factorization).
         
@@ -809,7 +818,7 @@ class Tensor:
                                  for id in range(at, self.rank)]) for b in blocks]
             mat = np.concatenate([b.reduced.reshape((-1, sh)).T
                                   for sh, b in zip(r_shapes, blocks)], axis=0)
-            q, r = np.linalg.qr(mat)
+            q, r = np.linalg.qr(mat, mode)
             l_blocks[q_labels_l] = r.T
             qs = np.split(q, list(accumulate(r_shapes[:-1])), axis=0)
             assert(len(qs) == len(blocks))
@@ -873,6 +882,24 @@ class Tensor:
                 blocks.append(b)
         return Tensor(blocks=blocks, tags=self.tags, contractor=self.contractor)
     
+    def align(self, o):
+        map_blocks = { b.q_labels : b for b in self.blocks }
+        omap_blocks = { b.q_labels : b for b in o.blocks }
+        self.blocks = [b for b in self.blocks if b.q_labels in omap_blocks]
+        for b in o.blocks:
+            if b.q_labels not in map_blocks:
+                self.blocks.append(SubTensor(q_labels=b.q_labels, reduced=np.zeros_like(b.reduced), cgs=None))
+
+    def equal_shape(self, o):
+        lb = sorted(self.blocks, key=lambda x: x.q_labels)
+        rb = sorted(o.blocks, key=lambda x: x.q_labels)
+        if len(lb) != len(rb):
+            return False
+        for l, r in zip(lb, rb):
+            if not l.equal_shape(r):
+                return False
+        return True
+
     def __eq__(self, o):
         lb = sorted(self.blocks, key=lambda x: x.q_labels)
         rb = sorted(o.blocks, key=lambda x: x.q_labels)
@@ -1012,6 +1039,10 @@ class TensorNetwork:
     def deep_copy(self):
         """Deep copy."""
         return TensorNetwork(tensors=[t.deep_copy() for t in self.tensors])
+    
+    def zero_copy(self):
+        """Deep copy with zeros."""
+        return TensorNetwork(tensors=[t.zero_copy() for t in self.tensors])
 
     def contract(self, tags, in_place=False):
         """

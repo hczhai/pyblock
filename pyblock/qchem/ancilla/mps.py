@@ -9,6 +9,8 @@ class AncillaLineCoupling(LineCoupling):
         self.physical_basis = basis
         basis = [basis[i // 2] for i in range(n_sites * 2)]
         super().__init__(n_sites * 2, basis, empty, target)
+    
+    def set_thermal_limit(self):
         self.left_dims = self._fill_ancilla_from_left()
         self.right_dims = self._fill_ancilla_from_right()
 

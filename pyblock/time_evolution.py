@@ -27,6 +27,7 @@ from .tensor.tensor import Tensor, TensorNetwork
 from .dmrg import MovingEnvironment
 import time
 from mpi4py import MPI
+import numpy as np
 
 class TEError(Exception):
     pass
@@ -35,9 +36,10 @@ def pprint(*args, **kwargs):
     if MPI.COMM_WORLD.Get_rank() == 0:
         print(*args, **kwargs)
 
+
 class ExpoApply:
     """
-    Apply exp(beta H) to MPS.
+    Apply exp(beta H) to MPS (tangent space appraoch).
     
     Attributes:
         n_sites : int
@@ -48,12 +50,15 @@ class ExpoApply:
             Bond dimension for each sweep.
         energies : list(float)
             Energies collected for all sweeps.
+        canonical_form : list(str)
+            The canonical form of initial MPS.
+            If None, assumming it is LL..CC..RR (dot=2) or LL..C..RR (dot=1)
     """
-    def __init__(self, mpo, mps, beta, bond_dim, contractor=None):
+    def __init__(self, mpo, mps, beta, bond_dims, contractor=None, canonical_form=None):
         self.n_sites = len(mpo)
         self.dot = mps.dot
         self.center = mps.center
-        self.bond_dims = bond_dim if isinstance(bond_dim, list) else [bond_dim]
+        self.bond_dims = bond_dims if isinstance(bond_dims, list) else [bond_dims]
 
         self._k = mps.deep_copy().add_tags({'_KET'})
         self._b = mps.deep_copy().add_tags({'_BRA'})
@@ -62,9 +67,12 @@ class ExpoApply:
         self._h.set_contractor(contractor)
         self._k.set_contractor(contractor)
         
-        self.canonical_form  = ['L'] * min(self.center, self.n_sites)
-        self.canonical_form += ['C'] * self.dot
-        self.canonical_form += ['R'] * max(self.n_sites - self.center - self.dot, 0)
+        if canonical_form is None:
+            self.canonical_form  = ['L'] * min(self.center, self.n_sites)
+            self.canonical_form += ['C'] * self.dot
+            self.canonical_form += ['R'] * max(self.n_sites - self.center - self.dot, 0)
+        else:
+            self.canonical_form = canonical_form
 
         self.energies = []
         
@@ -90,21 +98,21 @@ class ExpoApply:
             bond_dim : int
                 Bond dimension of current sweep.
             beta : float
-                Time step.
+                Beta parameter in exp(-beta H).
         
         Returns:
             energy : float
-                Ground state energy.
+                Energy of state exp(-beta H) |psi>.
             error : float
                 Sum of discarded weights.
             nexpos : (int, int)
-                Number of Expokit iterations.
+                Number of operator multiplication in forward and backward exponential step.
         """
         
         ctr = self._h[{i, '_HAM'}].contractor
         
         if ctr is None:
-            raise DMRGError('Need a contractor for updating local site!')
+            raise TimeEvolutionError('Need a contractor for updating local site!')
         
         fuse_left = i <= self.n_sites // 2
             
@@ -119,38 +127,39 @@ class ExpoApply:
         self.eff_ham()[{i, '_HAM'}].tags |= fuse_tags
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         h_eff.tags |= fuse_tags
-        gs_old = self._k[{i, '_KET'}]
-        energy, gs, nexpo = ctr.expo(h_eff, gs_old, beta)
+        ket = self._k[{i, '_KET'}]
+        
+        energy, bra, nexpo = ctr.expo_apply(h_eff, ket, beta)
         
         if not fuse_left and forward:
-            gs = ctr.unfuse_right(i, gs)
-            ctr.fuse_left(i, gs, self.canonical_form[i])
+            bra = ctr.unfuse_right(i, bra)
+            ctr.fuse_left(i, bra, self.canonical_form[i])
         elif fuse_left and not forward:
-            gs = ctr.unfuse_left(i, gs)
-            ctr.fuse_right(i, gs, self.canonical_form[i])
+            bra = ctr.unfuse_left(i, bra)
+            ctr.fuse_right(i, bra, self.canonical_form[i])
         
         if forward:
-            limit = ctr.bond_upper_limit_left[i]
+            limit = ctr.bond_upper_limit_left()[i]
         else:
-            limit = ctr.bond_upper_limit_right[i]
+            limit = ctr.bond_upper_limit_right()[i]
         
-        dm = gs.get_diag_density_matrix(trace_right=forward)
+        dm = bra.get_diag_density_matrix(trace_right=forward)
         
         l_fused, r_fused, error = \
-            gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
+            bra.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
         
         if forward:
             ctr.update_local_left_mps_info(i, l_fused)
-            gs_new = ctr.unfuse_left(i, l_fused)
+            bra_new = ctr.unfuse_left(i, l_fused)
         else:
             ctr.update_local_right_mps_info(i, r_fused)
-            gs_new = ctr.unfuse_right(i, r_fused)
+            bra_new = ctr.unfuse_right(i, r_fused)
         
         self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
-        self._k[{i, '_KET'}].modify(gs_new)
-        self._b[{i, '_BRA'}].modify(gs_new)
-        self.eff_ham()[{i, '_KET'}].modify(gs_new)
-        self.eff_ham()[{i, '_BRA'}].modify(gs_new)
+        self._k[{i, '_KET'}].modify(bra_new)
+        self._b[{i, '_BRA'}].modify(bra_new)
+        self.eff_ham()[{i, '_KET'}].modify(bra_new)
+        self.eff_ham()[{i, '_BRA'}].modify(bra_new)
  
         nexpok = 0
         if forward:
@@ -160,7 +169,7 @@ class ExpoApply:
                 k_eff = (k_tn ^ '_HAM')['_HAM']
                 k_eff.tags |= {'_NO_FUSE'}
                 r_fused.tags |= {i}
-                _, r_back, nexpok = ctr.expo(k_eff, r_fused, -beta)
+                _, r_back, nexpok = ctr.expo_apply(k_eff, r_fused, -beta)
                 k_tn.remove_tags({'_NO_FUSE'})
                 adj_new = Tensor.contract(r_back, self._k[{i + 1, '_KET'}], [1], [0])
                 self._k[{i + 1, '_KET'}].modify(adj_new)
@@ -200,21 +209,23 @@ class ExpoApply:
             bond_dim : int
                 Bond dimension of current sweep.
             beta : float
-                Temperature step.
+                Beta parameter in exp(-beta H).
         
         Returns:
             energy : float
-                Ground state energy.
+                Energy of state exp(-beta H) |psi>.
+            normsq : float
+                Self inner product of state exp(-beta H) |psi>.
             error : float
                 Sum of discarded weights.
             nexpos : (int, int)
-                Number of Expokit iterations.
+                Number of operator multiplication in forward and backward exponential step.
         """
         
         ctr = self._h[{i, '_HAM'}].contractor
         
         if ctr is None:
-            raise DMRGError('Need a contractor for updating local site!')
+            raise TimeEvolutionError('Need a contractor for updating local site!')
         
         if len(self._k.select({i, i + 1, '_KET'}, which='exact')) == 0:
             
@@ -229,18 +240,18 @@ class ExpoApply:
             self.eff_ham().add(twod_ket | twod_bra)
         
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
-        gs_old = self.eff_ham()[{i, i + 1, '_KET'}]
-        energy, gs, nexpo = ctr.expo(h_eff, gs_old, beta)
+        ket = self.eff_ham()[{i, i + 1, '_KET'}]
+        energy, normsq, bra, nexpo = ctr.expo_apply(h_eff, ket, beta)
         
         if forward:
-            limit = ctr.bond_upper_limit_left[i]
+            limit = ctr.bond_upper_limit_left()[i]
         else:
-            limit = ctr.bond_upper_limit_right[i + 1]
+            limit = ctr.bond_upper_limit_right()[i + 1]
         
-        dm = gs.get_diag_density_matrix(trace_right=forward)
+        dm = bra.get_diag_density_matrix(trace_right=forward)
         
         l_fused, r_fused, error = \
-            gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
+            bra.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
         
         if forward:
             ctr.update_local_left_mps_info(i, l_fused)
@@ -268,7 +279,7 @@ class ExpoApply:
                 k_eff = (k_tn ^ '_HAM')['_HAM']
                 k_eff.tags |= {'_FUSE_R'}
                 r_fused.tags |= {i + 1}
-                _, r_fused, nexpok = ctr.expo(k_eff, r_fused, -beta)
+                _, _, r_fused, nexpok = ctr.expo_apply(k_eff, r_fused, -beta)
                 k_tn.remove_tags({'_FUSE_R'})
                 r = ctr.unfuse_right(i + 1, r_fused)
                 self._k[{i + 1, '_KET'}].modify(r)
@@ -280,14 +291,14 @@ class ExpoApply:
                 k_eff = (k_tn ^ '_HAM')['_HAM']
                 k_eff.tags |= {'_FUSE_L'}
                 l_fused.tags |= {i}
-                _, l_fused, nexpok = ctr.expo(k_eff, l_fused, -beta)
+                _, _, l_fused, nexpok = ctr.expo_apply(k_eff, l_fused, -beta)
                 k_tn.remove_tags({'_FUSE_L'})
                 l = ctr.unfuse_left(i, l_fused)
                 self._k[{i, '_KET'}].modify(l)
                 self._b[{i, '_BRA'}].modify(l)
                 self.eff_ham()[{i, '_KET'}].modify(l)
         
-        return energy, error, (nexpo, nexpok)
+        return energy, normsq, error, (nexpo, nexpok)
 
     def construct_envs(self):
         t = time.perf_counter()
@@ -306,16 +317,18 @@ class ExpoApply:
                 Direction of current sweep. If True, sweep is performed from left to right.
             bond_dim : int
                 Bond dimension of current sweep.
-            noise : float
-                Noise prefactor of current sweep.
+            beta : float
+                Beta parameter in exp(-beta H).
         
         Returns:
             energy : float
-                Ground state energy.
+                Energy of state exp(-beta H) |psi>.
+            normsq : float
+                Self inner product of state exp(-beta H) |psi>.
             error : float
                 Sum of discarded weights.
-            ndav : int
-                Number of Davidson iterations.
+            nexpos : (int, int)
+                Number of operator multiplication in forward and backward exponential step.
         """
         self.eff_ham.move_to(i)
         self.center = i
@@ -332,14 +345,16 @@ class ExpoApply:
         Args:
             forward : bool
                 Direction of current sweep. If True, sweep is performed from left to right.
-            bond_dims : int
+            bond_dim : int
                 Bond dimension of current sweep.
-            noise : float
-                Noise prefactor of current sweep.
+            beta : float
+                Beta parameter in exp(-beta H).
         
         Returns:
             energy : float
-                Ground state energy.
+                Energy of state exp(-beta H) |psi>.
+            normsq : float
+                Self inner product of state exp(-beta H) |psi>.
         """
         self._pre_sweep()
         
@@ -356,6 +371,7 @@ class ExpoApply:
             sweep_range = range(self.center, -1, -1)
         
         sweep_energies = []
+        sweep_normsqs = []
 
         for i in sweep_range:
             if self.dot == 2:
@@ -363,23 +379,22 @@ class ExpoApply:
             else:
                 pprint(" %3s Site = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
             t = time.perf_counter()
-            energy, error, nexpos = self.blocking(i, forward=forward, bond_dim=bond_dim, beta=beta)
+            energy, normsq, error, nexpos = self.blocking(i, forward=forward, bond_dim=bond_dim, beta=beta)
             pprint("Nexpo = %4d/%4d E = %15.8f Error = %15.8f T = %4.2f" % (nexpos[0], nexpos[1], energy, error, time.perf_counter() - t))
             sweep_energies.append(energy)
+            sweep_normsqs.append(normsq)
         
         self._post_sweep()
 
-        return sweep_energies[-1]
+        return sweep_energies[-1], sweep_normsqs[-1]
 
     def solve(self, n_sweeps, forward=True, two_dot_to_one_dot=-1):
         """
-        Perform TDVP time evolution algorithm.
+        Perform time evolution algorithm.
         
         Args:
             n_sweeps : int
-                Maximum number of sweeps.
-            tol : float
-                Energy convergence threshold.
+                Maximum number of sweeps (two sweeps will calculate one exp(-beta H) application)
             forward : bool
                 Direction of first sweep. If True, sweep is performed from left to right.
             two_dot_to_one_dot : int or -1
@@ -387,7 +402,7 @@ class ExpoApply:
         
         Returns:
             energy : float
-                Final ground state energy.
+                Energy of state exp(-beta * (n_sweeps/2) H) |psi>.
         """
         if len(self.bond_dims) < n_sweeps:
             self.bond_dims.extend([self.bond_dims[-1]] * (n_sweeps - len(self.bond_dims)))
@@ -408,13 +423,21 @@ class ExpoApply:
                 if self.center != 0 and self.center == self.n_sites - 2:
                     self.center = self.n_sites - 1
 
-            energy = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], beta=self.beta / 2)
+            energy, normsq = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], beta=self.beta / 2)
             self.energies.append(energy)
 
             forward = not forward
             
             pprint('Time elapsed = %10.2f' % (time.perf_counter() - start))
             if iw % 2 == 1:
-                pprint('Beta = %10.5f Energy = %15.8f' % (current_beta, energy))
-        
+                pprint('Beta = %10.5f Energy = %15.8f Norm^2 = %15.8f' % (current_beta, energy, normsq))
+            
+            assert self.canonical_form.count('C') == 1
+            cc = self.canonical_form.index('C')
+            normalized = self._k[{cc, '_KET'}] * (1 / np.sqrt(normsq))
+            self._k[{cc, '_KET'}].modify(normalized)
+            self._b[{cc, '_BRA'}].modify(normalized)
+            self.eff_ham()[{cc, '_KET'}].modify(normalized)
+            self.eff_ham()[{cc, '_BRA'}].modify(normalized)
+            
         return energy

@@ -23,26 +23,31 @@
 Specialized MPS/MPO operations for DMRG.
 """
 
-from block.symmetry import state_tensor_product_target
+from block.symmetry import state_tensor_product_target, VectorStateInfo
 from block.operator import Wavefunction
 from block.rev import tensor_scale, tensor_dot_product, tensor_scale_add_no_trans
 from block.rev import tensor_precondition
 from block.data_page import init_data_pages, release_data_pages, activate_data_page
 from block.data_page import load_data_page, save_data_page
-from block.data_page import set_data_page_pointer
+from block.data_page import set_data_page_pointer, get_data_page_pointer
 
 from ..tensor.tensor import Tensor, SubTensor
 from ..davidson import davidson
+from ..expo import expo
 from .core import BlockHamiltonian, BlockEvaluation, BlockSymmetry
 from .simplifier import NoSimplifier
 import numpy as np
 import os
 import shutil
+import copy
 
 
 class DataPage:
     def __init__(self):
         pass
+    
+    def get(self):
+        return self
     
     def load(self, tags):
         pass
@@ -64,23 +69,31 @@ class DataPage:
 
 class DMRGDataPage(DataPage):
     """Determine how to swap data between disk and memory for DMRG calculation."""
-    def __init__(self, save_dir='node0'):
+    def __init__(self, save_dir='node0', n_frames=1):
         self.current_pages = {}
         self.main_page = -1
         self.n_pages = 5
         self.save_dir = save_dir
+        self.n_frames = n_frames
+        self.i_frame = 0
         if not os.path.isdir(self.save_dir):
             os.mkdir(self.save_dir)
+    
+    def get(self):
+        assert self.i_frame < self.n_frames
+        frame = copy.deepcopy(self)
+        self.i_frame += 1
+        return frame
     
     def _get_page(self, tags):
         """Return the data page id for the given data tags."""
         if tags == {'_BASE'}:
-            return 0
+            return 0 + self.i_frame * self.n_pages
         site = [i for i in tags if isinstance(i, int)][0]
         if '_LEFT' in tags:
-            return 1 + site % 2
+            return 1 + site % 2 + self.i_frame * self.n_pages
         elif '_RIGHT' in tags:
-            return 3 + site % 2
+            return 3 + site % 2 + self.i_frame * self.n_pages
     
     def _get_file_name(self, tags):
         """Return the data page filename for the given data tags."""
@@ -125,7 +138,7 @@ class DMRGDataPage(DataPage):
     
     def initialize(self):
         """Allocate memory for all pages."""
-        init_data_pages(self.n_pages)
+        init_data_pages(self.n_pages * self.n_frames)
         self.activate({'_BASE'})
     
     def release(self):
@@ -145,6 +158,7 @@ class ContractionError(Exception):
 
 
 class DMRGContractor:
+    """bra_mps_info is MPSInfo of some constant MPS."""
     def __init__(self, mps_info, mpo_info, simplifier=None, parallelizer=None):
         self.mps_info = mps_info
         self.mpo_info = mpo_info
@@ -152,9 +166,9 @@ class DMRGContractor:
         self.mem_ptr = 0
         self.rebuild = self.mpo_info.hamil.page is None
         if self.rebuild:
-            self.page = DataPage()
+            self.page = DataPage().get()
         else:
-            self.page = self.mpo_info.hamil.page
+            self.page = self.mpo_info.hamil.page.get()
         if simplifier is not None:
             BlockEvaluation.simplifier = simplifier
         if parallelizer is not None:
@@ -188,6 +202,108 @@ class DMRGContractor:
             assert False
             return None
     
+    def _get_state_info(self, dot, i, n_sites, opt, mps_info):
+        sts = None
+        if dot == 2:
+            st_l = mps_info.left_state_info_no_trunc[i]
+            st_r = mps_info.right_state_info_no_trunc[i + 1]
+        elif '_FUSE_L' in opt.tags:
+            st_l = mps_info.left_state_info_no_trunc[i]
+            if i + 1 < n_sites:
+                st_r = mps_info.right_state_info[i + 1]
+            else:
+                st_r = BlockSymmetry.to_state_info([(mps_info.lcp.empty, 1)])
+            sts = (st_l, st_r)
+        elif '_FUSE_R' in opt.tags:
+            if i - 1 >= 0:
+                st_l = mps_info.left_state_info[i - 1]
+            else:
+                st_l = BlockSymmetry.to_state_info([(mps_info.lcp.empty, 1)])
+            st_r = mps_info.right_state_info_no_trunc[i]
+            sts = (st_l, st_r)
+        elif '_NO_FUSE' in opt.tags:
+            st_l = mps_info.left_state_info[i]
+            st_r = mps_info.right_state_info[i + 1]
+            sts = (st_l, st_r)
+        return st_l, st_r, sts
+
+    def apply(self, opt, mpst):
+        
+        dot = len(mpst.tags - {'_KET', '_BRA'})
+
+        mpst = mpst.copy()
+        i = self._tag_site(mpst)
+        assert dot == 2 or '_FUSE_L' in opt.tags or '_FUSE_R' in opt.tags or '_NO_FUSE' in opt.tags
+        
+        kst_l, kst_r, ksts = self._get_state_info(dot, i, self.n_sites, opt, self.mps_info['_KET'])
+        bst_l, bst_r, bsts = self._get_state_info(dot, i, self.n_sites, opt, self.mps_info['_BRA'])
+        
+        super_sts = VectorStateInfo([state_tensor_product_target(bst_l, bst_r),
+                                     state_tensor_product_target(kst_l, kst_r)])
+        bopt = BlockMultiplyH(opt, super_sts, diag=False)
+
+        bwfn = self.mps_info['_BRA'].get_wavefunction_fused(i, None, dot=dot, sts=bsts)
+        kwfn = self.mps_info['_KET'].get_wavefunction_fused(i, mpst, dot=dot, sts=ksts)
+        bkwfn = BlockWavefunction(kwfn)
+        bbwfn = BlockWavefunction(bwfn)
+        bopt.apply(bkwfn, bbwfn)
+        
+        bkwfn.deallocate()
+        
+        norm = np.sqrt(abs(bbwfn.dot(bbwfn)))
+        
+        if dot == 2 or '_FUSE_L' in opt.tags or '_NO_FUSE' in opt.tags:
+            self.page.unload({i, '_LEFT'})
+            self.page.unload({i + 1, '_RIGHT'})
+        else:
+            self.page.unload({i - 1, '_LEFT'})
+            self.page.unload({i, '_RIGHT'})
+
+        v = self.mps_info['_BRA'].from_wavefunction_fused(i, bbwfn.data, sts=bsts)
+        
+        bbwfn.deallocate()
+        
+        return norm, v, 0
+    
+    def expo_apply(self, opt, mpst, beta):
+        
+        dot = len(mpst.tags - {'_KET', '_BRA'})
+
+        mpst = mpst.copy()
+        i = self._tag_site(mpst)
+        assert dot == 2 or '_FUSE_L' in opt.tags or '_FUSE_R' in opt.tags or '_NO_FUSE' in opt.tags
+        
+        st_l, st_r, sts = self._get_state_info(dot, i, self.n_sites, opt, self._get_mps_info({'_KET'}))
+        
+        super_sts = VectorStateInfo([state_tensor_product_target(st_l, st_r)])
+        bopt = BlockMultiplyH(opt, super_sts, diag=True)
+
+        kwfn = self._get_mps_info({'_KET'}).get_wavefunction_fused(i, mpst, dot=dot, sts=sts)
+        bwfn = self._get_mps_info({'_BRA'}).get_wavefunction_fused(i, None, dot=dot, sts=sts)
+        bkwfn = BlockWavefunction(kwfn)
+        bbwfn = BlockWavefunction(bwfn)
+        assert len(bkwfn.ref) == len(bbwfn.ref)
+        vs, nexpo = expo(bopt, bkwfn, beta, const_a=self.mpo_info.hamil.e)
+        
+        bopt.apply(vs, bbwfn)
+        normsq = vs.dot(vs)
+        energy = vs.dot(bbwfn) / normsq
+        bbwfn.deallocate()
+        
+        if dot == 2 or '_FUSE_L' in opt.tags or '_NO_FUSE' in opt.tags:
+            self.page.unload({i, '_LEFT'})
+            self.page.unload({i + 1, '_RIGHT'})
+        else:
+            self.page.unload({i - 1, '_LEFT'})
+            self.page.unload({i, '_RIGHT'})
+
+        v = self.mps_info.from_wavefunction_fused(i, vs.data, sts=sts)
+        # v.align(mpst)
+        
+        vs.deallocate()
+        
+        return energy, normsq, v, nexpo
+    
     def eigs(self, opt, mpst):
         """
         Davidson diagonalization.
@@ -208,6 +324,7 @@ class DMRGContractor:
             ndav : int
                 Number of Davidson iterations.
         """
+        assert not isinstance(self.mps_info, dict)
         dot = len(mpst.tags - {'_KET'})
             
         mpst = mpst.copy()
@@ -215,29 +332,12 @@ class DMRGContractor:
         
         assert dot == 2 or '_FUSE_L' in opt.tags or '_FUSE_R' in opt.tags
         
-        sts = None
-        if dot == 2:
-            st_l = self.mps_info.left_state_info_no_trunc[i]
-            st_r = self.mps_info.right_state_info_no_trunc[i + 1]
-        elif '_FUSE_L' in opt.tags:
-            st_l = self.mps_info.left_state_info_no_trunc[i]
-            if i + 1 < self.n_sites:
-                st_r = self.mps_info.right_state_info[i + 1]
-            else:
-                st_r = BlockSymmetry.to_state_info([(self.mps_info.lcp.empty, 1)])
-            sts = (st_l, st_r)
-        elif '_FUSE_R' in opt.tags:
-            if i - 1 >= 0:
-                st_l = self.mps_info.left_state_info[i - 1]
-            else:
-                st_l = BlockSymmetry.to_state_info([(self.mps_info.lcp.empty, 1)])
-            st_r = self.mps_info.right_state_info_no_trunc[i]
-            sts = (st_l, st_r)
-        
+        st_l, st_r, sts = self._get_state_info(dot, i, self.n_sites, opt, self._get_mps_info({'_KET'}))
+
         wfn = self.mps_info.get_wavefunction_fused(i, mpst, dot=dot, sts=sts)
-            
-        st = state_tensor_product_target(st_l, st_r)
-        a = BlockMultiplyH(opt, st)
+
+        super_sts = VectorStateInfo([state_tensor_product_target(st_l, st_r)])
+        a = BlockMultiplyH(opt, super_sts)
         b = [BlockWavefunction(wfn)]
         
         es, vs, ndav = davidson(a, b, 1, mpi=self.is_parallel)
@@ -254,63 +354,86 @@ class DMRGContractor:
             
         e = es[0]
         v = self.mps_info.from_wavefunction_fused(i, vs[0].data, sts=sts)
+        
+        vs[0].deallocate()
+        
         return e + self.mpo_info.hamil.e, v, ndav
+    
+    def _get_mps_info(self, tags):
+        if isinstance(self.mps_info, dict):
+            if '_KET' in tags:
+                tag = '_KET'
+            elif '_BRA' in tags:
+                tag = '_BRA'
+            else:
+                raise ContractionError('Cannot detetermine bra/ket mps info!!')
+            return self.mps_info[tag]
+        else:
+            return self.mps_info
     
     def update_local_left_mps_info(self, i, l_fused):
         """Update :attr:`info` for site i using the left tensor from SVD."""
         block_basis = [(b.q_labels[1], b.reduced.shape[1]) for b in l_fused.blocks]
-        self.mps_info.update_local_left_block_basis(i, block_basis)
+        self._get_mps_info(l_fused.tags).update_local_left_block_basis(i, block_basis)
         
     def update_local_right_mps_info(self, i, r_fused):
         """Update :attr:`info` for site i using the right tensor from SVD."""
         block_basis = [(b.q_labels[0], b.reduced.shape[0]) for b in r_fused.blocks]
-        self.mps_info.update_local_right_block_basis(i, block_basis)
+        self._get_mps_info(r_fused.tags).update_local_right_block_basis(i, block_basis)
     
     def fuse_left(self, i, tensor, original_form):
-        st_l = self.mps_info.left_state_info_no_trunc[i]
+        mps_info = self._get_mps_info(tensor.tags)
+        st_l = mps_info.left_state_info_no_trunc[i]
         stlq = BlockSymmetry.from_state_info(st_l)
         if original_form == 'L':
             tensor.fuse_index(0, dict(stlq), equal=True)
         else:
             if original_form == 'R':
                 for block in tensor.blocks:
-                    assert block.q_labels[0] == self.mps_info.lcp.target
-                    block.q_labels = (self.mps_info.lcp.empty, ) + block.q_labels[1:]
-            tensor.fuse_index(0, dict(stlq), target=self.mps_info.lcp.target)
+                    assert block.q_labels[0] == mps_info.lcp.target
+                    block.q_labels = (mps_info.lcp.empty, ) + block.q_labels[1:]
+            tensor.fuse_index(0, dict(stlq), target=mps_info.lcp.target)
     
     def fuse_right(self, i, tensor, original_form):
-        st_r = self.mps_info.right_state_info_no_trunc[i]
+        mps_info = self._get_mps_info(tensor.tags)
+        st_r = mps_info.right_state_info_no_trunc[i]
         strq = BlockSymmetry.from_state_info(st_r)
         if original_form == 'R':
             tensor.fuse_index(1, dict(strq), equal=True)
         else:
             if original_form == 'L':
                 for block in tensor.blocks:
-                    assert block.q_labels[2] == self.mps_info.lcp.target
-                    block.q_labels = block.q_labels[:2] + (self.mps_info.lcp.empty, )
-            tensor.fuse_index(1, dict(strq), target=self.mps_info.lcp.target)
+                    assert block.q_labels[2] == mps_info.lcp.target
+                    block.q_labels = block.q_labels[:2] + (mps_info.lcp.empty, )
+            tensor.fuse_index(1, dict(strq), target=mps_info.lcp.target)
     
     def unfuse_left(self, i, tensor):
-        l = [(self.mps_info.lcp.empty, 1)] if i == 0 else self.mps_info.left_block_basis[i - 1]
-        r = self.mps_info.basis[i]
+        mps_info = self._get_mps_info(tensor.tags)
+        l = [(mps_info.lcp.empty, 1)] if i == 0 else mps_info.left_block_basis[i - 1]
+        r = mps_info.basis[i]
         tensor = tensor.copy()
         tensor.unfuse_index(0, l, r)
         return tensor.set_tags({i}).set_contractor(self)
     
     def unfuse_right(self, i, tensor):
-        l = self.mps_info.basis[i]
-        r = [(self.mps_info.lcp.empty, 1)] if i == self.n_sites - 1 else self.mps_info.right_block_basis[i + 1]
+        mps_info = self._get_mps_info(tensor.tags)
+        l = mps_info.basis[i]
+        r = [(mps_info.lcp.empty, 1)] if i == self.n_sites - 1 else mps_info.right_block_basis[i + 1]
         tensor = tensor.copy()
         tensor.unfuse_index(1, l, r)
         return tensor.set_tags({i}).set_contractor(self)
     
-    @property
-    def bond_upper_limit_left(self):
-        return self.mps_info.lcp.left_dims_fci
+    def bond_upper_limit_left(self, tags={}):
+        return self._get_mps_info(tags).lcp.left_dims_fci
     
-    @property
-    def bond_upper_limit_right(self):
-        return self.mps_info.lcp.right_dims_fci
+    def bond_upper_limit_right(self, tags={}):
+        return self._get_mps_info(tags).lcp.right_dims_fci
+    
+    def bond_left(self, tags={}):
+        return self._get_mps_info(tags).lcp.left_dims
+    
+    def bond_right(self, tags={}):
+        return self._get_mps_info(tags).lcp.right_dims
     
     def contract(self, tn, tags):
         """
@@ -339,34 +462,40 @@ class DMRGContractor:
             dir, i, j = tags
         else:
             dir = tags[0]
+        if isinstance(self.mps_info, dict):
+            info_ket, info_bra = self.mps_info['_KET'], self.mps_info['_BRA']
+        else:
+            info_ket, info_bra = self.mps_info, None
         if dir == '_LEFT':
             ket = tn[{i, '_KET'}]
+            bra = tn[{i, '_BRA'}]
             ham = tn[{i, '_HAM'}]
             self.page.activate({i, '_LEFT'}, reset=True)
             if i == 0:
-                ham_rot = BlockEvaluation.left_rotate(ham, ket, self.mps_info, i)
+                ham_rot = BlockEvaluation.left_rotate(i, ham, ket, info_ket, bra, info_bra)
                 ham_rot.tags.add(dir)
             else:
                 self.page.load({i - 1, '_LEFT'})
                 ham_prev = tn[{i - 1, '_HAM', dir}]
-                ham_ctr = BlockEvaluation.left_contract(ham_prev, ham, self.mps_info, self.mpo_info, i)
-                ham_rot = BlockEvaluation.left_rotate(ham_ctr, ket, self.mps_info, i)
+                ham_ctr = BlockEvaluation.left_contract(i, ham_prev, ham, self.mpo_info, info_ket, info_bra)
+                ham_rot = BlockEvaluation.left_rotate(i, ham_ctr, ket, info_ket, bra, info_bra)
                 ham_rot.tags.add(dir)
                 self.page.unload({i - 1, '_LEFT'})
             self.page.save({i, '_LEFT'})
             return ham_rot
         elif dir == '_RIGHT':
             ket = tn[{i, '_KET'}]
+            bra = tn[{i, '_BRA'}]
             ham = tn[{i, '_HAM'}]
             self.page.activate({i, '_RIGHT'}, reset=True)
             if i == self.n_sites - 1:
-                ham_rot = BlockEvaluation.right_rotate(ham, ket, self.mps_info, i)
+                ham_rot = BlockEvaluation.right_rotate(i, ham, ket, info_ket, bra, info_bra)
                 ham_rot.tags.add(dir)
             else:
                 self.page.load({i + 1, '_RIGHT'})
                 ham_prev = tn[{i + 1, '_HAM', dir}]
-                ham_ctr = BlockEvaluation.right_contract(ham_prev, ham, self.mps_info, self.mpo_info, i)
-                ham_rot = BlockEvaluation.right_rotate(ham_ctr, ket, self.mps_info, i)
+                ham_ctr = BlockEvaluation.right_contract(i, ham_prev, ham, self.mpo_info, info_ket, info_bra)
+                ham_rot = BlockEvaluation.right_rotate(i, ham_ctr, ket, info_ket, bra, info_bra)
                 ham_rot.tags.add(dir)
                 self.page.unload({i + 1, '_RIGHT'})
             self.page.save({i, '_RIGHT'})
@@ -379,14 +508,14 @@ class DMRGContractor:
                 if self._tag_site(ts[0]) != -1:
                     self.page.activate({self._tag_site(ts[1]), '_LEFT'}, reset=True)
                     self.page.load({self._tag_site(ts[0]), '_LEFT'})
-                    ham_left = BlockEvaluation.left_contract(ts[0], ts[1], self.mps_info, self.mpo_info, self._tag_site(ts[1]))
+                    ham_left = BlockEvaluation.left_contract(self._tag_site(ts[1]), ts[0], ts[1], self.mpo_info, info_ket, info_bra)
                     self.page.unload({self._tag_site(ts[0]), '_LEFT'})
                 else:
                     ham_left = ts[1]
                 if self._tag_site(ts[3]) != self.n_sites:
                     self.page.activate({self._tag_site(ts[2]), '_RIGHT'}, reset=True)
                     self.page.load({self._tag_site(ts[3]), '_RIGHT'})
-                    ham_right = BlockEvaluation.right_contract(ts[3], ts[2], self.mps_info, self.mpo_info, self._tag_site(ts[2]))
+                    ham_right = BlockEvaluation.right_contract(self._tag_site(ts[2]), ts[3], ts[2], self.mpo_info, info_ket, info_bra)
                     self.page.unload({self._tag_site(ts[3]), '_RIGHT'})
                 else:
                     ham_right = ts[2]
@@ -394,7 +523,7 @@ class DMRGContractor:
                 if self._tag_site(ts[0]) != -1:
                     self.page.activate({self._tag_site(ts[1]), '_LEFT'}, reset=True)
                     self.page.load({self._tag_site(ts[0]), '_LEFT'})
-                    ham_left = BlockEvaluation.left_contract(ts[0], ts[1], self.mps_info, self.mpo_info, self._tag_site(ts[1]))
+                    ham_left = BlockEvaluation.left_contract(self._tag_site(ts[1]), ts[0], ts[1], self.mpo_info, info_ket, info_bra)
                     self.page.unload({self._tag_site(ts[0]), '_LEFT'})
                 else:
                     ham_left = ts[1]
@@ -412,7 +541,7 @@ class DMRGContractor:
                 if self._tag_site(ts[2]) != self.n_sites:
                     self.page.activate({self._tag_site(ts[1]), '_RIGHT'}, reset=True)
                     self.page.load({self._tag_site(ts[2]), '_RIGHT'})
-                    ham_right = BlockEvaluation.right_contract(ts[2], ts[1], self.mps_info, self.mpo_info, self._tag_site(ts[1]))
+                    ham_right = BlockEvaluation.right_contract(self._tag_site(ts[1]), ts[2], ts[1], self.mpo_info, info_ket, info_bra)
                     self.page.unload({self._tag_site(ts[2]), '_RIGHT'})
                 else:
                     ham_right = ts[1]
@@ -430,8 +559,8 @@ class DMRGContractor:
                 tag = '_FUSE_R'
             elif '_NO_FUSE' in ts[1].tags:
                 tag = '_NO_FUSE'
-            return BlockEvaluation.left_right_contract(ham_left, ham_right, self.mpo_info, self._tag_site(ts[1]), tag)
-        elif dir == '_KET':
+            return BlockEvaluation.left_right_contract(self._tag_site(ts[1]), ham_left, ham_right, self.mpo_info, tag)
+        elif dir == '_KET' or dir == '_BRA':
             ts = sorted(tn.tensors, key=self._tag_site)
             at = 1
             map_idx_b = {}
@@ -538,10 +667,13 @@ class BlockMultiplyH:
         diag_mat : DiagonalMatrix
             Diagonal elements of super block Hamiltonian, in flatten form with no quantum labels.
     """
-    def __init__(self, opt, st):
+    def __init__(self, opt, sts, diag=True):
         self.opt = opt
-        self.st = st
-        self.diag_mat = BlockEvaluation.expr_diagonal_eval(opt.mat[0, 0], opt.ops[0], opt.ops[1], st)
+        self.sts = sts
+        if diag:
+            self.diag_mat = BlockEvaluation.expr_diagonal_eval(opt.mat[0, 0], opt.ops[0], opt.ops[1], sts)
+        else:
+            self.diag_mat = None
     
     def diag(self):
         """Returns Diagonal elements (for preconditioning)."""
@@ -564,4 +696,4 @@ class BlockMultiplyH:
         result.data.clear()
         result.factor = 1.0
         BlockEvaluation.expr_multiply_eval(self.opt.mat[0, 0], self.opt.ops[0], self.opt.ops[1],
-            other.data, result.data, self.st)
+            other.data, result.data, self.sts)

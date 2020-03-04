@@ -17,6 +17,6 @@ with BlockHamiltonian.get(fcidump='HUBBARD-L16.FCIDUMP', pg='c1', su2=True, outp
     mps.canonicalize()
     mpo = MPO(hamil, iprint=True)
     ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), Simplifier(AllRules()))
-    dmrg = DMRG(mpo, mps, bond_dim=bond_dim, contractor=ctr)
+    dmrg = DMRG(mpo, mps, bond_dims=bond_dim, contractor=ctr)
     ener = dmrg.solve(10, 1E-6)
     print('final energy = ', ener)

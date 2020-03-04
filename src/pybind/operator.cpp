@@ -33,6 +33,7 @@ PYBIND11_MAKE_OPAQUE(vector<vector<int>>);
 PYBIND11_MAKE_OPAQUE(vector<::Matrix>);
 PYBIND11_MAKE_OPAQUE(vector<SpinQuantum>);
 PYBIND11_MAKE_OPAQUE(vector<StackWavefunction>);
+PYBIND11_MAKE_OPAQUE(vector<boost::shared_ptr<StateInfo>>);
 PYBIND11_MAKE_OPAQUE(vector<boost::shared_ptr<StackOp_component_base>>);
 PYBIND11_MAKE_OPAQUE(vector<boost::shared_ptr<StackSparseMatrix>>);
 
@@ -279,7 +280,8 @@ void pybind_operator(py::module &m) {
         .def("__repr__", [](StackSparseMatrix *self) {
             stringstream ss;
             for (auto &r: self->get_nonZeroBlocks()) {
-                ss << "[SP] (" << r.first.first << ", " << r.first.second << ") = " << endl;
+                ss << "[SP] (" << r.first.first << ", " << r.first.second << ") = ["
+                   << r.second.Nrows() << " x " << r.second.Ncols() << "]" << endl;
                 ss << Map<Eigen::Matrix<double, Dynamic, Dynamic, RowMajor>>(
                     r.second.Store(), r.second.Nrows(), r.second.Ncols()) << endl;
             }
@@ -333,8 +335,12 @@ void pybind_operator(py::module &m) {
         .def("deep_copy", &StackSparseMatrix::deepCopy)
         .def("shallow_copy", &StackSparseMatrix::shallowCopy)
         .def("deep_clear_copy", &StackSparseMatrix::deepClearCopy)
-        .def("allocate", (void (StackSparseMatrix::*)(const StateInfo &)) &
-                             StackSparseMatrix::allocate)
+        .def("allocate", [](StackSparseMatrix *self, const vector<boost::shared_ptr<StateInfo>> &sts) {
+            if (sts.size() == 1)
+                self->allocate(*sts[0]);
+            else if (sts.size() == 2)
+                self->allocate(*sts[0], *sts[1]);
+        })
         .def("deallocate", &StackSparseMatrix::deallocate);
     
     py::class_<StackTransposeview, boost::shared_ptr<StackTransposeview>,

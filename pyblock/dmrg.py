@@ -173,11 +173,11 @@ class DMRG:
         energies : list(float)
             Energies collected for all sweeps.
     """
-    def __init__(self, mpo, mps, bond_dim, noise=0.0, contractor=None):
+    def __init__(self, mpo, mps, bond_dims, noise=0.0, contractor=None):
         self.n_sites = len(mpo)
         self.dot = mps.dot
         self.center = mps.center
-        self.bond_dims = bond_dim if isinstance(bond_dim, list) else [bond_dim]
+        self.bond_dims = bond_dims if isinstance(bond_dims, list) else [bond_dims]
         self.noise = noise if isinstance(noise, list) else [noise]
 
         self._k = mps.deep_copy().add_tags({'_KET'})
@@ -253,9 +253,9 @@ class DMRG:
             ctr.fuse_right(i, gs, self.canonical_form[i])
         
         if forward:
-            limit = ctr.bond_upper_limit_left[i]
+            limit = ctr.bond_upper_limit_left()[i]
         else:
-            limit = ctr.bond_upper_limit_right[i]
+            limit = ctr.bond_upper_limit_right()[i]
         
         dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
         
@@ -340,9 +340,9 @@ class DMRG:
         energy, gs, ndav = ctr.eigs(h_eff, gs_old)
         
         if forward:
-            limit = ctr.bond_upper_limit_left[i]
+            limit = ctr.bond_upper_limit_left()[i]
         else:
-            limit = ctr.bond_upper_limit_right[i + 1]
+            limit = ctr.bond_upper_limit_right()[i + 1]
         
         dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
         

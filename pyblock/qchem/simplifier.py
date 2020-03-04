@@ -168,6 +168,18 @@ class AllRules(Rule):
         self.f = (RuleA() | RuleP() |  RuleB() | RuleQ() | RuleR() | RuleD()).__call__
 
 
+class NoTransposeRules(Rule):
+    def __init__(self, rule=AllRules()):
+        self.f = rule.__call__
+    
+    def __call__(self, op):
+        link = super().__call__(op)
+        if link is None or link.trans:
+            return None
+        else:
+            return link
+
+
 class Simplifier:
     """Simplify complementary operators using symmetry properties."""
     def __init__(self, rule):

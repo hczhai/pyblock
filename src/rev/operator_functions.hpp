@@ -49,7 +49,7 @@ void TensorProductDiagonal(const StackSparseMatrix &a, const StackSparseMatrix &
 // TENSOR PRODUCT ACT ON STATE (A x B) C -> V [V = A C B]
 void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &b,
                     const StackWavefunction &c, StackWavefunction &v,
-                    const StateInfo &state_info, const SpinQuantum op_q, double scale);
+                    const vector<boost::shared_ptr<StateInfo>> &state_info, const SpinQuantum op_q, double scale);
 
 // TENSOR ACT ON STATE (A x I) C -> V (trace_right) (I x A) C -> V (trace_left)
 void TensorTraceMultiply(const StackSparseMatrix &a, const StackWavefunction &c,
@@ -59,7 +59,7 @@ void TensorTraceMultiply(const StackSparseMatrix &a, const StackWavefunction &c,
 // SparseMatrix ROTATION T^T A T -> C
 void TensorRotate(const StackSparseMatrix &a, StackSparseMatrix &c,
                   const vector<boost::shared_ptr<StateInfo>> &state_info,
-                  const vector<Matrix>& rotate_matrix, double scale);
+                  const vector<boost::shared_ptr<vector<Matrix>>> &rotate_matrices, double scale);
 
 //  SparseMatrix scale A *= scale
 void TensorScale(double scale, StackSparseMatrix &a);
@@ -67,7 +67,7 @@ void TensorScale(double scale, StackSparseMatrix &a);
 // SparseMatrix scale add C += scale * A
 // can support a transpose
 void TensorScaleAdd(double scale, const StackSparseMatrix &a, StackSparseMatrix &c,
-                    const StateInfo &state_info);
+                    const vector<boost::shared_ptr<StateInfo>> &state_info);
 
 // SparseMatrix scale add C += scale * A
 void TensorScaleAdd(double scale, const StackSparseMatrix &a, StackSparseMatrix &c);

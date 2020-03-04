@@ -379,13 +379,14 @@ class MPSInfo:
         wfn.initialize(target_state_info.quanta, st_l, st_r, dot == 1)
         wfn.clear()
         
-        map_tensor = {block.q_labels: block for block in tensor.blocks}
-        
-        for (il, ir), mat in wfn.non_zero_blocks:
-            q_labels = (BlockSymmetry.from_spin_quantum(st_l.quanta[il]),
-                BlockSymmetry.from_spin_quantum(st_r.quanta[ir]))
-            if q_labels in map_tensor:
-                mat.ref[:, :] = map_tensor[q_labels].reduced
+        if tensor is not None:
+            map_tensor = {block.q_labels: block for block in tensor.blocks}
+
+            for (il, ir), mat in wfn.non_zero_blocks:
+                q_labels = (BlockSymmetry.from_spin_quantum(st_l.quanta[il]),
+                    BlockSymmetry.from_spin_quantum(st_r.quanta[ir]))
+                if q_labels in map_tensor:
+                    mat.ref[:, :] = map_tensor[q_labels].reduced
         
         return wfn
     
@@ -612,13 +613,21 @@ class MPSInfo:
                     
 class MPS(TensorNetwork):
     """Matrix Product State."""
-    def __init__(self, lcp, center, dot=2, iprint=False):
+    def __init__(self, lcp, center, dot=2, iprint=False, tensors=None):
         self.lcp = lcp
         self.n_sites = lcp.n_sites
         self.center = center
         self.dot = dot
-        tensors = self._init_mps_tensors(lcp, iprint=iprint)
+        if tensors is None:
+            tensors = self._init_mps_tensors(lcp, iprint=iprint)
         super().__init__(tensors)
+    
+    @staticmethod
+    def from_tensor_network(tn, mps_info, center, dot=2):
+        r = MPS(mps_info.lcp, center, dot, tensors=tn.tensors[:])
+        for ts in r.tensors:
+            ts.tags = {t for t in ts.tags if isinstance(t, int)}
+        return r
     
     def _init_mps_tensors(self, lcp, iprint):
         tensors = []
@@ -647,7 +656,10 @@ class MPS(TensorNetwork):
             tensors.append(Tensor.rank2_init_target(ld, rd, lcp.target))
             tensors[-1].tags = set(range(self.center, self.center + self.dot))
         return tensors
-        
+    
+    def zero_copy(self):
+        return MPS(self.lcp, self.center, self.dot, tensors=super().zero_copy().tensors)
+    
     def randomize(self):
         """Fill MPS reduced matrices with random numbers in [0, 1)."""
         for ts in self.tensors:
@@ -666,21 +678,25 @@ class MPS(TensorNetwork):
             rs = self[i].left_canonicalize()
             if i + 1 < self.n_sites:
                 ts = self.select({i + 1}).tensors[0]
-                if i + 1 == self.center and self.dot == 2:
+                unfused = False
+                if i + 1 == self.center and self.dot == 2 and ts.rank == 2:
                     l = self.lcp.left_dims[i]
                     ts.unfuse_index(0, l, self.lcp.basis[i + 1])
+                    unfused = True
                 ts.left_multiply(rs)
-                if i + 1 == self.center and self.dot == 2:
+                if unfused:
                     ld = self.lcp.tensor_product(l, self.lcp.basis[i + 1])
                     ts.fuse_index(0, ld, target=self.lcp.target)
         for i in range(self.n_sites - 1, self.center + self.dot - 1, -1):
             ls = self[i].right_canonicalize()
             if i - 1 >= 0:
                 ts = self.select({i - 1}).tensors[0]
-                if i - 1 == self.center + self.dot - 1 and self.dot == 2:
+                unfused = False
+                if i - 1 == self.center + self.dot - 1 and self.dot == 2 and ts.rank == 2:
                     r = self.lcp.right_dims[i]
                     ts.unfuse_index(1, self.lcp.basis[i - 1], r)
+                    unfused = True
                 ts.right_multiply(ls)
-                if i - 1 == self.center + self.dot - 1 and self.dot == 2:
+                if unfused:
                     rd = self.lcp.tensor_product(self.lcp.basis[i - 1], r)
                     ts.fuse_index(1, rd, target=self.lcp.target)
