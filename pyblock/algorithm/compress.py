@@ -59,7 +59,9 @@ class Compress:
         assert mps.center == ket_mps.center
         self.bond_dims = bond_dims if isinstance(bond_dims, list) else [bond_dims]
         self.noise = noise if isinstance(noise, list) else [noise]
-
+        
+        self.mps = mps.deep_copy()
+        
         self._k = ket_mps.deep_copy().add_tags({'_KET'}) # const MPS
         self._b = mps.deep_copy().add_tags({'_BRA'}) # target MPS
         self._h = mpo.copy().add_tags({'_HAM'})
@@ -86,6 +88,15 @@ class Compress:
         
         if not self.rebuild:
             self.construct_envs()
+    
+    def set_mps(self, tags, wfn):
+        self.mps = self._b.deep_copy()
+        self.mps.center = self.center
+        self.mps.dot = self.dot
+        self.mps.replace(tags, wfn.deep_copy().set_tags(tags), which='any')
+        self.mps.remove_tags({'_BRA'})
+        self.mps.form = self.bra_canonical_form.copy()
+        self.mps.set_contractor(None)
     
     def update_one_dot(self, i, forward, bond_dim, noise, beta):
         """
@@ -132,11 +143,13 @@ class Compress:
 
         if not fuse_left and forward:
             psi_bra = ctr.unfuse_right(i, psi_bra.add_tags({'_BRA'})).add_tags({'_BRA'})
+            self.set_mps({i}, psi_bra)
             ctr.fuse_left(i, psi_bra, self.bra_canonical_form[i])
             psi_ket = ctr.unfuse_right(i, psi_ket.add_tags({'_KET'})).add_tags({'_KET'})
             ctr.fuse_left(i, psi_ket, self.ket_canonical_form[i])
         elif fuse_left and not forward:
             psi_bra = ctr.unfuse_left(i, psi_bra.add_tags({'_BRA'})).add_tags({'_BRA'})
+            self.set_mps({i}, psi_bra)
             ctr.fuse_right(i, psi_bra, self.bra_canonical_form[i])
             psi_ket = ctr.unfuse_left(i, psi_ket.add_tags({'_KET'})).add_tags({'_KET'})
             ctr.fuse_right(i, psi_ket, self.ket_canonical_form[i])
@@ -247,6 +260,8 @@ class Compress:
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         psi_ket = self.eff_ham()[{i, i + 1, '_KET'}]
         energy, psi_bra, nexpo = ctr.apply(h_eff, psi_ket)
+        
+        self.set_mps({i, i + 1}, psi_bra)
         
         if forward:
             ket_limit = ctr.bond_left({'_KET'})[i]

@@ -59,7 +59,9 @@ class ExpoApply:
         self.dot = mps.dot
         self.center = mps.center
         self.bond_dims = bond_dims if isinstance(bond_dims, list) else [bond_dims]
-
+        
+        self.mps = mps.deep_copy()
+        
         self._k = mps.deep_copy().add_tags({'_KET'})
         self._b = mps.deep_copy().add_tags({'_BRA'})
         self._h = mpo.copy().add_tags({'_HAM'})
@@ -75,6 +77,8 @@ class ExpoApply:
             self.canonical_form = canonical_form
 
         self.energies = []
+        self.normsqs = []
+        self.errors = []
         
         self._pre_sweep = contractor.pre_sweep if contractor is not None else lambda: None
         self._post_sweep = contractor.post_sweep if contractor is not None else lambda: None
@@ -83,8 +87,20 @@ class ExpoApply:
 
         self.rebuild = contractor.rebuild
         
+        self.last_psi = None
+        self.last_psi_tags = None
+        
         if not self.rebuild:
             self.construct_envs()
+    
+    def set_mps(self, tags, wfn):
+        self.mps = self._b.deep_copy()
+        self.mps.center = self.center
+        self.mps.dot = self.dot
+        self.mps.replace(tags, wfn.deep_copy().set_tags(tags), which='any')
+        self.mps.remove_tags({'_BRA'})
+        self.mps.form = self.canonical_form.copy()
+        self.mps.set_contractor(None)
     
     def update_one_dot(self, i, forward, bond_dim, beta):
         """
@@ -135,9 +151,11 @@ class ExpoApply:
         
         if not fuse_left and forward:
             bra = ctr.unfuse_right(i, bra)
+            self.set_mps({i}, bra)
             ctr.fuse_left(i, bra, self.canonical_form[i])
         elif fuse_left and not forward:
             bra = ctr.unfuse_left(i, bra)
+            self.set_mps({i}, bra)
             ctr.fuse_right(i, bra, self.canonical_form[i])
         
         if forward:
@@ -249,6 +267,8 @@ class ExpoApply:
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         ket = self.eff_ham()[{i, i + 1, '_KET'}]
         energy, normsq, bra, nexpo = ctr.expo_apply(h_eff, ket, beta)
+        
+        self.set_mps({i, i + 1}, bra)
         
         if forward:
             limit = ctr.bond_upper_limit_left()[i]
@@ -362,6 +382,8 @@ class ExpoApply:
                 Energy of state exp(-beta H) |psi>.
             normsq : float
                 Self inner product of state exp(-beta H) |psi>.
+            error : float
+                Largest sum of discarded weights.
         """
         self._pre_sweep()
         
@@ -379,6 +401,7 @@ class ExpoApply:
         
         sweep_energies = []
         sweep_normsqs = []
+        sweep_errors = []
 
         for i in sweep_range:
             if self.dot == 2:
@@ -390,12 +413,13 @@ class ExpoApply:
             pprint("Nexpo = %4d/%4d E = %15.8f Error = %15.8f T = %4.2f" % (nexpos[0], nexpos[1], energy, error, time.perf_counter() - t))
             sweep_energies.append(energy)
             sweep_normsqs.append(normsq)
+            sweep_errors.append(error)
         
         self._post_sweep()
 
-        return sweep_energies[-1], sweep_normsqs[-1]
+        return sweep_energies[-1], sweep_normsqs[-1], max(sweep_errors)
 
-    def solve(self, n_sweeps, forward=True, two_dot_to_one_dot=-1):
+    def solve(self, n_sweeps, forward=True, two_dot_to_one_dot=-1, current_beta=0.0, iprint=True):
         """
         Perform time evolution algorithm.
         
@@ -415,8 +439,6 @@ class ExpoApply:
             self.bond_dims.extend([self.bond_dims[-1]] * (n_sweeps - len(self.bond_dims)))
         
         start = time.perf_counter()
-        
-        current_beta = 0.0
 
         for iw in range(n_sweeps):
 
@@ -430,13 +452,15 @@ class ExpoApply:
                 if self.center != 0 and self.center == self.n_sites - 2:
                     self.center = self.n_sites - 1
 
-            energy, normsq = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], beta=self.beta / 2)
+            energy, normsq, error = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], beta=self.beta / 2)
             self.energies.append(energy)
+            self.normsqs.append(normsq)
+            self.errors.append(error)
 
             forward = not forward
             
             pprint('Time elapsed = %10.2f' % (time.perf_counter() - start))
-            if iw % 2 == 1:
+            if iw % 2 == 1 and iprint:
                 pprint('Beta = %10.5f Energy = %15.8f Norm^2 = %15.8f' % (current_beta, energy, normsq))
             
             if self.canonical_form.count('C') != 0:

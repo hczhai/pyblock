@@ -898,6 +898,12 @@ class Tensor:
         for b in o.blocks:
             if b.q_labels not in map_blocks:
                 self.blocks.append(SubTensor(q_labels=b.q_labels, reduced=np.zeros_like(b.reduced), cgs=None))
+    
+    def fit(self, o, v):
+        omap_blocks = { b.q_labels : b for b in o.blocks }
+        for b in self.blocks:
+            if b.q_labels in omap_blocks:
+                b.reduced.reshape((-1, ))[0] = v
 
     def equal_shape(self, o):
         lb = sorted(self.blocks, key=lambda x: x.q_labels)

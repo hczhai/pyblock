@@ -622,6 +622,16 @@ class MPS(TensorNetwork):
             tensors = self._init_mps_tensors(lcp, iprint=iprint)
         super().__init__(tensors)
     
+    def update_line_coupling(self):
+        for i in range(0, self.center):
+            dd = { b.q_labels[2]: b.reduced.shape[2] for b in self.tensors[{i}] }
+            self.lcp.left_dims[i] = collections.Counter(dd)
+        for i in range(self.n_sites - 1, self.center + self.dot - 1, -1):
+            dd = { b.q_labels[0]: b.reduced.shape[0] for b in self.tensors[{i}] }
+            self.lcp.right_dims[i] = collections.Counter(dd)
+        self.lcp._post_check_left()
+        self.lcp._post_check_right()
+    
     @staticmethod
     def from_tensor_network(tn, mps_info, center, dot=2):
         r = MPS(mps_info.lcp, center, dot, tensors=tn.tensors[:])
@@ -659,6 +669,13 @@ class MPS(TensorNetwork):
     
     def zero_copy(self):
         return MPS(self.lcp, self.center, self.dot, tensors=super().zero_copy().tensors)
+    
+    def deep_copy(self):
+        return MPS(self.lcp, self.center, self.dot, tensors=super().deep_copy().tensors)
+    
+    def fit(self, o, v):
+        for ts, ots in zip(self.tensors, o.tensors):
+            ts.fit(ots, v)
     
     def randomize(self):
         """Fill MPS reduced matrices with random numbers in [0, 1)."""

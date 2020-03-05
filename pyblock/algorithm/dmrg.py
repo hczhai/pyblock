@@ -50,11 +50,12 @@ class MovingEnvironment:
         envs : dict(int -> TensorNetwork)
             DMRG Environment for different positions of left dot.
     """
-    def __init__(self, n_sites, center, dot, tn):
+    def __init__(self, n_sites, center, dot, tn, iprint=True):
         self.pos = center
         self.dot = dot
         self.n_sites = n_sites
         self.tnc = tn.copy()
+        self.iprint = iprint
         self.init_environments()
     
     def init_environments(self):
@@ -72,8 +73,10 @@ class MovingEnvironment:
         # i = 0, dot = 1 :: [sys=][sdot=0][env=1,2..]
         # i = 0, dot = 2 :: [sys=][sdot=0][edot=1][env=2,3..]
         for i in range(self.n_sites - self.dot - 1, self.pos - 1, -1):
-            pprint("\r Constructing environment .. %3d%% " % ((self.n_sites - self.dot - i) * 100 // self.n_sites),
-                   end="", flush=True)
+            if self.iprint:
+                pprint("\r Constructing environment .. %3d%% " %
+                       ((self.n_sites - self.dot - i) * 100 // self.n_sites),
+                       end="", flush=True)
             # add a new site to previous env, and contract one site
             self.envs[i] = self.envs[i + 1].copy()
             self.envs[i].remove({i}, in_place=True)
@@ -86,9 +89,10 @@ class MovingEnvironment:
         # i = n - 1, dot = 1 :: [env=..n-2][sdot=n-1][sys=]
         # i = n - 2, dot = 2 :: [env=..n-3][edot=n-2][sdot=n-1][sys=]
         for i in range(0, self.pos):
-            pprint("\r Constructing environment .. %3d%% " %
-                   ((self.n_sites - self.dot - self.pos + i + 1) * 100 // self.n_sites),
-                   end="", flush=True)
+            if self.iprint:
+                pprint("\r Constructing environment .. %3d%% " %
+                       ((self.n_sites - self.dot - self.pos + i + 1) * 100 // self.n_sites),
+                       end="", flush=True)
             # add a new site to previous env, and contract one site
             self.envs[i] = self.envs[i - 1].copy()
             self.envs[i].remove({i + self.dot - 1}, in_place=True)
@@ -181,7 +185,9 @@ class DMRG:
         self.center = mps.center
         self.bond_dims = bond_dims if isinstance(bond_dims, list) else [bond_dims]
         self.noise = noise if isinstance(noise, list) else [noise]
-
+        
+        self.mps = mps.deep_copy()
+        
         self._k = mps.deep_copy().add_tags({'_KET'})
         self._b = mps.deep_copy().add_tags({'_BRA'})
         self._h = mpo.copy().add_tags({'_HAM'})
@@ -202,6 +208,15 @@ class DMRG:
         
         if not self.rebuild:
             self.construct_envs()
+    
+    def set_mps(self, tags, wfn):
+        self.mps = self._k.deep_copy()
+        self.mps.center = self.center
+        self.mps.dot = self.dot
+        self.mps.replace(tags, wfn.deep_copy().set_tags(tags), which='any')
+        self.mps.remove_tags({'_KET'})
+        self.mps.form = self.canonical_form.copy()
+        self.mps.set_contractor(None)
     
     def update_one_dot(self, i, forward, bond_dim, noise):
         """
@@ -249,9 +264,11 @@ class DMRG:
         
         if not fuse_left and forward:
             gs = ctr.unfuse_right(i, gs)
+            self.set_mps({i}, gs)
             ctr.fuse_left(i, gs, self.canonical_form[i])
         elif fuse_left and not forward:
             gs = ctr.unfuse_left(i, gs)
+            self.set_mps({i}, gs)
             ctr.fuse_right(i, gs, self.canonical_form[i])
         
         if forward:
@@ -342,6 +359,8 @@ class DMRG:
         h_eff = (self.eff_ham() ^ '_HAM')['_HAM']
         gs_old = self.eff_ham()[{i, i + 1, '_KET'}]
         energy, gs, ndav = ctr.eigs(h_eff, gs_old)
+        
+        self.set_mps({i, i + 1}, gs)
         
         if forward:
             limit = ctr.bond_upper_limit_left()[i]

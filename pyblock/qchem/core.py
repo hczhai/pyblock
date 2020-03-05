@@ -119,6 +119,8 @@ class BlockEvaluation:
             new_opt : OperatorTensor
                 Operator tensor in (truncated) new basis.
         """
+        if mps_info is None:
+            return opt
         old_st = mps_info.left_state_info_no_trunc[i]
         new_st = mps_info.left_state_info[i]
         rmat = mps_info.get_left_rotation_matrix(i, mpst)
@@ -155,6 +157,8 @@ class BlockEvaluation:
             new_opt : OperatorTensor
                 Operator tensor in (truncated) new basis.
         """
+        if mps_info is None:
+            return opt
         old_st = mps_info.right_state_info_no_trunc[i]
         new_st = mps_info.right_state_info[i]
         rmat = mps_info.get_right_rotation_matrix(i, mpst)
@@ -191,11 +195,13 @@ class BlockEvaluation:
             new_opt : OperatorTensor
                 Operator tensor in untruncated basis in current left block.
         """
-        if bra_mps_info is None:
+        op_names = mpo_info.right_operator_names[i]
+        if mps_info is None:
+            return optd.__class__(mat=op_names.reshape((1, -1)), ops={}, tags=optd.tags, contractor=optd.contractor)
+        elif bra_mps_info is None:
             sts = VectorStateInfo([mps_info.left_state_info_no_trunc[i]])
         else:
             sts = VectorStateInfo([bra_mps_info.left_state_info_no_trunc[i], mps_info.left_state_info_no_trunc[i]])
-        op_names = mpo_info.right_operator_names[i]
         exprs = mpo_info.cached_exprs.get((i, '_LEFT'), None)
         if exprs is None:
             new_mat = optl.mat @ optd.mat
@@ -235,11 +241,13 @@ class BlockEvaluation:
             new_opt : OperatorTensor
                 Operator tensor in untruncated basis in current right block.
         """
-        if bra_mps_info is None:
+        op_names = mpo_info.left_operator_names[i]
+        if mps_info is None:
+            return optd.__class__(mat=op_names.reshape((-1, 1)), ops={}, tags=optd.tags, contractor=optd.contractor)
+        elif bra_mps_info is None:
             sts = VectorStateInfo([mps_info.right_state_info_no_trunc[i]])
         else:
             sts = VectorStateInfo([bra_mps_info.right_state_info_no_trunc[i], mps_info.right_state_info_no_trunc[i]])
-        op_names = mpo_info.left_operator_names[i]
         exprs = mpo_info.cached_exprs.get((i, '_RIGHT'), None)
         if exprs is None:
             new_mat = optd.mat @ optr.mat

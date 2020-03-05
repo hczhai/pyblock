@@ -3,7 +3,7 @@ from pyblock.qchem import BlockHamiltonian, DMRGContractor
 from pyblock.qchem import MPSInfo, IdentityMPOInfo, IdentityMPO
 from pyblock.qchem import DMRGDataPage, Simplifier, AllRules, NoTransposeRules
 from pyblock.qchem.ancilla import LineCoupling, MPOInfo, MPS, MPO
-from pyblock.algorithm import ExpoApply, Compress
+from pyblock.algorithm import ExpoApply, Compress, Expect
 
 import numpy as np
 import pytest
@@ -85,4 +85,9 @@ class TestDMRGOneSite:
             te = ExpoApply(mpo, mps0, bond_dims=bdims, beta=beta, contractor=ctr, canonical_form=mps0_form)
             ener = te.solve(10, forward=cps.forward, two_dot_to_one_dot=tto)
             assert abs(ener - (-8.30251649)) <= 5E-3
+            # Expectation
+            mps0 = te.mps
+            normsq = te.normsqs[-1]
+            fener = Expect(mpo, mps0, mps0, mps0.form, None, contractor=ctr).solve() / normsq
+            assert abs(ener - fener) <= 1E-6
 

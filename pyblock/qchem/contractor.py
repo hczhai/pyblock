@@ -164,7 +164,9 @@ class DMRGContractor:
         self.n_sites = mpo_info.n_sites
         self.mem_ptr = 0
         self.rebuild = self.mpo_info.hamil.page is None
-        if self.rebuild:
+        if mps_info is None:
+            self.rebuild = False
+        if self.rebuild or mps_info is None:
             self.page = DataPage().get()
         else:
             self.page = self.mpo_info.hamil.page.get()
@@ -226,6 +228,44 @@ class DMRGContractor:
             sts = (st_l, st_r)
         return st_l, st_r, sts
 
+    def expect(self, opt, brat, kett):
+        
+        dot = len(brat.tags - {'_BRA'})
+        
+        i = self._tag_site(kett)
+        assert dot == 2 or '_FUSE_L' in opt.tags or '_FUSE_R' in opt.tags or '_NO_FUSE' in opt.tags
+        
+        kst_l, kst_r, ksts = self._get_state_info(dot, i, self.n_sites, opt, self._get_mps_info({'_KET'}))
+        bst_l, bst_r, bsts = self._get_state_info(dot, i, self.n_sites, opt, self._get_mps_info({'_BRA'}))
+        
+        super_sts = VectorStateInfo([state_tensor_product_target(bst_l, bst_r),
+                                     state_tensor_product_target(kst_l, kst_r)])
+        bopt = BlockMultiplyH(opt, super_sts, diag=False)
+
+        rwfn = self._get_mps_info({'_BRA'}).get_wavefunction_fused(i, None, dot=dot, sts=bsts)
+        bwfn = self._get_mps_info({'_BRA'}).get_wavefunction_fused(i, brat, dot=dot, sts=bsts)
+        kwfn = self._get_mps_info({'_KET'}).get_wavefunction_fused(i, kett, dot=dot, sts=ksts)
+        
+        brwfn = BlockWavefunction(rwfn)
+        bkwfn = BlockWavefunction(kwfn)
+        bbwfn = BlockWavefunction(bwfn)
+        
+        bopt.apply(bkwfn, brwfn)
+        result = brwfn.dot(bbwfn)
+        
+        if dot == 2 or '_FUSE_L' in opt.tags or '_NO_FUSE' in opt.tags:
+            self.page.unload({i, '_LEFT'})
+            self.page.unload({i + 1, '_RIGHT'})
+        else:
+            self.page.unload({i - 1, '_LEFT'})
+            self.page.unload({i, '_RIGHT'})
+        
+        bkwfn.deallocate()
+        bbwfn.deallocate()
+        brwfn.deallocate()
+        
+        return result
+    
     def apply(self, opt, mpst):
         
         dot = len(mpst.tags - {'_KET', '_BRA'})
@@ -234,8 +274,8 @@ class DMRGContractor:
         i = self._tag_site(mpst)
         assert dot == 2 or '_FUSE_L' in opt.tags or '_FUSE_R' in opt.tags or '_NO_FUSE' in opt.tags
         
-        kst_l, kst_r, ksts = self._get_state_info(dot, i, self.n_sites, opt, self.mps_info['_KET'])
-        bst_l, bst_r, bsts = self._get_state_info(dot, i, self.n_sites, opt, self.mps_info['_BRA'])
+        kst_l, kst_r, ksts = self._get_state_info(dot, i, self.n_sites, opt, self._get_mps_info({'_KET'}))
+        bst_l, bst_r, bsts = self._get_state_info(dot, i, self.n_sites, opt, self._get_mps_info({'_BRA'}))
         
         super_sts = VectorStateInfo([state_tensor_product_target(bst_l, bst_r),
                                      state_tensor_product_target(kst_l, kst_r)])
@@ -283,12 +323,12 @@ class DMRGContractor:
         bbwfn = BlockWavefunction(bwfn)
         assert len(bkwfn.ref) == len(bbwfn.ref)
         vs, nexpo = expo(bopt, bkwfn, beta, const_a=self.mpo_info.hamil.e)
-        
+
         bopt.apply(vs, bbwfn)
         normsq = vs.dot(vs)
         energy = vs.dot(bbwfn) / normsq
         bbwfn.deallocate()
-        
+
         if dot == 2 or '_FUSE_L' in opt.tags or '_NO_FUSE' in opt.tags:
             self.page.unload({i, '_LEFT'})
             self.page.unload({i + 1, '_RIGHT'})
@@ -298,9 +338,9 @@ class DMRGContractor:
 
         v = self.mps_info.from_wavefunction_fused(i, vs.data, sts=sts)
         # v.align(mpst)
-        
+
         vs.deallocate()
-        
+
         return energy, normsq, v, nexpo
     
     def eigs(self, opt, mpst):
@@ -461,13 +501,18 @@ class DMRGContractor:
             dir, i, j = tags
         else:
             dir = tags[0]
-        if isinstance(self.mps_info, dict):
+        if self.mps_info is None:
+            info_ket, info_bra = None, None
+        elif isinstance(self.mps_info, dict):
             info_ket, info_bra = self.mps_info['_KET'], self.mps_info['_BRA']
         else:
             info_ket, info_bra = self.mps_info, None
         if dir == '_LEFT':
-            ket = tn[{i, '_KET'}]
-            bra = tn[{i, '_BRA'}]
+            if self.mps_info is None:
+                ket, bra = None
+            else:
+                ket = tn[{i, '_KET'}]
+                bra = tn[{i, '_BRA'}]
             ham = tn[{i, '_HAM'}]
             self.page.activate({i, '_LEFT'}, reset=True)
             if i == 0:
@@ -483,8 +528,11 @@ class DMRGContractor:
             self.page.save({i, '_LEFT'})
             return ham_rot
         elif dir == '_RIGHT':
-            ket = tn[{i, '_KET'}]
-            bra = tn[{i, '_BRA'}]
+            if self.mps_info is None:
+                ket, bra = None
+            else:
+                ket = tn[{i, '_KET'}]
+                bra = tn[{i, '_BRA'}]
             ham = tn[{i, '_HAM'}]
             self.page.activate({i, '_RIGHT'}, reset=True)
             if i == self.n_sites - 1:
