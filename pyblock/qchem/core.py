@@ -587,6 +587,9 @@ class BlockHamiltonian:
                 self.t = t
                 self.v = v
                 self.e = e
+            
+            if self.page is not None:
+                input['scratch'] = str(self.page.save_dir)
 
             for k, v in kwargs.items():
                 if k in ['orbitals', 'fcidump']:
@@ -691,6 +694,30 @@ class BlockHamiltonian:
             mat.operator_element(2, 2).ref[0, 0] = 1.0
             ops[OpElement(OpNames.I, ())] = mat
             
+            if op_set == { OpElement(OpNames.I, ()) }:
+                return ops
+            
+            if OpElement(OpNames.N, ()) in op_set or OpElement(OpNames.NN, ()) in op_set:
+                
+                mat = StackSparseMatrix()
+                mat.fermion = False
+                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
+                mat.allocate(self.site_state_info[m])
+                mat.initialized = True
+                mat.operator_element(0, 0).ref[0, 0] = 0.0
+                mat.operator_element(1, 1).ref[0, 0] = 1.0
+                mat.operator_element(2, 2).ref[0, 0] = 2.0
+                ops[OpElement(OpNames.N, ())] = mat
+                
+                if OpElement(OpNames.NN, ()) in op_set:
+                    
+                    mat2 = StackSparseMatrix()
+                    mat2.deep_clear_copy(mat)
+                    product(mat, mat, mat2, self.site_state_info[m][0], 1.0)
+                    ops[OpElement(OpNames.NN, ())] = mat2
+                
+                return ops
+            
             mat = StackSparseMatrix()
             mat.fermion = False
             mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
@@ -709,7 +736,7 @@ class BlockHamiltonian:
             mat.operator_element(1, 0).ref[0, 0] = 1.0
             mat.operator_element(2, 1).ref[0, 0] = -np.sqrt(2)
             ops[OpElement(OpNames.C, (m, ))] = mat
-
+            
             mat = StackSparseMatrix()
             mat.fermion = True
             mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.one_site_q[m])])
@@ -723,6 +750,7 @@ class BlockHamiltonian:
             raise BlockError('non spin-adapted case not implemented.')
         
         for s in [0, 1]:
+            
             mat = StackSparseMatrix()
             mat.fermion = False
             mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_plus_q[m, m][s])])
@@ -731,8 +759,7 @@ class BlockHamiltonian:
             product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.C, (m, ))],
                     mat, self.site_state_info[m][0], 1.0)
             ops[OpElement(OpNames.A, (m, m, s))] = mat
-        
-        for s in [0, 1]:
+
             mat = StackSparseMatrix()
             mat.fermion = False
             mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.two_site_plus_q[m, m][s])])
@@ -742,7 +769,6 @@ class BlockHamiltonian:
                     mat, self.site_state_info[m][0], 1.0)
             ops[OpElement(OpNames.AD, (m, m, s))] = mat
         
-        for s in [0, 1]:
             mat = StackSparseMatrix()
             mat.fermion = False
             mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[m, m][s])])
@@ -872,7 +898,6 @@ class BlockHamiltonian:
                         mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[i, j][1])])
                         ops[OpElement(OpNames.Q, (i, j, 1))] = mat
         
-        # TODO :: need to store Block to deallocate it later
         return ops
     
     @staticmethod

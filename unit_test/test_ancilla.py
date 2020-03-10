@@ -3,6 +3,7 @@ from pyblock.qchem import BlockHamiltonian, DMRGContractor
 from pyblock.qchem import MPSInfo, IdentityMPOInfo, IdentityMPO
 from pyblock.qchem import DMRGDataPage, Simplifier, AllRules, NoTransposeRules
 from pyblock.qchem.ancilla import LineCoupling, MPOInfo, MPS, MPO
+from pyblock.qchem.thermal import FreeEnergy
 from pyblock.algorithm import ExpoApply, Compress, Expect
 
 import numpy as np
@@ -33,6 +34,8 @@ class TestDMRGOneSite:
             mps = MPS(lcp, center=0, dot=2)
             mps.fill_thermal_limit()
             mps.canonicalize()
+            fe_hamil = FreeEnergy(hamil)
+            fe_hamil.set_free_energy(mu=1.0)
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
             te = ExpoApply(mpo, mps, bond_dims=50, beta=0.02, contractor=ctr)
@@ -66,6 +69,8 @@ class TestDMRGOneSite:
             mps_info = MPSInfo(lcp)
             mps_info_d = { '_BRA': mps_info, '_KET': mps_info_thermal }
             # MPO
+            fe_hamil = FreeEnergy(hamil)
+            fe_hamil.set_free_energy(mu=1.0)
             mpo = MPO(hamil)
             mpo_info = MPOInfo(hamil)
             # Identity MPO
@@ -90,4 +95,4 @@ class TestDMRGOneSite:
             normsq = te.normsqs[-1]
             fener = Expect(mpo, mps0, mps0, mps0.form, None, contractor=ctr).solve() / normsq
             assert abs(ener - fener) <= 1E-6
-
+        page.clean()

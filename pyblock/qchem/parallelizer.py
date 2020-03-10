@@ -180,7 +180,7 @@ class ParaRule:
             return ParaProperty(TInt.find_index(*op.site_index[:2]) % self.size, False, False)
         
 class Parallelizer:
-    def __init__(self, rule, rank=mpi_rank, random_seed=None):
+    def __init__(self, rule, rank=mpi_rank):
         self.rule = rule
         self.op_map = {}
         self.rank = rank

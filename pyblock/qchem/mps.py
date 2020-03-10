@@ -200,6 +200,13 @@ class MPSInfo:
         self.right_block_basis = [sorted(rd.items(), key=lambda x: x[0]) for rd in self.lcp.right_dims]
         self._init_state_info()
     
+    def __getstate__(self):
+        return (self.lcp, self.n_sites, self.basis, self.left_block_basis, self.right_block_basis)
+    
+    def __setstate__(self, state):
+        self.lcp, self.n_sites, self.basis, self.left_block_basis, self.right_block_basis = state
+        self._init_state_info()
+    
     def _init_state_info(self):
         """Generate StateInfo objects."""
         self.left_state_info = [None] * self.n_sites
@@ -688,10 +695,15 @@ class MPS(TensorNetwork):
             if ts.rank == 3:
                 ts.build_zero()
                 ts.build_identity()
-            
-    def canonicalize(self):
+    
+    def canonicalize(self, random=False):
         """Canonicalization."""
+        if random:
+            for ts in self.tensors:
+                ts.build_random()
         for i in range(0, self.center):
+            if random:
+                self[i].build_random()
             rs = self[i].left_canonicalize()
             if i + 1 < self.n_sites:
                 ts = self.select({i + 1}).tensors[0]
@@ -705,6 +717,8 @@ class MPS(TensorNetwork):
                     ld = self.lcp.tensor_product(l, self.lcp.basis[i + 1])
                     ts.fuse_index(0, ld, target=self.lcp.target)
         for i in range(self.n_sites - 1, self.center + self.dot - 1, -1):
+            if random:
+                self[i].build_random()
             ls = self[i].right_canonicalize()
             if i - 1 >= 0:
                 ts = self.select({i - 1}).tensors[0]

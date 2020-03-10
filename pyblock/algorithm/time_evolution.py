@@ -435,6 +435,7 @@ class ExpoApply:
             energy : float
                 Energy of state exp(-beta * (n_sweeps/2) H) |psi>.
         """
+        
         if len(self.bond_dims) < n_sweeps:
             self.bond_dims.extend([self.bond_dims[-1]] * (n_sweeps - len(self.bond_dims)))
         
@@ -471,6 +472,7 @@ class ExpoApply:
                 cc = self.canonical_form.index('S')
             else:
                 raise TimeEvolutionError('Unknown canonical form!!')
+            
             normalized = self._k[{cc, '_KET'}] * (1 / np.sqrt(normsq))
             self._k[{cc, '_KET'}].modify(normalized)
             self._b[{cc, '_BRA'}].modify(normalized)

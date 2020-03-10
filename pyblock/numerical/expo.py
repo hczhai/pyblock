@@ -25,10 +25,10 @@ def stdout_redirected(to=os.devnull):
     else:
         yield
 
-def expo(a, b, beta, const_a=0.0):
+def expo(a, b, beta, const_a=0.0, expo_tol=0, deflation_max_size=20):
     """Calculate exp(-beta (a + const_a)) b."""
     n = b.ref.size
-    m = min(30, n - 1)
+    m = min(deflation_max_size, n - 1)
     v = b.ref.copy()
     wsp = np.zeros(1000 + 7 + n * (m + 2) + 5 * (m + 2) * (m + 2), dtype=float)
     iwsp = np.zeros(100 + m + 3, dtype=int)
@@ -53,7 +53,7 @@ def expo(a, b, beta, const_a=0.0):
             return y + const_a * x
 
     with stdout_redirected():
-        u, tol, iflag = dsexpv(m, -beta, v, 0.0, anorm, wsp, iwsp, lambda x: adot(x), 0)
+        u, tol, iflag = dsexpv(m, -beta, v, expo_tol, anorm, wsp, iwsp, lambda x: adot(x), 0)
     
     tmpb.deallocate()
     tmpa.deallocate()

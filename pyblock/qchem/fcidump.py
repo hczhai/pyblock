@@ -59,6 +59,11 @@ class TInt:
 
     def __repr__(self):
         return [(i, j, self[i, j]) for i in range(self.n) for j in range(i + 1)].__repr__()
+    
+    def copy(self):
+        r = self.__class__(self.n)
+        r.data = self.data.copy()
+        return r
 
 
 # two-electron integrals

@@ -51,7 +51,7 @@ class Compress:
         bond_dims : list(int) or int
             Bond dimension for each sweep.
     """
-    def __init__(self, mpo, mps, ket_mps, bond_dims, noise, ket_canonical_form=None, contractor=None):
+    def __init__(self, mpo, mps, ket_mps, bond_dims, noise, bra_canonical_form=None, ket_canonical_form=None, contractor=None):
         self.n_sites = len(mpo)
         self.dot = mps.dot
         self.center = mps.center
@@ -68,9 +68,12 @@ class Compress:
         
         self._h.set_contractor(contractor)
         
-        self.bra_canonical_form  = ['L'] * min(self.center, self.n_sites)
-        self.bra_canonical_form += ['C'] * self.dot
-        self.bra_canonical_form += ['R'] * max(self.n_sites - self.center - self.dot, 0)
+        if bra_canonical_form is None:
+            self.bra_canonical_form  = ['L'] * min(self.center, self.n_sites)
+            self.bra_canonical_form += ['C'] * self.dot
+            self.bra_canonical_form += ['R'] * max(self.n_sites - self.center - self.dot, 0)
+        else:
+            self.bra_canonical_form = bra_canonical_form
         
         if ket_canonical_form is not None:
             self.ket_canonical_form = ket_canonical_form

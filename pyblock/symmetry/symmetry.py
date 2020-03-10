@@ -33,6 +33,9 @@ class HashIrrep:
     def __init__(self, ir):
         self.ir = ir
 
+    def __getnewargs__(self):
+        return (self.ir, )
+        
     def __eq__(self, o):
         return self.ir == o.ir
     
@@ -195,6 +198,9 @@ class SU2Proj(SU2):
     
     def __init__(self, s, sz):
         pass
+    
+    def __getnewargs__(self):
+        return (self.s, self.sz)
     
     def __new__(cls, s, sz):
         if isinstance(s, Fraction) or isinstance(s, float):

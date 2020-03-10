@@ -528,4 +528,5 @@ class DMRG:
             if converged:
                 break
         
+        self.forward = forward
         return energy

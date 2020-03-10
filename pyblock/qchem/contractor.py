@@ -96,7 +96,7 @@ class DMRGDataPage(DataPage):
     
     def _get_file_name(self, tags):
         """Return the data page filename for the given data tags."""
-        return os.path.join(self.save_dir, ".".join(sorted(map(str, tags))) + '.page.tmp')
+        return os.path.join(self.save_dir, ".".join(sorted(map(str, tags))) + ".%d" % self.i_frame + '.page.tmp')
 
     def load(self, tags):
         """Load data page from disk to memory, for reading data."""
@@ -117,14 +117,13 @@ class DMRGDataPage(DataPage):
     def activate(self, tags, reset=False):
         """Activate one data page in memory for writing data."""
         ip = self._get_page(tags)
-        if ip != self.main_page:
-            if reset:
-                assert ip not in self.current_pages
-            self.current_pages[ip] = tags
-            self.main_page = ip
-            activate_data_page(ip)
-            if reset:
-                set_data_page_pointer(ip, 0)
+        if reset:
+            assert ip not in self.current_pages
+        self.current_pages[ip] = tags
+        self.main_page = ip
+        activate_data_page(ip)
+        if reset:
+            set_data_page_pointer(ip, 0)
     
     def save(self, tags):
         """Save the data page in memory to disk."""
@@ -137,12 +136,15 @@ class DMRGDataPage(DataPage):
     
     def initialize(self):
         """Allocate memory for all pages."""
-        init_data_pages(self.n_pages * self.n_frames)
+        if self.i_frame == 0:
+            init_data_pages(self.n_pages * self.n_frames)
+        self.current_pages = {}
         self.activate({'_BASE'})
     
     def release(self):
         """Deallocate memory for all pages."""
-        release_data_pages()
+        if self.i_frame == 0:
+            release_data_pages()
     
     def clean(self):
         """Delete all temporary files."""
@@ -228,7 +230,7 @@ class DMRGContractor:
             sts = (st_l, st_r)
         return st_l, st_r, sts
 
-    def expect(self, opt, brat, kett):
+    def expect(self, opt, brat, kett, do_square=False):
         
         dot = len(brat.tags - {'_BRA'})
         
@@ -252,6 +254,9 @@ class DMRGContractor:
         
         bopt.apply(bkwfn, brwfn)
         result = brwfn.dot(bbwfn)
+        
+        if do_square:
+            result = np.array([result, brwfn.dot(brwfn)])
         
         if dot == 2 or '_FUSE_L' in opt.tags or '_NO_FUSE' in opt.tags:
             self.page.unload({i, '_LEFT'})
@@ -281,8 +286,8 @@ class DMRGContractor:
                                      state_tensor_product_target(kst_l, kst_r)])
         bopt = BlockMultiplyH(opt, super_sts, diag=False)
 
-        bwfn = self.mps_info['_BRA'].get_wavefunction_fused(i, None, dot=dot, sts=bsts)
-        kwfn = self.mps_info['_KET'].get_wavefunction_fused(i, mpst, dot=dot, sts=ksts)
+        bwfn = self._get_mps_info({'_BRA'}).get_wavefunction_fused(i, None, dot=dot, sts=bsts)
+        kwfn = self._get_mps_info({'_KET'}).get_wavefunction_fused(i, mpst, dot=dot, sts=ksts)
         bkwfn = BlockWavefunction(kwfn)
         bbwfn = BlockWavefunction(bwfn)
         bopt.apply(bkwfn, bbwfn)
@@ -298,7 +303,7 @@ class DMRGContractor:
             self.page.unload({i - 1, '_LEFT'})
             self.page.unload({i, '_RIGHT'})
 
-        v = self.mps_info['_BRA'].from_wavefunction_fused(i, bbwfn.data, sts=bsts)
+        v = self._get_mps_info({'_BRA'}).from_wavefunction_fused(i, bbwfn.data, sts=bsts)
         
         bbwfn.deallocate()
         
@@ -337,7 +342,6 @@ class DMRGContractor:
             self.page.unload({i, '_RIGHT'})
 
         v = self.mps_info.from_wavefunction_fused(i, vs.data, sts=sts)
-        # v.align(mpst)
 
         vs.deallocate()
 
