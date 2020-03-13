@@ -133,7 +133,7 @@ def olsen_precondition(q, c, ld, diag):
     t.deallocate()
 
 # E.R. Davidson, J. Comput. Phys. 17 (1), 87-94 (1975).
-def davidson(a, b, k, max_iter=100, conv_thold=5e-6, deflation_min_size=2, deflation_max_size=20, iprint=False, mpi=False):
+def davidson(a, b, k, max_iter=500, conv_thold=5e-6, deflation_min_size=2, deflation_max_size=30, iprint=False, mpi=False):
     """
     Davidson diagonalization.
     

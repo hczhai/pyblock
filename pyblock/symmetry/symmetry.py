@@ -88,6 +88,10 @@ class ParticleN(HashIrrep):
     @staticmethod
     def clebsch_gordan(a, b, c):
         return np.array([[[1 if a + b == c else 0]]], dtype=float)
+    
+    @property
+    def multiplicity(self):
+        return 1
 
 
 class SU2(HashIrrep):
@@ -148,6 +152,10 @@ class SU2(HashIrrep):
 
     def to_multi(self):
         return self
+    
+    @property
+    def multiplicity(self):
+        return self.ir + 1
 
 
 class SZ(HashIrrep):
@@ -189,6 +197,10 @@ class SZ(HashIrrep):
     @staticmethod
     def clebsch_gordan(a, b, c):
         return np.array([[[1 if a + b == c else 0]]], dtype=float)
+    
+    @property
+    def multiplicity(self):
+        return 1
 
 
 # SU2 irreducible repr with sz quantum number
@@ -263,6 +275,10 @@ class SU2Proj(SU2):
         else:
             self.pir = sz
 
+    @property
+    def multiplicity(self):
+        return 1
+
 
 class PointGroup(HashIrrep):
     """
@@ -311,6 +327,10 @@ class PointGroup(HashIrrep):
     @staticmethod
     def clebsch_gordan(a, b, c):
         return np.array([[[1 if a + b == c else 0]]], dtype=float)
+    
+    @property
+    def multiplicity(self):
+        return 1
 
 
 class PGD2H(PointGroup):
@@ -355,6 +375,7 @@ class DirectProdGroup:
     def __init__(self, *args):
         self.irs = args
         self.ng = len(args)
+        self.multiplicity = np.prod([x.multiplicity for x in self.irs])
         assert self.ng != 0
 
     def __add__(self, o):

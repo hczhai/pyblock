@@ -3,6 +3,9 @@
 #include "global.h"
 #include "input.h"
 #include "timer.h"
+#ifdef _HAS_INTEL_MKL
+#include <mkl.h>
+#endif
 #include <pybind11/pybind11.h>
 #include <string>
 #include <vector>
@@ -24,6 +27,11 @@ void pybind_io(py::module &m) {
 
     m.def("init_stack_memory", []() {
         dmrginp.matmultFlops.resize(max(numthrds, dmrginp.quanta_thrds()), 0.);
+
+#ifdef _HAS_INTEL_MKL
+    mkl_set_num_threads(dmrginp.mkl_thrds());
+    mkl_set_dynamic(0);
+#endif
 
         cout.precision(12);
         cout << std::fixed;

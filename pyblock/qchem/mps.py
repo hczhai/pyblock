@@ -30,6 +30,7 @@ from block.operator import Wavefunction
 from ..symmetry.symmetry import DirectProdGroup
 from ..tensor.tensor import Tensor, SubTensor, TensorNetwork
 from .core import BlockSymmetry
+from .occupation import Occupation
 import numpy as np
 import bisect
 import collections
@@ -150,6 +151,10 @@ class LineCoupling:
                     del rd[k]
                 else:
                     rd[k] = min(rd[k], x)
+    
+    def set_bond_dimension_using_occ(self, m, occ, bias=1):
+        ocp = Occupation(occ, self.n_sites, self.basis, self.empty, self.target, bias=bias)
+        self.left_dims, self.right_dims = ocp.set_bond_dimension(self.left_dims_fci, self.right_dims_fci, m)
     
     def set_bond_dimension(self, m, exact=False):
         """

@@ -566,6 +566,7 @@ class Tensor:
         assert self.rank == 2
         blocks = []
         eigen_values = []
+        eigen_values_reduced = []
         total_k = 0
         for block in self.blocks:
             assert block.q_labels[0] == block.q_labels[1]
@@ -578,6 +579,7 @@ class Tensor:
                 alpha = alpha[:, ld_idx]
             blocks.append(SubTensor(block.q_labels, alpha))
             eigen_values.append(ld)
+            eigen_values_reduced.append(ld / block.q_labels[0].multiplicity)
             total_k += len(ld)
         
         if k == -1 or total_k <= k:
@@ -585,8 +587,9 @@ class Tensor:
             return Tensor(blocks), eigen_values, 0.0
         else:
             error = 0.0
-            ss = [(i, j, v) for i, ps in enumerate(eigen_values) for j, v in enumerate(ps)]
+            ss = [(i, j, v) for i, ps in enumerate(eigen_values_reduced) for j, v in enumerate(ps)]
             assert len(ss) == total_k
+            # sort by reduced eigen_values to determine number of reduced states
             ss.sort(key=lambda x: -x[2])
             ss_trunc = ss[:k]
             ss_trunc.sort(key=lambda x: (x[0], x[1]))

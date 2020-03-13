@@ -32,7 +32,8 @@ opts = dict(
     su2=True,
     output_level=-1,
     memory=8000,
-    omp_threads=2,
+    omp_threads=1,
+    mkl_threads=1,
     page=page
 )
 
@@ -51,7 +52,7 @@ with BlockHamiltonian.get(**opts) as hamil:
     pprint('mps ok')
     mpo = MPO(hamil, iprint=is_root)
     pprint('mpo ok')
-    ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
+    ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl, par)
     dmrg = DMRG(mpo, mps, bond_dims=bdims, noise=noise, contractor=ctr)
     pprint('init time = ', time.perf_counter() - t)
     ener = dmrg.solve(20, 1E-6, two_dot_to_one_dot=8)

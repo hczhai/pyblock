@@ -615,6 +615,8 @@ class BlockHamiltonian:
                     input['maxiter'] = str(v)
                 elif k == 'omp_threads':
                     input['quanta_thrds'] = str(v)
+                elif k == 'mkl_threads':
+                    input['mkl_thrds'] = str(v)
                 elif k == 'max_m':
                     input['maxM'] = str(v)
                 elif k == 'memory':

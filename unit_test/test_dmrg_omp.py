@@ -14,7 +14,7 @@ def data_dir(request):
     filename = request.module.__file__
     return os.path.join(os.path.dirname(filename), 'data')
 
-@pytest.fixture(scope="module", params=[1, 2, 4])
+@pytest.fixture(scope="module", params=[1, 2, 4, -2, -3])
 def openmp_scheme(request):
     return request.param
 
@@ -24,8 +24,10 @@ class TestDMRGOMP:
         pg = 'd2h'
         page = DMRGDataPage(tmp_path / 'node0')
         simpl = Simplifier(AllRules())
+        omp_t = openmp_scheme if openmp_scheme > 0 else 1
+        omp_m = -openmp_scheme if openmp_scheme < 0 else 1
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
-                                  memory=3000, page=page, omp_threads=openmp_scheme) as hamil:
+                                  memory=3000, page=page, omp_threads=omp_t, mkl_threads=omp_m) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(100)
             mps = MPS(lcp, center=0, dot=1)
@@ -38,3 +40,4 @@ class TestDMRGOMP:
             ener = dmrg.solve(10, 1E-6)
             assert abs(ener - (-107.648250974014)) < 5E-6
         page.clean()
+

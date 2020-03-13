@@ -3,6 +3,9 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#ifdef _HAS_INTEL_MKL
+#include <mkl.h>
+#endif
 #include "global.h"
 #include "alloc.h"
 #include "data_page.hpp"
@@ -19,7 +22,12 @@ vector<StackAllocator<double>> DataPages;
 void init_data_pages(int n_pages) {
     dmrginp.matmultFlops.resize(max(numthrds, dmrginp.quanta_thrds()), 0.);
     dmrginp.initCumulTimer();
-    
+
+#ifdef _HAS_INTEL_MKL
+    mkl_set_num_threads(dmrginp.mkl_thrds());
+    mkl_set_dynamic(0);
+#endif
+
     if (dmrginp.outputlevel() >= 0)
         cout << "allocating " << dmrginp.getMemory() << " doubles (in " <<
             n_pages << " data pages" << ")" << endl;

@@ -89,7 +89,7 @@ class TestDMRGOneSite:
             tto = dot_scheme if dot_scheme >= 3 else -1
             te = ExpoApply(mpo, mps0, bond_dims=bdims, beta=beta, contractor=ctr, canonical_form=mps0_form)
             ener = te.solve(10, forward=cps.forward, two_dot_to_one_dot=tto)
-            assert abs(ener - (-8.30251649)) <= 5E-3
+            assert abs(ener - (-8.30251649)) <= 8E-3
             # Expectation
             mps0 = te.mps
             normsq = te.normsqs[-1]
