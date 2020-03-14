@@ -67,7 +67,9 @@ class OpLink:
         if op_dict[self.op] == 0:
             return 0
         else:
-            if not self.trans and self.scale == 1:
+            if self.trans is None:
+                return self.scale * op_dict[self.op]
+            elif not self.trans and self.scale == 1:
                 return op_dict[self.op]
             else:
                 mat = op_dict[self.op].__class__()
@@ -139,6 +141,7 @@ class RuleP(Rule):
         else:
             return None
 
+
 class RuleB(Rule):
     def __call__(self, op):
         if op.name == OpNames.B:
@@ -147,6 +150,18 @@ class RuleB(Rule):
                 return None
             else:
                 return OpLink(OpElement(OpNames.B, (j, i, s)), True, -1 if s == 1 else 1)
+        else:
+            return None
+
+
+class RulePDM1(Rule):
+    def __call__(self, op):
+        if op.name == OpNames.PDM1:
+            i, j = op.site_index
+            if i >= j:
+                return None
+            else:
+                return OpLink(OpElement(OpNames.PDM1, (j, i)), None, 1)
         else:
             return None
 
@@ -166,6 +181,11 @@ class RuleQ(Rule):
 class AllRules(Rule):
     def __init__(self):
         self.f = (RuleA() | RuleP() |  RuleB() | RuleQ() | RuleR() | RuleD()).__call__
+
+
+class RDM1Rules(Rule):
+    def __init__(self):
+        self.f = (RuleB() | RuleD() | RulePDM1()).__call__
 
 
 class NoTransposeRules(Rule):

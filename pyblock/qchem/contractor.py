@@ -230,7 +230,7 @@ class DMRGContractor:
             sts = (st_l, st_r)
         return st_l, st_r, sts
 
-    def expect(self, opt, brat, kett, do_square=False):
+    def expect(self, opt, brat, kett):
         
         dot = len(brat.tags - {'_BRA'})
         
@@ -244,19 +244,13 @@ class DMRGContractor:
                                      state_tensor_product_target(kst_l, kst_r)])
         bopt = BlockMultiplyH(opt, super_sts, diag=False)
 
-        rwfn = self._get_mps_info({'_BRA'}).get_wavefunction_fused(i, None, dot=dot, sts=bsts)
         bwfn = self._get_mps_info({'_BRA'}).get_wavefunction_fused(i, brat, dot=dot, sts=bsts)
         kwfn = self._get_mps_info({'_KET'}).get_wavefunction_fused(i, kett, dot=dot, sts=ksts)
         
-        brwfn = BlockWavefunction(rwfn)
         bkwfn = BlockWavefunction(kwfn)
         bbwfn = BlockWavefunction(bwfn)
         
-        bopt.apply(bkwfn, brwfn)
-        result = brwfn.dot(bbwfn)
-        
-        if do_square:
-            result = np.array([result, brwfn.dot(brwfn)])
+        results = bopt.expect(bkwfn, bbwfn)
         
         if dot == 2 or '_FUSE_L' in opt.tags or '_NO_FUSE' in opt.tags:
             self.page.unload({i, '_LEFT'})
@@ -267,9 +261,8 @@ class DMRGContractor:
         
         bkwfn.deallocate()
         bbwfn.deallocate()
-        brwfn.deallocate()
         
-        return result
+        return results
     
     def apply(self, opt, mpst):
         
@@ -732,6 +725,15 @@ class BlockMultiplyH:
     
     def diag_norm(self):
         return np.linalg.norm(self.diag().ref)
+    
+    def expect(self, ket, bra):
+        assert isinstance(ket, BlockWavefunction)
+        assert isinstance(bra, BlockWavefunction)
+        tmp_bra = bra.clear_copy()
+        x = BlockEvaluation.expr_expectation(self.opt.mat[0, 0], self.opt.ops[0], self.opt.ops[1],
+            ket.data, bra.data, tmp_bra.data, self.sts)
+        tmp_bra.deallocate()
+        return x
     
     def apply(self, other, result):
         """

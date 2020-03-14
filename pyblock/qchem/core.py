@@ -37,17 +37,19 @@ from block.block import Block, VectorBlock
 from block.rev import tensor_scale, tensor_trace, tensor_rotate, tensor_product
 from block.rev import tensor_trace_diagonal, tensor_product_diagonal
 from block.rev import tensor_trace_multiply, tensor_product_multiply, product
-from block.rev import tensor_scale_add_no_trans
+from block.rev import tensor_scale_add_no_trans, tensor_dot_product
 
 from ..symmetry.symmetry import ParticleN, SU2, SZ, PointGroup, point_group
 from ..symmetry.symmetry import DirectProdGroup
 from .operator import OpElement, OpNames, OpString, OpSum
+from .mpo import OperatorTensor, DualOperatorTensor
 from .simplifier import NoSimplifier, OpCollection, OpShell
 from .fcidump import read_fcidump
 from fractions import Fraction
 import contextlib
 import numpy as np
 import time
+import copy
                 
 class BlockError(Exception):
     pass
@@ -63,7 +65,7 @@ class BlockEvaluation:
         Transform basis of MPO using rotation matrix.
         
         Args:
-            opt : OperatorTensor
+            opt : OperatorTensor or DualOperatorTensor
                 Operator tensor in (untruncated) old basis.
             sts : VectorStateInfo
                 Old (untruncated) and new (truncated) basis.
@@ -71,7 +73,7 @@ class BlockEvaluation:
                 Rotation matrices for ket (or bra and ket).
         
         Returns:
-            new_opt : OperatorTensor
+            new_opt : OperatorTensor or DualOperatorTensor
                 Operator tensor in (truncated) new basis.
         """
         exprs = self.simplifier.simplify(opt.ops.items())
@@ -94,8 +96,9 @@ class BlockEvaluation:
                     if not isinstance(mat, OpShell):
                         tensor_rotate(mat, nmat, sts, rmats, mat.symm_scale)
                     new_ops[op] = nmat
-        return opt.__class__(mat=opt.mat, ops=new_ops, tags=opt.tags,
-                             contractor=opt.contractor)
+        new_opt = copy.copy(opt)
+        new_opt.ops = new_ops
+        return new_opt
     
     @classmethod
     def left_rotate(self, i, opt, mpst, mps_info, bra_mpst=None, bra_mps_info=None):
@@ -104,7 +107,7 @@ class BlockEvaluation:
         Args:
             i : int
                 Site index.
-            opt : OperatorTensor
+            opt : OperatorTensor or DualOperatorTensor
                 Operator tensor in (untruncated) old basis.
             mpst : Tensor
                 MPS tensor defining rotation in ket side.
@@ -116,7 +119,7 @@ class BlockEvaluation:
                 MPSInfo object for bra state.
         
         Returns:
-            new_opt : OperatorTensor
+            new_opt : OperatorTensor or DualOperatorTensor
                 Operator tensor in (truncated) new basis.
         """
         if mps_info is None:
@@ -142,7 +145,7 @@ class BlockEvaluation:
         Args:
             i : int
                 Site index.
-            opt : OperatorTensor
+            opt : OperatorTensor or DualOperatorTensor
                 Operator tensor in (untruncated) old basis.
             mpst : Tensor
                 MPS tensor defining rotation in ket side.
@@ -154,7 +157,7 @@ class BlockEvaluation:
                 MPSInfo object for bra state.
         
         Returns:
-            new_opt : OperatorTensor
+            new_opt : OperatorTensor or DualOperatorTensor
                 Operator tensor in (truncated) new basis.
         """
         if mps_info is None:
@@ -180,9 +183,9 @@ class BlockEvaluation:
         Args:
             i : int
                 Site index.
-            optl: OperatorTensor
+            optl: OperatorTensor or DualOperatorTensor
                 Contracted MPO operator tensor at previous left block.
-            optd : OperatorTensor
+            optd : OperatorTensor or DualOperatorTensor
                 MPO operator tensor at dot block.
             mpo_info : MPOInfo
                 MPOInfo object.
@@ -192,10 +195,10 @@ class BlockEvaluation:
                 MPSInfo object for bra state.
         
         Returns:
-            new_opt : OperatorTensor
+            new_opt : OperatorTensor or DualOperatorTensor
                 Operator tensor in untruncated basis in current left block.
         """
-        op_names = mpo_info.right_operator_names[i]
+        op_names = mpo_info.left_operator_names[i]
         if mps_info is None:
             return optd.__class__(mat=op_names.reshape((1, -1)), ops={}, tags=optd.tags, contractor=optd.contractor)
         elif bra_mps_info is None:
@@ -204,7 +207,10 @@ class BlockEvaluation:
             sts = VectorStateInfo([bra_mps_info.left_state_info_no_trunc[i], mps_info.left_state_info_no_trunc[i]])
         exprs = mpo_info.cached_exprs.get((i, '_LEFT'), None)
         if exprs is None:
-            new_mat = optl.mat @ optd.mat
+            if isinstance(optd, OperatorTensor):
+                new_mat = optl.mat @ optd.mat
+            elif isinstance(optd, DualOperatorTensor):
+                new_mat = optl.lmat @ optd.lmat
             zipped = [(op, expr) if op.factor == 1 else (abs(op), expr / op.factor)
                       for op, expr in zip(op_names, new_mat[0, :])]
             exprs = self.simplifier.simplify(zipped)
@@ -215,9 +221,14 @@ class BlockEvaluation:
         with exprs() as (zipped, new_ops):
             for op, expr in zipped:
                 new_ops[op] = self.expr_eval(expr, optl.ops, optd.ops, sts, op.q_label)
-        return optd.__class__(mat=op_names.reshape((1, -1)),
-                              ops=new_ops, tags=optd.tags,
-                              contractor=optd.contractor)
+        if isinstance(optd, OperatorTensor):
+            return OperatorTensor(mat=op_names.reshape((1, -1)),
+                                  ops=new_ops, tags=optd.tags,
+                                  contractor=optd.contractor)
+        elif isinstance(optd, DualOperatorTensor):
+            return DualOperatorTensor(lmat=op_names.reshape((1, -1)),
+                                  ops=new_ops, tags=optd.tags,
+                                  contractor=optd.contractor)
     
     @classmethod
     def right_contract(self, i, optr, optd, mpo_info, mps_info, bra_mps_info=None):
@@ -226,9 +237,9 @@ class BlockEvaluation:
         Args:
             i : int
                 Site index.
-            optr: OperatorTensor
+            optr: OperatorTensor or DualOperatorTensor
                 Contracted MPO operator tensor at previous right block.
-            optd : OperatorTensor
+            optd : OperatorTensor or DualOperatorTensor
                 MPO operator tensor at dot block.
             mpo_info : MPOInfo
                 MPOInfo object.
@@ -238,10 +249,10 @@ class BlockEvaluation:
                 MPSInfo object for bra state.
         
         Returns:
-            new_opt : OperatorTensor
+            new_opt : OperatorTensor or DualOperatorTensor
                 Operator tensor in untruncated basis in current right block.
         """
-        op_names = mpo_info.left_operator_names[i]
+        op_names = mpo_info.right_operator_names[i]
         if mps_info is None:
             return optd.__class__(mat=op_names.reshape((-1, 1)), ops={}, tags=optd.tags, contractor=optd.contractor)
         elif bra_mps_info is None:
@@ -250,7 +261,10 @@ class BlockEvaluation:
             sts = VectorStateInfo([bra_mps_info.right_state_info_no_trunc[i], mps_info.right_state_info_no_trunc[i]])
         exprs = mpo_info.cached_exprs.get((i, '_RIGHT'), None)
         if exprs is None:
-            new_mat = optd.mat @ optr.mat
+            if isinstance(optd, OperatorTensor):
+                new_mat = optd.mat @ optr.mat
+            elif isinstance(optd, DualOperatorTensor):
+                new_mat = optd.rmat @ optr.rmat
             zipped = [(op, expr) if op.factor == 1 else (abs(op), expr / op.factor)
                       for op, expr in zip(op_names, new_mat[:, 0])]
             exprs = self.simplifier.simplify(zipped)
@@ -261,9 +275,14 @@ class BlockEvaluation:
         with exprs() as (zipped, new_ops):
             for op, expr in zipped:
                 new_ops[op] = self.expr_eval(expr, optd.ops, optr.ops, sts, op.q_label)
-        return optd.__class__(mat=op_names.reshape((-1, 1)),
-                              ops=new_ops, tags=optd.tags,
-                              contractor=optd.contractor)
+        if isinstance(optd, OperatorTensor):
+            return OperatorTensor(mat=op_names.reshape((-1, 1)),
+                                  ops=new_ops, tags=optd.tags,
+                                  contractor=optd.contractor)
+        elif isinstance(optd, DualOperatorTensor):
+            return DualOperatorTensor(rmat=op_names.reshape((-1, 1)),
+                                  ops=new_ops, tags=optd.tags,
+                                  contractor=optd.contractor)
     
     @classmethod
     def left_right_contract(self, i, optl, optr, mpo_info, tag):
@@ -288,17 +307,24 @@ class BlockEvaluation:
         """
         exprs = mpo_info.cached_exprs.get((i, tag, '_HAM'), None)
         if exprs is None:
-            new_mat = optl.mat @ optr.mat
-            assert new_mat.shape == (1, 1)
-            exprs = self.simplifier.simplify([(OpElement(OpNames.H, ()), new_mat[0, 0])])
+            if mpo_info.middle_operators is None:
+                new_mat = optl.mat @ optr.mat
+                assert new_mat.shape == (1, 1)
+                zipped = [(OpElement(OpNames.H, ()), new_mat[0, 0])]
+            else:
+                if tag == '_FUSE_LR' or tag == '_FUSE_L' or tag == '_NO_FUSE':
+                    zipped = mpo_info.middle_operators[i]
+                else:
+                    zipped = mpo_info.middle_operators[i - 1]
+            exprs = self.simplifier.simplify(zipped)
             if self.parallelizer is not None:
                 exprs = self.parallelizer.parallelize(exprs, do_partial=True, bcast_all=True)
             if mpo_info.cache_contraction:
                 mpo_info.cached_exprs[(i, tag, '_HAM')] = exprs
         new_mat = np.array([[exprs]], dtype=object)
-        return optl.__class__(mat=new_mat, ops=(optl.ops, optr.ops),
+        return OperatorTensor(mat=new_mat, ops=(optl.ops, optr.ops),
                               tags={'_HAM'}, contractor=optl.contractor)
-    
+
     @classmethod
     def expr_diagonal_eval(self, expr, a, b, sts):
         """
@@ -388,7 +414,23 @@ class BlockEvaluation:
                 new_ops[op] = nwave
         else:
             assert False
-    
+
+    @classmethod
+    def expr_expectation(self, expr, a, b, ket, bra, work, sts):
+        if isinstance(expr, OpCollection):
+            with expr() as (zipped, new_ops):
+                for op, expr in zipped:
+                    if expr != 0:
+                        work.clear()
+                        for x in expr.strings if isinstance(expr, OpSum) else [expr]:
+                            self.expr_multiply_eval(x, a, b, ket, work, sts)
+                        new_ops[op] = tensor_dot_product(bra, work)
+                    else:
+                        new_ops[op] = 0
+            return new_ops
+        else:
+            assert False
+
     @classmethod
     def expr_eval(self, expr, a, b, sts, q_label, nmat=0):
         """

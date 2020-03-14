@@ -44,6 +44,7 @@ class OpNames(Enum):
     Q = auto()
     N = auto()
     NN = auto()
+    PDM1 = auto()
     
     def __repr__(self):
         return self.name

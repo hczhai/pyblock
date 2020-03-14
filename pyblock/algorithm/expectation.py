@@ -86,7 +86,7 @@ class Expect:
         t = time.perf_counter()
         self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k, iprint=False)
     
-    def update_one_dot(self, i, forward, bond_dim, do_square):
+    def update_one_dot(self, i, forward, bond_dim):
         """
         Update local sites in one-dot scheme.
         
@@ -98,8 +98,6 @@ class Expect:
                 If None, no sweep is performed (local evaluation).
             bond_dim : int
                 Bond dimension of current sweep.
-            do_square : bool
-                If True, also return expectation value of :math:`O^\\dagger O`
         
         Returns:
             expect : float
@@ -126,7 +124,10 @@ class Expect:
         psi_bra = self._b[{i, '_BRA'}]
         psi_ket = self._k[{i, '_KET'}]
         
-        result = ctr.expect(h_eff, psi_bra, psi_ket, do_square)
+        result = ctr.expect(h_eff, psi_bra, psi_ket)
+        
+        if len(result) == 1 and repr(list(result.keys())[0]) == 'H':
+            result = list(result.values())[0]
         
         if forward is None:
             return result
@@ -214,7 +215,7 @@ class Expect:
 
         return result
 
-    def update_two_dot(self, i, forward, bond_dim, do_square):
+    def update_two_dot(self, i, forward, bond_dim):
         """
         Update local sites in two-dot scheme.
         
@@ -226,8 +227,6 @@ class Expect:
                 If None, no sweep is performed (local evaluation).
             bond_dim : int
                 Bond dimension of current sweep.
-            do_square : bool
-                If True, also return expectation value of :math:`O^\\dagger O`
         
         Returns:
             expect : float
@@ -253,7 +252,10 @@ class Expect:
         psi_bra = self.eff_ham()[{i, i + 1, '_BRA'}]
         psi_ket = self.eff_ham()[{i, i + 1, '_KET'}]
         
-        result = ctr.expect(h_eff, psi_bra, psi_ket, do_square)
+        result = ctr.expect(h_eff, psi_bra, psi_ket)
+        
+        if len(result) == 1 and repr(list(result.keys())[0]) == 'H':
+            result = list(result.values())[0]
         
         if forward is None:
             return result
@@ -314,7 +316,7 @@ class Expect:
         
         return result
     
-    def blocking(self, i, forward, bond_dim, do_square):
+    def blocking(self, i, forward, bond_dim):
         """
         Perform one blocking iteration.
         
@@ -326,8 +328,6 @@ class Expect:
                 If None, no sweep is performed (local evaluation).
             bond_dim : int
                 Bond dimension of current sweep.
-            do_square : bool
-                If True, also return expectation value of :math:`O^\\dagger O`
         
         Returns:
             result : float
@@ -337,11 +337,11 @@ class Expect:
         self.center = i
 
         if self.dot == 1:
-            return self.update_one_dot(i, forward, bond_dim, do_square)
+            return self.update_one_dot(i, forward, bond_dim)
         else:
-            return self.update_two_dot(i, forward, bond_dim, do_square)
+            return self.update_two_dot(i, forward, bond_dim)
     
-    def solve(self, forward=None, bond_dim=-1, do_square=False):
+    def solve(self, forward=None, bond_dim=-1):
         """
         Calculate expectation value.
         
@@ -351,8 +351,6 @@ class Expect:
                 If None, no sweep is performed (local evaluation).
             bond_dim : int
                 Bond dimension of current sweep.
-            do_square : bool
-                If True, also return expectation value of :math:`O^\\dagger O`
         
         Returns:
             expect : float
@@ -377,10 +375,26 @@ class Expect:
             else:
                 pprint(" %3s Site = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
             t = time.perf_counter()
-            result = self.blocking(i, forward=forward, bond_dim=bond_dim, do_square=do_square)
-            pprint("Result = %r T = %4.2f" % (result, time.perf_counter() - t))
+            result = self.blocking(i, forward=forward, bond_dim=bond_dim)
+            
+            if isinstance(result, dict):
+                pprint("Nterms = %4d T = %4.2f" % (len(result), time.perf_counter() - t))
+            else:
+                pprint("Result = %15.8f T = %4.2f" % (result, time.perf_counter() - t))
+            
             self.results.append(result)
 
         self._post_sweep()
 
         return result
+    
+    def get_1pdm(self):
+        """
+        Spatial 1-particle density matrix.
+        """
+        pdmat = np.zeros((self.n_sites, self.n_sites))
+        assert hasattr(self, "results")
+        for r in self.results:
+            for k, v in r.items():
+                pdmat[k.site_index[0], k.site_index[1]] = v
+        return pdmat

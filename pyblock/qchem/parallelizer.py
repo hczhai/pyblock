@@ -105,13 +105,18 @@ class ParaOpCollection(OpCollection):
                                 ccomm = comm.Split(1, mpi_rank + 1)
 
                 if new_ops[op] != 0:
-                    if mpi_rank == owner:
-                        ccomm.Reduce(MPI.IN_PLACE, [new_ops[op].ref, MPI.DOUBLE], op=MPI.SUM, root=0)
+                    if isinstance(new_ops[op], float):
+                        new_ops[op] = ccomm.reduce(new_ops[op], op=MPI.SUM, root=0)
+                        if new_ops[op] is None:
+                            new_ops[op] = 0.0
                     else:
-                        ccomm.Reduce([new_ops[op].ref, MPI.DOUBLE], None, op=MPI.SUM, root=0)
-                        if not self.bcast_all:
-                            deallo_ops.append(op)
-                
+                        if mpi_rank == owner:
+                            ccomm.Reduce(MPI.IN_PLACE, [new_ops[op].ref, MPI.DOUBLE], op=MPI.SUM, root=0)
+                        else:
+                            ccomm.Reduce([new_ops[op].ref, MPI.DOUBLE], None, op=MPI.SUM, root=0)
+                            if not self.bcast_all:
+                                deallo_ops.append(op)
+
                 ccomm.Free()
                 if not self.bcast_all and mpi_rank != owner and new_ops[op] == 0:
                     del new_ops[op]
@@ -132,13 +137,17 @@ class ParaOpCollection(OpCollection):
                     new_ops[op].ref[:] = data
             
             for op, owner in self.broadcast:
-                comm.Bcast(new_ops[op].ref, root=owner)
+                if isinstance(new_ops[op], float) or new_ops[op] == 0:
+                    new_ops[op] = comm.bcast(new_ops[op], root=owner)
+                else:
+                    comm.Bcast(new_ops[op].ref, root=owner)
 
 
 class ParaProperty:
-    def __init__(self, owner, repeated, partial):
+    def __init__(self, owner, repeated, repeated_num, partial):
         self.owner = owner
         self.repeated = repeated
+        self.repeated_num = repeated_num
         self.partial = partial
     
     @property
@@ -152,32 +161,17 @@ class ParaRule:
     
     def __call__(self, op):
         if op.name in [OpNames.C, OpNames.D]:
-            return ParaProperty(0, True, False)
+            return ParaProperty(0, True, False, False)
         elif op.name in [OpNames.R, OpNames.RD]:
-            return ParaProperty(op.site_index[0] % (self.size - 1) + 1, False, True)
+            return ParaProperty(op.site_index[0] % self.size, False, False, True)
         elif op.name in [OpNames.I]:
-            return ParaProperty(0, True, False)
+            return ParaProperty(0, True, False, False)
         elif op.name in [OpNames.H]:
-            return ParaProperty(0, False, True)
+            return ParaProperty(0, False, False, True)
+        elif op.name in [OpNames.PDM1]:
+            return ParaProperty(TInt.find_index(*op.site_index[:2]) % self.size, False, True, False)
         else:
-            return ParaProperty(TInt.find_index(*op.site_index[:2]) % (self.size - 1) + 1, False, False)
-
-
-class ParaRule:
-    def __init__(self, size=mpi_size):
-        self.size = mpi_size
-    
-    def __call__(self, op):
-        if op.name in [OpNames.C, OpNames.D]:
-            return ParaProperty(0, True, False)
-        elif op.name in [OpNames.R, OpNames.RD]:
-            return ParaProperty(op.site_index[0] % self.size, False, True)
-        elif op.name in [OpNames.I]:
-            return ParaProperty(0, True, False)
-        elif op.name in [OpNames.H]:
-            return ParaProperty(0, False, True)
-        else:
-            return ParaProperty(TInt.find_index(*op.site_index[:2]) % self.size, False, False)
+            return ParaProperty(TInt.find_index(*op.site_index[:2]) % self.size, False, False, False)
         
 class Parallelizer:
     def __init__(self, rule, rank=mpi_rank):
@@ -258,6 +252,12 @@ class Parallelizer:
                     p_uniq[op] = expr if expr != 0 else 0
                 else:
                     p_uniq[op] = OpShell(expr) if expr != 0 else 0
+                p_broadcast.append((op, self.op_map[op].owner))
+            elif self.op_map[op].repeated_num:
+                if self.op_map[op].owner == self.rank:
+                    p_uniq[op] = expr if expr != 0 else 0
+                else:
+                    p_uniq[op] = 0
                 p_broadcast.append((op, self.op_map[op].owner))
             elif self.op_map[op].owner == self.rank:
                 p_uniq[op] = expr

@@ -60,11 +60,35 @@ class OperatorTensor(Tensor):
         assert isinstance(self.ops, dict)
         return OperatorTensor(mat=self.mat.copy(), ops=self.ops.copy(),
             tags=self.tags.copy(), contractor=self.contractor)
+
+
+class DualOperatorTensor(Tensor):
+    """
+    MPO tensor or contracted MPO tensor with dual (left and right) representation.
+    """
+    def __init__(self, lmat=None, rmat=None, ops=None, tags=None, contractor=None):
+        self.lmat = lmat
+        self.rmat = rmat
+        self.ops = ops
+        super().__init__([], tags=tags, contractor=contractor)
     
+    def __repr__(self):
+        return repr(self.lmat) + "\n" + repr(self.rmat) + "\n" + "\n".join([repr(k) + " :: \n" + repr(v) for k, v in self.ops.items()])
+
+    def copy(self):
+        """Return shallow copy of this object."""
+        assert isinstance(self.ops, dict)
+        lmat = self.lmat.copy() if self.lmat is not None else None
+        rmat = self.rmat.copy() if self.rmat is not None else None
+        return DualOperatorTensor(lmat=lmat, rmat=rmat, ops=self.ops.copy(),
+            tags=self.tags.copy(), contractor=self.contractor)
+
+
 class MPOInfo:
     def __init__(self, hamil, cache_contraction=True):
         self.hamil = hamil
         self.n_sites = hamil.n_sites
+        self.middle_operators = None
         self._init_operator_names()
         self.cache_contraction = cache_contraction
         self.cached_exprs = {}
@@ -74,79 +98,79 @@ class MPOInfo:
         self.right_operator_names = [None] * self.n_sites
         
         for i in range(self.n_sites):
-            lshape = 2 + 2 * self.n_sites + 6 * i * i if i != 0 else 1
-            rshape = 2 + 2 * self.n_sites + 6 * (i + 1) * (i + 1) if i != self.n_sites - 1 else 1
+            lshape = 2 + 2 * self.n_sites + 6 * (i + 1) * (i + 1) if i != self.n_sites - 1 else 1
+            rshape = 2 + 2 * self.n_sites + 6 * i * i if i != 0 else 1
             lop = np.zeros((lshape, ), dtype=object)
             rop = np.zeros((rshape, ), dtype=object)
-            rop[0] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+            lop[0] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
             if i != self.n_sites - 1:
-                rop[1] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                lop[1] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
                 p = 2
                 for j in range(i + 1):
-                    rop[p + j] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
+                    lop[p + j] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
                 p += i + 1
                 for j in range(i + 1):
-                    rop[p + j] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
+                    lop[p + j] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
                 p += i + 1
                 for j in range(i + 1, self.n_sites):
-                    rop[p + j - i - 1] = 2.0 * OpElement(OpNames.RD, (j, ), q_label=self.hamil.one_site_q[j])
+                    lop[p + j - i - 1] = 2.0 * OpElement(OpNames.RD, (j, ), q_label=self.hamil.one_site_q[j])
                 p += self.n_sites - (i + 1)
                 for j in range(i + 1, self.n_sites):
-                    rop[p + j - i - 1] = 2.0 * OpElement(OpNames.R, (j, ), q_label=-self.hamil.one_site_q[j])
+                    lop[p + j - i - 1] = 2.0 * OpElement(OpNames.R, (j, ), q_label=-self.hamil.one_site_q[j])
                 p += self.n_sites - (i + 1)
                 for s in [0, 1]:
                     for j in range(i + 1):
                         for k in range(i + 1):
-                            rop[p + k] = OpElement(OpNames.A, (j, k, s), q_label=self.hamil.two_site_plus_q[j, k][s])
+                            lop[p + k] = OpElement(OpNames.A, (j, k, s), q_label=self.hamil.two_site_plus_q[j, k][s])
                         p += i + 1
                 for s in [0, 1]:
                     for j in range(i + 1):
                         for k in range(i + 1):
-                            rop[p + k] = OpElement(OpNames.AD, (j, k, s), q_label=-self.hamil.two_site_plus_q[j, k][s])
+                            lop[p + k] = OpElement(OpNames.AD, (j, k, s), q_label=-self.hamil.two_site_plus_q[j, k][s])
                         p += i + 1
                 for s in [0, 1]:
                     for j in range(i + 1):
                         for k in range(i + 1):
-                            rop[p + k] = OpElement(OpNames.B, (j, k, s), q_label=self.hamil.two_site_minus_q[j, k][s])
+                            lop[p + k] = OpElement(OpNames.B, (j, k, s), q_label=self.hamil.two_site_minus_q[j, k][s])
                         p += i + 1
-                assert p == rop.shape[0]
-            lop[0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                assert p == lop.shape[0]
+            rop[0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
             if i != 0:
-                lop[1] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
+                rop[1] = OpElement(OpNames.H, (), q_label=self.hamil.empty)
                 p = 2
                 for j in range(i):
-                    lop[p + j] = 2.0 * OpElement(OpNames.R, (j, ), q_label=-self.hamil.one_site_q[j])
+                    rop[p + j] = 2.0 * OpElement(OpNames.R, (j, ), q_label=-self.hamil.one_site_q[j])
                 p += i
                 for j in range(i):
-                    lop[p + j] = 2.0 * OpElement(OpNames.RD, (j, ), q_label=self.hamil.one_site_q[j])
+                    rop[p + j] = 2.0 * OpElement(OpNames.RD, (j, ), q_label=self.hamil.one_site_q[j])
                 p += i
                 for j in range(i, self.n_sites):
-                    lop[p + j - i] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
+                    rop[p + j - i] = OpElement(OpNames.D, (j, ), q_label=-self.hamil.one_site_q[j])
                 p += self.n_sites - i
                 for j in range(i, self.n_sites):
-                    lop[p + j - i] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
+                    rop[p + j - i] = OpElement(OpNames.C, (j, ), q_label=self.hamil.one_site_q[j])
                 p += self.n_sites - i
                 su2_factor = [-0.5, -0.5 * np.sqrt(3.0)]
                 for s in [0, 1]:
                     for j in range(i):
                         for k in range(i):
-                            lop[p + k] = su2_factor[s] * \
+                            rop[p + k] = su2_factor[s] * \
                                 OpElement(OpNames.P, (j, k, s), q_label=-self.hamil.two_site_plus_q[j, k][s])
                         p += i
                 for s in [0, 1]:
                     for j in range(i):
                         for k in range(i):
-                            lop[p + k] = su2_factor[s] * \
+                            rop[p + k] = su2_factor[s] * \
                                 OpElement(OpNames.PD, (j, k, s), q_label=self.hamil.two_site_plus_q[j, k][s])
                         p += i
                 su2_factor = [1.0, np.sqrt(3.0)]
                 for s in [0, 1]:
                     for j in range(i):
                         for k in range(i):
-                            lop[p + k] = su2_factor[s] * \
+                            rop[p + k] = su2_factor[s] * \
                                 OpElement(OpNames.Q, (j, k, s), q_label=self.hamil.two_site_minus_q[j, k][s])
                         p += i
-                assert p == lop.shape[0]
+                assert p == rop.shape[0]
             self.left_operator_names[i] = lop
             self.right_operator_names[i] = rop
 
@@ -361,43 +385,45 @@ class MPO(TensorNetwork):
                     p += (m + 1) * (m + 1)
                 assert p == rshape
             
-            mat, ops = self._post_check_mpo_operators(mat, m)
+            [mat], ops = self._post_check_mpo_operators([mat], m)
             
             tensors.append(OperatorTensor(mat=mat, tags={m}, ops=ops))
             
         return tensors
     
-    def _post_check_mpo_operators(self, mat, m):
+    def _post_check_mpo_operators(self, mats, m):
         
         ops_set = set()
         
-        for em in mat.reshape(mat.size):
-            if em == 0:
-                pass
-            elif isinstance(em, OpElement):
-                ops_set.add(abs(em))
-            elif isinstance(em, OpSum):
-                ops_set |= { abs(opd.op) for opd in em.strings }
-            else:
-                assert False
-        
-        ops = self.hamil.get_site_operators(m, ops_set)
-        
-        for il in range(mat.shape[0]):
-            for ir in range(mat.shape[1]):
-                em = mat[il, ir]
+        for mat in mats:
+            for em in mat.reshape(mat.size):
                 if em == 0:
                     pass
                 elif isinstance(em, OpElement):
-                    if ops[abs(em)] == 0:
-                        mat[il, ir] = 0
+                    ops_set.add(abs(em))
                 elif isinstance(em, OpSum):
-                    if all(ops[abs(opd.op)] == 0 for opd in em.strings):
-                        mat[il, ir] = 0
+                    ops_set |= { abs(opd.op) for opd in em.strings }
+                else:
+                    assert False
+        
+        ops = self.hamil.get_site_operators(m, ops_set)
+        
+        for mat in mats:
+            for il in range(mat.shape[0]):
+                for ir in range(mat.shape[1]):
+                    em = mat[il, ir]
+                    if em == 0:
+                        pass
+                    elif isinstance(em, OpElement):
+                        if ops[abs(em)] == 0:
+                            mat[il, ir] = 0
+                    elif isinstance(em, OpSum):
+                        if all(ops[abs(opd.op)] == 0 for opd in em.strings):
+                            mat[il, ir] = 0
         
         ops = { k : v for k, v in ops.items() if v != 0 }
         
-        return mat, ops
+        return mats, ops
 
 
 class SquareMPOInfo(MPOInfo):
@@ -406,6 +432,7 @@ class SquareMPOInfo(MPOInfo):
         self.op_name = op_name
         self.opsq_name = opsq_name
         self.n_sites = mpo_info.n_sites
+        self.middle_operators = None
         self._init_operator_names()
         self.cache_contraction = cache_contraction
         self.cached_exprs = {}
@@ -416,14 +443,14 @@ class SquareMPOInfo(MPOInfo):
         
         for i in range(self.n_sites):
             self.left_operator_names[i] = np.array([
-                OpElement(OpNames.I, (), q_label=self.hamil.empty),
-                2.0 * OpElement(self.op_name, (), q_label=self.hamil.empty),
-                OpElement(self.opsq_name, (), q_label=self.hamil.empty)
-            ], dtype=object)
-            self.right_operator_names[i] = np.array([
                 OpElement(self.opsq_name, (), q_label=self.hamil.empty),
                 OpElement(self.op_name, (), q_label=self.hamil.empty),
                 OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            ], dtype=object)
+            self.right_operator_names[i] = np.array([
+                OpElement(OpNames.I, (), q_label=self.hamil.empty),
+                2.0 * OpElement(self.op_name, (), q_label=self.hamil.empty),
+                OpElement(self.opsq_name, (), q_label=self.hamil.empty)
             ], dtype=object)
 
 
@@ -472,6 +499,7 @@ class LocalMPOInfo(MPOInfo):
         self.hamil = mpo_info.hamil
         self.op_name = op_name
         self.n_sites = mpo_info.n_sites
+        self.middle_operators = None
         self._init_operator_names()
         self.cache_contraction = cache_contraction
         self.cached_exprs = {}
@@ -482,12 +510,12 @@ class LocalMPOInfo(MPOInfo):
         
         for i in range(self.n_sites):
             self.left_operator_names[i] = np.array([
-                OpElement(OpNames.I, (), q_label=self.hamil.empty),
-                OpElement(self.op_name, (), q_label=self.hamil.empty)
-            ], dtype=object)
-            self.right_operator_names[i] = np.array([
                 OpElement(self.op_name, (), q_label=self.hamil.empty),
                 OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            ], dtype=object)
+            self.right_operator_names[i] = np.array([
+                OpElement(OpNames.I, (), q_label=self.hamil.empty),
+                OpElement(self.op_name, (), q_label=self.hamil.empty)
             ], dtype=object)
 
 
@@ -533,6 +561,7 @@ class IdentityMPOInfo(MPOInfo):
     def __init__(self, mpo_info, cache_contraction=True):
         self.hamil = mpo_info.hamil
         self.n_sites = mpo_info.n_sites
+        self.middle_operators = None
         self._init_operator_names()
         self.cache_contraction = cache_contraction
         self.cached_exprs = {}
@@ -542,7 +571,7 @@ class IdentityMPOInfo(MPOInfo):
         self.right_operator_names = [None] * self.n_sites
         
         for i in range(self.n_sites):
-            self.left_operator_names[i] = np.array([OpElement(OpNames.I, (), q_label=self.hamil.empty)], dtype=object)
+            self.left_operator_names[i]  = np.array([OpElement(OpNames.I, (), q_label=self.hamil.empty)], dtype=object)
             self.right_operator_names[i] = np.array([OpElement(OpNames.I, (), q_label=self.hamil.empty)], dtype=object)
 
 
