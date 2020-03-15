@@ -97,7 +97,7 @@ class PDM1MPO(MPO):
                 rmat = np.array([[OpElement(OpNames.I, (), q_label=self.hamil.empty), 0, 0]])
             else:
                 rmat = np.array([[OpElement(OpNames.I, (), q_label=self.hamil.empty)]])
-            
+
             [lmat, rmat], ops = self._post_check_mpo_operators([lmat, rmat], m)
 
             tensors.append(DualOperatorTensor(lmat=lmat, rmat=rmat, tags={m}, ops=ops))

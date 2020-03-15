@@ -2,8 +2,11 @@
 from pyblock.qchem import BlockHamiltonian, DMRGContractor
 from pyblock.qchem import MPSInfo, IdentityMPOInfo, IdentityMPO
 from pyblock.qchem import DMRGDataPage, Simplifier, AllRules, NoTransposeRules
-from pyblock.qchem.ancilla import LineCoupling as ALineCoupling, MPOInfo as AMPOInfo, MPS as AMPS, MPO as AMPO
 from pyblock.qchem import LocalMPOInfo, LocalMPO, SquareMPOInfo, SquareMPO, LineCoupling, MPOInfo, MPS, MPO
+from pyblock.qchem.ancilla import LineCoupling as ALineCoupling, MPOInfo as AMPOInfo, MPS as AMPS, MPO as AMPO
+from pyblock.qchem.ancilla import IdentityMPOInfo as AIMPOInfo, IdentityMPO as AIMPO
+from pyblock.qchem.ancilla import LocalMPOInfo as ALMPOInfo, LocalMPO as ALMPO
+from pyblock.qchem.ancilla import SquareMPOInfo as ASMPOInfo, SquareMPO as ASMPO
 from pyblock.qchem.thermal import FreeEnergy
 from pyblock.qchem.operator import OpNames
 from pyblock.algorithm import ExpoApply, Compress, Expect, DMRG
@@ -47,10 +50,10 @@ class TestExpect:
             
             # MPOInfo
             mpo_info = MPOInfo(hamil)
-            impo_info = IdentityMPOInfo(mpo_info)
+            impo_info = IdentityMPOInfo(hamil)
             nmpo_info = MPOInfo(hamil)
-            lnmpo_info = LocalMPOInfo(mpo_info, OpNames.N)
-            nnmpo_info = SquareMPOInfo(mpo_info, OpNames.N, OpNames.NN)
+            lnmpo_info = LocalMPOInfo(hamil, OpNames.N)
+            nnmpo_info = SquareMPOInfo(hamil, OpNames.N, OpNames.NN)
             
             # MPO
             fe_hamil = FreeEnergy(hamil)
@@ -62,7 +65,7 @@ class TestExpect:
             
             ictr = DMRGContractor(mps_info, impo_info, Simplifier(AllRules()))
             ictr.page.activate({'_BASE'})
-            impo = IdentityMPO(mpo)
+            impo = IdentityMPO(hamil)
             
             fe_hamil.set_particle_number()
             nctr = DMRGContractor(mps_info, nmpo_info, Simplifier(AllRules()))
@@ -71,11 +74,11 @@ class TestExpect:
             
             lnctr = DMRGContractor(mps_info, lnmpo_info, Simplifier(AllRules()))
             lnctr.page.activate({'_BASE'})
-            lnmpo = LocalMPO(mpo, OpNames.N)
+            lnmpo = LocalMPO(hamil, OpNames.N)
             
             nnctr = DMRGContractor(mps_info, nnmpo_info, Simplifier(AllRules()))
             nnctr.page.activate({'_BASE'})
-            nnmpo = SquareMPO(mpo, OpNames.N, OpNames.NN)
+            nnmpo = SquareMPO(hamil, OpNames.N, OpNames.NN)
             
             dmrg = DMRG(mpo, mps, bond_dims=bdims, contractor=ctr)
             ener = dmrg.solve(10, 1E-6)
@@ -124,11 +127,11 @@ class TestExpect:
             
             # MPOInfo
             mpo_info = AMPOInfo(hamil)
-            impo_info = IdentityMPOInfo(mpo_info)
+            impo_info = AIMPOInfo(hamil)
             empo_info = AMPOInfo(hamil)
             nmpo_info = AMPOInfo(hamil)
-            lnmpo_info = LocalMPOInfo(mpo_info, OpNames.N)
-            nnmpo_info = SquareMPOInfo(mpo_info, OpNames.N, OpNames.NN)
+            lnmpo_info = ALMPOInfo(hamil, OpNames.N)
+            nnmpo_info = ASMPOInfo(hamil, OpNames.N, OpNames.NN)
             
             # MPO
             fe_hamil = FreeEnergy(hamil)
@@ -140,7 +143,7 @@ class TestExpect:
             
             ictr = DMRGContractor(mps_info_d, impo_info, Simplifier(NoTransposeRules()))
             ictr.page.activate({'_BASE'})
-            impo = IdentityMPO(mpo)
+            impo = AIMPO(hamil)
             
             fe_hamil.set_energy()
             ectr = DMRGContractor(mps_info, empo_info, Simplifier(AllRules()))
@@ -154,11 +157,11 @@ class TestExpect:
             
             lnctr = DMRGContractor(mps_info, lnmpo_info, Simplifier(AllRules()))
             lnctr.page.activate({'_BASE'})
-            lnmpo = LocalMPO(mpo, OpNames.N)
+            lnmpo = ALMPO(hamil, OpNames.N)
             
             nnctr = DMRGContractor(mps_info, nnmpo_info, Simplifier(AllRules()))
             nnctr.page.activate({'_BASE'})
-            nnmpo = SquareMPO(mpo, OpNames.N, OpNames.NN)
+            nnmpo = ASMPO(hamil, OpNames.N, OpNames.NN)
             
             # Compression
             cps = Compress(impo, mps, mps_thermal, bond_dims=bdims, contractor=ictr, noise=1E-4)

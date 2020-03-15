@@ -53,6 +53,7 @@ on_rtd = os.environ.get('READTHEDOCS') == 'True'
 if on_rtd:
     html_theme = 'default'
     sys.path.insert(0, os.path.abspath('../etc'))
+    autodoc_mock_imports = ['expokitpy', 'mpi4py']
 else:
     html_theme = 'bizstyle'
     sys.path.insert(0, os.path.abspath('../../build'))

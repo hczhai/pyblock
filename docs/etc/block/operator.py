@@ -1010,6 +1010,14 @@ Overloaded function.
 2. __init__(self: block.operator.StackMatrix, arg0: numpy.ndarray[float64[m, n], flags.writeable, flags.c_contiguous]) -> None"""
         pass
 
+    def __getstate__(self, *args, **kwargs):
+        """__getstate__(self: block.operator.StackMatrix) -> tuple"""
+        pass
+
+    def __setstate__(self, *args, **kwargs):
+        """__setstate__(self: block.operator.StackMatrix, arg0: tuple) -> None"""
+        pass
+
     def __repr__(self, *args, **kwargs):
         """__repr__(self: block.operator.StackMatrix) -> str"""
         pass
@@ -1030,6 +1038,11 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
     @property
     def non_zero_blocks(self):
         """A list of non zero blocks. Each element in the list is a pair of a pair of bra and ket indices, and :class:`StackMatrix`."""
+        pass
+
+    @property
+    def ref(self):
+        """A numpy.ndarray reference."""
         pass
 
     @property
@@ -1058,12 +1071,28 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
     def conjugacy(self):
         pass
 
+    @property
+    def symm_scale(self):
+        pass
+
     def __init__(self, *args, **kwargs):
         """__init__(self: block.operator.StackSparseMatrix) -> None"""
         pass
 
     def operator_element(self, *args, **kwargs):
         """operator_element(self: block.operator.StackSparseMatrix, arg0: int, arg1: int) -> block.operator.StackMatrix"""
+        pass
+
+    def allocate_memory(self, *args, **kwargs):
+        """allocate_memory(self: block.operator.StackSparseMatrix, arg0: int) -> None"""
+        pass
+
+    def __getstate__(self, *args, **kwargs):
+        """__getstate__(self: block.operator.StackSparseMatrix) -> tuple"""
+        pass
+
+    def __setstate__(self, *args, **kwargs):
+        """__setstate__(self: block.operator.StackSparseMatrix, arg0: tuple) -> None"""
         pass
 
     def __repr__(self, *args, **kwargs):
@@ -1090,12 +1119,16 @@ Non-zero blocks are identified by symmetry (quantum numbers) requirements and st
         """deep_copy(self: block.operator.StackSparseMatrix, arg0: block.operator.StackSparseMatrix) -> None"""
         pass
 
+    def shallow_copy(self, *args, **kwargs):
+        """shallow_copy(self: block.operator.StackSparseMatrix, arg0: block.operator.StackSparseMatrix) -> None"""
+        pass
+
     def deep_clear_copy(self, *args, **kwargs):
         """deep_clear_copy(self: block.operator.StackSparseMatrix, arg0: block.operator.StackSparseMatrix) -> None"""
         pass
 
     def allocate(self, *args, **kwargs):
-        """allocate(self: block.operator.StackSparseMatrix, arg0: block.symmetry.StateInfo) -> None"""
+        """allocate(self: block.operator.StackSparseMatrix, arg0: block.symmetry.VectorStateInfo) -> None"""
         pass
 
     def deallocate(self, *args, **kwargs):

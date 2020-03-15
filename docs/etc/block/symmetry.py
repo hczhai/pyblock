@@ -90,6 +90,14 @@ Overloaded function.
         """__neg__(self: block.symmetry.SpinQuantum) -> block.symmetry.SpinQuantum"""
         pass
 
+    def __getstate__(self, *args, **kwargs):
+        """__getstate__(self: block.symmetry.SpinQuantum) -> tuple"""
+        pass
+
+    def __setstate__(self, *args, **kwargs):
+        """__setstate__(self: block.symmetry.SpinQuantum, arg0: tuple) -> None"""
+        pass
+
     def __repr__(self, *args, **kwargs):
         """__repr__(self: block.symmetry.SpinQuantum) -> str"""
         pass

@@ -37,8 +37,8 @@ with BlockHamiltonian.get(fcidump='HUBBARD-L8.FCIDUMP', pg='c1', su2=True, outpu
     mps.randomize()
     mps.canonicalize()
     mps_info = { '_BRA': MPSInfo(lcp), '_KET': ctr.mps_info }
-    impo = IdentityMPO(mpo)
-    impo_info = IdentityMPOInfo(mpo_info)
+    impo = IdentityMPO(hamil)
+    impo_info = IdentityMPOInfo(hamil)
     ctr = DMRGContractor(mps_info, impo_info, Simplifier(NoTransposeRules()))
     mps0.set_contractor(ctr)
     cps = Compress(impo, mps, mps0, bond_dims=bond_dim, contractor=ctr, noise=1E-4, ket_canonical_form=mps0_form)

@@ -29,8 +29,10 @@ import time
 from mpi4py import MPI
 import numpy as np
 
+
 class TEError(Exception):
     pass
+
 
 def pprint(*args, **kwargs):
     if MPI.COMM_WORLD.Get_rank() == 0:
@@ -39,7 +41,7 @@ def pprint(*args, **kwargs):
 
 class ExpoApply:
     """
-    Apply exp(beta H) to MPS (tangent space appraoch).
+    Apply exp(beta H) to MPS (tangent space approach).
     
     Attributes:
         n_sites : int
@@ -114,13 +116,13 @@ class ExpoApply:
             bond_dim : int
                 Bond dimension of current sweep.
             beta : float
-                Beta parameter in exp(-beta H).
+                Beta parameter in :math:`\\exp(-\\beta H)`.
         
         Returns:
             energy : float
-                Energy of state exp(-beta H) |psi>.
+                Energy of state :math:`\\exp(-\\beta H) |\\psi\\rangle`.
             normsq : float
-                Self inner product of state exp(-beta H) |psi>.
+                Self inner product of state :math:`\\exp(-\\beta H) |\\psi\\rangle`.
             error : float
                 Sum of discarded weights.
             nexpos : (int, int)
@@ -234,13 +236,13 @@ class ExpoApply:
             bond_dim : int
                 Bond dimension of current sweep.
             beta : float
-                Beta parameter in exp(-beta H).
+                Beta parameter in :math:`\\exp(-\\beta H)`.
         
         Returns:
             energy : float
-                Energy of state exp(-beta H) |psi>.
+                Energy of state :math:`\\exp(-\\beta H) |\\psi\\rangle`.
             normsq : float
-                Self inner product of state exp(-beta H) |psi>.
+                Self inner product of state :math:`\\exp(-\\beta H) |\\psi\\rangle`.
             error : float
                 Sum of discarded weights.
             nexpos : (int, int)
@@ -345,13 +347,13 @@ class ExpoApply:
             bond_dim : int
                 Bond dimension of current sweep.
             beta : float
-                Beta parameter in exp(-beta H).
+                Beta parameter in :math:`\\exp(-\\beta H)`.
         
         Returns:
             energy : float
-                Energy of state exp(-beta H) |psi>.
+                Energy of state :math:`\\exp(-\\beta H) |\\psi\\rangle`.
             normsq : float
-                Self inner product of state exp(-beta H) |psi>.
+                Self inner product of state :math:`\\exp(-\\beta H) |\\psi\\rangle`.
             error : float
                 Sum of discarded weights.
             nexpos : (int, int)
@@ -375,13 +377,13 @@ class ExpoApply:
             bond_dim : int
                 Bond dimension of current sweep.
             beta : float
-                Beta parameter in exp(-beta H).
+                Beta parameter in :math:`\\exp(-\\beta H)`.
         
         Returns:
             energy : float
-                Energy of state exp(-beta H) |psi>.
+                Energy of state :math:`\\exp(-\\beta H) |\\psi\\rangle`.
             normsq : float
-                Self inner product of state exp(-beta H) |psi>.
+                Self inner product of state :math:`\\exp(-\\beta H) |\\psi\\rangle`.
             error : float
                 Largest sum of discarded weights.
         """
@@ -433,7 +435,7 @@ class ExpoApply:
         
         Returns:
             energy : float
-                Energy of state exp(-beta * (n_sweeps/2) H) |psi>.
+                Energy of state :math:`\\exp(-\\beta * (n_{sweeps}/2) H) |\\psi\\rangle`.
         """
         
         if len(self.bond_dims) < n_sweeps:
@@ -472,11 +474,12 @@ class ExpoApply:
                 cc = self.canonical_form.index('S')
             else:
                 raise TimeEvolutionError('Unknown canonical form!!')
-            
+
             normalized = self._k[{cc, '_KET'}] * (1 / np.sqrt(normsq))
             self._k[{cc, '_KET'}].modify(normalized)
             self._b[{cc, '_BRA'}].modify(normalized)
             self.eff_ham()[{cc, '_KET'}].modify(normalized)
             self.eff_ham()[{cc, '_BRA'}].modify(normalized)
-            
+
+        self.forward = forward
         return energy

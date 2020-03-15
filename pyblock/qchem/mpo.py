@@ -427,165 +427,109 @@ class MPO(TensorNetwork):
 
 
 class SquareMPOInfo(MPOInfo):
-    def __init__(self, mpo_info, op_name, opsq_name, cache_contraction=True):
-        self.hamil = mpo_info.hamil
+    def __init__(self, hamil, op_name, opsq_name, **kwargs):
         self.op_name = op_name
         self.opsq_name = opsq_name
-        self.n_sites = mpo_info.n_sites
-        self.middle_operators = None
-        self._init_operator_names()
-        self.cache_contraction = cache_contraction
-        self.cached_exprs = {}
+        super().__init__(hamil, **kwargs)
     
     def _init_operator_names(self):
         self.left_operator_names = [None] * self.n_sites
         self.right_operator_names = [None] * self.n_sites
-        
+        iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+        op = OpElement(self.op_name, (), q_label=self.hamil.empty)
+        opsq = OpElement(self.opsq_name, (), q_label=self.hamil.empty)
         for i in range(self.n_sites):
-            self.left_operator_names[i] = np.array([
-                OpElement(self.opsq_name, (), q_label=self.hamil.empty),
-                OpElement(self.op_name, (), q_label=self.hamil.empty),
-                OpElement(OpNames.I, (), q_label=self.hamil.empty)
-            ], dtype=object)
-            self.right_operator_names[i] = np.array([
-                OpElement(OpNames.I, (), q_label=self.hamil.empty),
-                2.0 * OpElement(self.op_name, (), q_label=self.hamil.empty),
-                OpElement(self.opsq_name, (), q_label=self.hamil.empty)
-            ], dtype=object)
+            if i == self.n_sites - 1:
+                self.left_operator_names[i] = np.array([iop], dtype=object)
+            else:
+                self.left_operator_names[i] = np.array([opsq, op, iop], dtype=object)
+            if i == 0:
+                self.right_operator_names[i] = np.array([iop], dtype=object)
+            else:
+                self.right_operator_names[i] = np.array([iop, 2.0 * op, opsq], dtype=object)
 
 
 class SquareMPO(MPO):
-    def __init__(self, mpo, op_name, opsq_name):
-        self.n_sites = mpo.n_sites
+    def __init__(self, hamil, op_name, opsq_name, **kwargs):
         self.op_name = op_name
         self.opsq_name = opsq_name
-        self.hamil = mpo.hamil
-        self.tensors = self._init_mpo_tensors(mpo=mpo)
+        super().__init__(hamil, **kwargs)
 
-    def _init_mpo_tensors(self, mpo):
+    def _init_mpo_tensors(self, iprint):
         tensors = []
+        iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+        op = OpElement(self.op_name, (), q_label=self.hamil.empty)
+        opsq = OpElement(self.opsq_name, (), q_label=self.hamil.empty)
         for m in range(self.n_sites):
-            iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
-            op = OpElement(self.op_name, (), q_label=self.hamil.empty)
-            opsq = OpElement(self.opsq_name, (), q_label=self.hamil.empty)
-            if self.n_sites == self.hamil.n_sites:
-                if m == 0:
-                    mat = np.array([[opsq, op, iop]], dtype=object)
-                elif m == self.n_sites - 1:
-                    mat = np.array([[iop], [2.0 * op], [opsq]], dtype=object)
-                else:
-                    mat = np.array([[iop, 0, 0], [2.0 * op, iop, 0], [opsq, op, iop]], dtype=object)
-                ops = self.hamil.get_site_operators(m, { iop, op, opsq })
+            if m == 0:
+                mat = np.array([[opsq, op, iop]], dtype=object)
+            elif m == self.n_sites - 1:
+                mat = np.array([[iop], [2.0 * op], [opsq]], dtype=object)
             else:
-                assert self.n_sites == 2 * self.hamil.n_sites
-                if m == 0:
-                    mat = np.array([[opsq, op, iop]], dtype=object)
-                elif m == self.n_sites - 1:
-                    mat = np.array([[iop], [0], [0]], dtype=object)
-                elif m % 2 == 0:
-                    mat = np.array([[iop, 0, 0], [2.0 * op, iop, 0], [opsq, op, iop]], dtype=object)
-                else:
-                    mat = np.array([[iop, 0, 0], [0, iop, 0], [0, 0, iop]], dtype=object)
-                if m % 2 == 0:
-                    ops = self.hamil.get_site_operators(m // 2, { iop, op, opsq })
-                else:
-                    ops = self.hamil.get_site_operators(m // 2, { iop })
+                mat = np.array([[iop, 0, 0], [2.0 * op, iop, 0], [opsq, op, iop]], dtype=object)
+            ops = self.hamil.get_site_operators(m, { iop, op, opsq })
             tensors.append(OperatorTensor(mat=mat, tags={m}, ops=ops))
         return tensors
 
 
 class LocalMPOInfo(MPOInfo):
-    def __init__(self, mpo_info, op_name, cache_contraction=True):
-        self.hamil = mpo_info.hamil
+    def __init__(self, hamil, op_name, **kwargs):
         self.op_name = op_name
-        self.n_sites = mpo_info.n_sites
-        self.middle_operators = None
-        self._init_operator_names()
-        self.cache_contraction = cache_contraction
-        self.cached_exprs = {}
+        super().__init__(hamil, **kwargs)
     
     def _init_operator_names(self):
         self.left_operator_names = [None] * self.n_sites
         self.right_operator_names = [None] * self.n_sites
-        
+        iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+        op = OpElement(self.op_name, (), q_label=self.hamil.empty)
         for i in range(self.n_sites):
-            self.left_operator_names[i] = np.array([
-                OpElement(self.op_name, (), q_label=self.hamil.empty),
-                OpElement(OpNames.I, (), q_label=self.hamil.empty)
-            ], dtype=object)
-            self.right_operator_names[i] = np.array([
-                OpElement(OpNames.I, (), q_label=self.hamil.empty),
-                OpElement(self.op_name, (), q_label=self.hamil.empty)
-            ], dtype=object)
+            if i == self.n_sites - 1:
+                self.left_operator_names[i] = np.array([iop], dtype=object)
+            else:
+                self.left_operator_names[i] = np.array([op, iop], dtype=object)
+            if i == 0:
+                self.right_operator_names[i] = np.array([iop], dtype=object)
+            else:
+                self.right_operator_names[i] = np.array([iop, op], dtype=object)
 
 
 class LocalMPO(MPO):
-    def __init__(self, mpo, op_name):
-        self.n_sites = mpo.n_sites
+    def __init__(self, hamil, op_name, **kwargs):
         self.op_name = op_name
-        self.hamil = mpo.hamil
-        self.tensors = self._init_mpo_tensors(mpo=mpo)
+        super().__init__(hamil, **kwargs)
     
-    def _init_mpo_tensors(self, mpo):
+    def _init_mpo_tensors(self, iprint):
         tensors = []
+        iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+        op = OpElement(self.op_name, (), q_label=self.hamil.empty)
         for m in range(self.n_sites):
-            iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
-            op = OpElement(self.op_name, (), q_label=self.hamil.empty)
-            if self.n_sites == self.hamil.n_sites:
-                if m == 0:
-                    mat = np.array([[op, iop]], dtype=object)
-                elif m == self.n_sites - 1:
-                    mat = np.array([[iop], [op]], dtype=object)
-                else:
-                    mat = np.array([[iop, 0], [op, iop]], dtype=object)
-                ops = self.hamil.get_site_operators(m, { iop, op })
+            if m == 0:
+                mat = np.array([[op, iop]], dtype=object)
+            elif m == self.n_sites - 1:
+                mat = np.array([[iop], [op]], dtype=object)
             else:
-                assert self.n_sites == 2 * self.hamil.n_sites
-                if m == 0:
-                    mat = np.array([[op, iop]], dtype=object)
-                elif m == self.n_sites - 1:
-                    mat = np.array([[iop], [0]], dtype=object)
-                elif m % 2 == 0:
-                    mat = np.array([[iop, 0], [op, iop]], dtype=object)
-                else:
-                    mat = np.array([[iop, 0], [0, iop]], dtype=object)
-                if m % 2 == 0:
-                    ops = self.hamil.get_site_operators(m // 2, { iop, op })
-                else:
-                    ops = self.hamil.get_site_operators(m // 2, { iop })
+                mat = np.array([[iop, 0], [op, iop]], dtype=object)
+            ops = self.hamil.get_site_operators(m, { iop, op })
             tensors.append(OperatorTensor(mat=mat, tags={m}, ops=ops))
         return tensors
 
 
 class IdentityMPOInfo(MPOInfo):
-    def __init__(self, mpo_info, cache_contraction=True):
-        self.hamil = mpo_info.hamil
-        self.n_sites = mpo_info.n_sites
-        self.middle_operators = None
-        self._init_operator_names()
-        self.cache_contraction = cache_contraction
-        self.cached_exprs = {}
-    
     def _init_operator_names(self):
         self.left_operator_names = [None] * self.n_sites
         self.right_operator_names = [None] * self.n_sites
-        
+        iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
         for i in range(self.n_sites):
-            self.left_operator_names[i]  = np.array([OpElement(OpNames.I, (), q_label=self.hamil.empty)], dtype=object)
-            self.right_operator_names[i] = np.array([OpElement(OpNames.I, (), q_label=self.hamil.empty)], dtype=object)
+            self.left_operator_names[i]  = np.array([iop], dtype=object)
+            self.right_operator_names[i] = np.array([iop], dtype=object)
 
 
 class IdentityMPO(MPO):
-    def __init__(self, mpo):
-        self.n_sites = mpo.n_sites
-        self.hamil = mpo.hamil
-        self.tensors = self._init_mpo_tensors(mpo=mpo)
-    
-    def _init_mpo_tensors(self, mpo):
+    def _init_mpo_tensors(self, iprint):
         tensors = []
+        iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
         for m in range(self.n_sites):
-            iop = OpElement(OpNames.I, (), q_label=self.hamil.empty)
             mat = np.array([[iop]], dtype=object)
-            ops = { iop : mpo[m].ops[iop] }
+            ops = self.hamil.get_site_operators(m, { iop })
             tensors.append(OperatorTensor(mat=mat, tags={m}, ops=ops))
         return tensors

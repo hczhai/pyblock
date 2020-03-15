@@ -49,3 +49,66 @@ pyblock.qchem.contractor
    :undoc-members:
    :show-inheritance:
 
+pyblock.qchem.simplifier
+------------------------
+
+.. automodule:: pyblock.qchem.simplifier
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+pyblock.qchem.parallelizer
+--------------------------
+
+.. automodule:: pyblock.qchem.parallelizer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+pyblock.qchem.thermal
+---------------------
+
+.. automodule:: pyblock.qchem.thermal
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+pyblock.qchem.occupation
+------------------------
+
+.. automodule:: pyblock.qchem.occupation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+pyblock.qchem.ancilla
+---------------------
+
+.. automodule:: pyblock.qchem.ancilla
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: pyblock.qchem.ancilla.mps
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: pyblock.qchem.ancilla.mpo
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+pyblock.qchem.npdm
+------------------
+
+.. automodule:: pyblock.qchem.npdm
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: pyblock.qchem.npdm.mpo
+   :members:
+   :undoc-members:
+   :show-inheritance:
+

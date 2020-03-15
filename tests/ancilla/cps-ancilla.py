@@ -55,8 +55,8 @@ with BlockHamiltonian.get(**opts) as hamil:
     mpo_info = MPOInfo(hamil)
     
     # Identity MPO
-    impo = IdentityMPO(mpo)
-    impo_info = IdentityMPOInfo(mpo_info)
+    impo = IdentityMPO(hamil)
+    impo_info = IdentityMPOInfo(hamil)
     
     # Compression
     ctr = DMRGContractor(mps_info_d, impo_info, Simplifier(NoTransposeRules()))

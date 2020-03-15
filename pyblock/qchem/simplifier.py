@@ -183,7 +183,7 @@ class AllRules(Rule):
         self.f = (RuleA() | RuleP() |  RuleB() | RuleQ() | RuleR() | RuleD()).__call__
 
 
-class RDM1Rules(Rule):
+class PDM1Rules(Rule):
     def __init__(self):
         self.f = (RuleB() | RuleD() | RulePDM1()).__call__
 

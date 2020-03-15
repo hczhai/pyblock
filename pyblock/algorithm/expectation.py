@@ -30,13 +30,16 @@ import time
 from mpi4py import MPI
 import numpy as np
 
+
 class ExpectationError(Exception):
     pass
+
 
 def pprint(*args, **kwargs):
     if MPI.COMM_WORLD.Get_rank() == 0:
         print(*args, **kwargs)
-        
+
+
 class Expect:
     """
     Calculation of expectation value <MPS1|MPO|MPS2>.
@@ -54,6 +57,10 @@ class Expect:
     """
     def __init__(self, mpo, bra_mps, ket_mps, bra_canonical_form=None, ket_canonical_form=None, contractor=None):
         self.n_sites = len(mpo)
+        if hasattr(mpo, "n_physical_sites"):
+            self.n_physical_sites = mpo.n_physical_sites
+        else:
+            self.n_physical_sites = self.n_sites
         self.dot = bra_mps.dot
         self.center = bra_mps.center
         assert bra_mps.dot == ket_mps.dot
@@ -388,13 +395,13 @@ class Expect:
 
         return result
     
-    def get_1pdm(self):
+    def get_1pdm(self, normsq=1):
         """
         Spatial 1-particle density matrix.
         """
-        pdmat = np.zeros((self.n_sites, self.n_sites))
+        pdmat = np.zeros((self.n_physical_sites, self.n_physical_sites))
         assert hasattr(self, "results")
         for r in self.results:
             for k, v in r.items():
-                pdmat[k.site_index[0], k.site_index[1]] = v
+                pdmat[k.site_index[0], k.site_index[1]] = v / normsq
         return pdmat

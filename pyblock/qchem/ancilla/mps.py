@@ -4,13 +4,14 @@ from ...symmetry.symmetry import ParticleN, SU2
 import collections
 import numpy as np
 
+
 class AncillaLineCoupling(LineCoupling):
     def __init__(self, n_sites, basis, empty, target):
         self.n_physical_sites = n_sites
         self.physical_basis = basis
         basis = [basis[i // 2] for i in range(n_sites * 2)]
         super().__init__(n_sites * 2, basis, empty, target)
-    
+
     def set_bond_dimension_initial(self, *args, **kwargs):
         """
         This forces one possible quantum number between physical sites, which is only true for initial state.
@@ -28,11 +29,11 @@ class AncillaLineCoupling(LineCoupling):
         if self.target is not None:
             self._filter()
         super().set_bond_dimension(*args, **kwargs)
-    
+
     def set_thermal_limit(self):
         self.left_dims = self._fill_ancilla_from_left()
         self.right_dims = self._fill_ancilla_from_right()
-    
+
     def _fill_ancilla_from_left(self):
         dim_l = [None] * self.n_sites
         ld = None
@@ -46,7 +47,7 @@ class AncillaLineCoupling(LineCoupling):
                     t = t[0]
                 ld = dim_l[d] = collections.Counter({ t: 1 })
         return dim_l
-    
+
     def _fill_ancilla_from_right(self):
         dim_r = [None] * self.n_sites
         rd = None
@@ -61,10 +62,8 @@ class AncillaLineCoupling(LineCoupling):
                 rd = dim_r[d] = collections.Counter({ t: 1 })
         return dim_r
 
-class AncillaMPS(MPS):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
+class AncillaMPS(MPS):
     def fill_thermal_limit(self):
         for ts in self.tensors:
             if ts.rank == 3:
@@ -88,4 +87,3 @@ class AncillaMPS(MPS):
                 for ib, b in enumerate(ts.blocks):
                     assert tuple(b.reduced_shape) == (1, 1)
                     b.reduced = np.array([[1.0 / np.sqrt(4) if ib != 1 else 1.0 / np.sqrt(2)]])
-

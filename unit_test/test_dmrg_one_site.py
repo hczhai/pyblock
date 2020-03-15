@@ -27,14 +27,14 @@ class TestDMRGOneSite:
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
                                   memory=2000, page=page) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
-            lcp.set_bond_dimension(100)
+            lcp.set_bond_dimension(60)
             mps = MPS(lcp, center=0, dot=1 if dot_scheme == 1 else 2)
             mps.randomize()
             mps.canonicalize()
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
             tto = dot_scheme if dot_scheme >= 3 else -1
-            dmrg = DMRG(mpo, mps, bond_dims=[100, 150, 200, 400, 500],
+            dmrg = DMRG(mpo, mps, bond_dims=[60, 100],
                         noise=[1E-3, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=tto)
             assert abs(ener - (-107.648250974014)) < 5E-6
@@ -48,14 +48,14 @@ class TestDMRGOneSite:
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
                                   memory=2000, page=page) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
-            lcp.set_bond_dimension(50, exact=True)
+            lcp.set_bond_dimension(60, exact=True)
             mps = MPS(lcp, center=0, dot=2)
             mps.randomize()
             mps.canonicalize()
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
-            dmrg = DMRG(mpo, mps, bond_dims=[50, 100, 150, 200, 400, 500],
-                        noise=[1E-3, 1E-4, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
+            dmrg = DMRG(mpo, mps, bond_dims=[60, 100],
+                        noise=[1E-2, 1E-4, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=-1)
             assert abs(ener - (-107.648250974014)) < 5E-6
         page.clean()
@@ -76,7 +76,7 @@ class TestDMRGOneSite:
             mps.canonicalize()
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
-            dmrg = DMRG(mpo, mps, bond_dims=[50, 100, 150, 200, 400, 500],
+            dmrg = DMRG(mpo, mps, bond_dims=[50, 100],
                         noise=[1E-3, 1E-4, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=-1)
             assert abs(ener - (-107.65412244752243)) < 1E-4

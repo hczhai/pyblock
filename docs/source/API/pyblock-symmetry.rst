@@ -16,3 +16,12 @@ pyblock.symmetry.cg
    :members:
    :undoc-members:
    :show-inheritance:
+
+pyblock.symmetry.basis
+----------------------
+
+.. automodule:: pyblock.symmetry.basis
+   :members:
+   :undoc-members:
+   :show-inheritance:
+

@@ -1,8 +1,10 @@
 
 from pyblock.qchem import BlockHamiltonian, DMRGContractor
-from pyblock.qchem import MPSInfo, IdentityMPOInfo, IdentityMPO
-from pyblock.qchem import DMRGDataPage, Simplifier, AllRules, NoTransposeRules
-from pyblock.qchem.ancilla import LineCoupling, MPOInfo, MPS, MPO
+from pyblock.qchem import MPSInfo
+from pyblock.qchem.npdm import PDM1MPOInfo, PDM1MPO
+from pyblock.qchem import DMRGDataPage, Simplifier, AllRules, NoTransposeRules, PDM1Rules
+from pyblock.qchem.ancilla import LineCoupling, MPS, MPOInfo, MPO, Ancilla
+from pyblock.qchem.ancilla import IdentityMPOInfo as AIMPOInfo, IdentityMPO as AIMPO
 from pyblock.qchem.thermal import FreeEnergy
 from pyblock.algorithm import ExpoApply, Compress, Expect
 
@@ -10,6 +12,7 @@ import numpy as np
 import pytest
 import fractions
 import os
+import copy
 
 @pytest.fixture
 def data_dir(request):
@@ -20,7 +23,8 @@ def data_dir(request):
 def dot_scheme(request):
     return request.param
 
-class TestDMRGOneSite:
+
+class TestAncilla:
     def test_hubbard_ancilla(self, data_dir, tmp_path):
         fcidump = 'HUBBARD-L8-U2.FCIDUMP'
         pg = 'c1'
@@ -46,18 +50,20 @@ class TestDMRGOneSite:
     def test_hubbard_nnn_ancilla(self, data_dir, tmp_path, dot_scheme):
         fcidump = 'HUBBARD-L8-U2-NNN.FCIDUMP'
         pg = 'c1'
-        page = DMRGDataPage(tmp_path / 'node0', n_frames=2)
+        page = DMRGDataPage(tmp_path / 'node0', n_frames=3)
         simpl = Simplifier(AllRules())
         bdims = 50
         beta = 0.02
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
                                   memory=2000, page=page, nelec=16) as hamil:
             assert hamil.n_electrons == hamil.n_sites * 2
+
             # Line coupling
             lcp_thermal = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp_thermal.set_thermal_limit()
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(bdims)
+
             # MPS
             mps_thermal = MPS(lcp_thermal, center=0, dot=1 if dot_scheme == 1 else 2, iprint=True)
             mps_thermal.fill_thermal_limit()
@@ -68,31 +74,62 @@ class TestDMRGOneSite:
             mps_info_thermal = MPSInfo(lcp_thermal)
             mps_info = MPSInfo(lcp)
             mps_info_d = { '_BRA': mps_info, '_KET': mps_info_thermal }
+
             # MPO
             fe_hamil = FreeEnergy(hamil)
+
             fe_hamil.set_free_energy(mu=1.0)
-            mpo = MPO(hamil)
             mpo_info = MPOInfo(hamil)
-            # Identity MPO
-            impo = IdentityMPO(mpo)
-            impo_info = IdentityMPOInfo(mpo_info)
-            # Compression
-            ctr = DMRGContractor(mps_info_d, impo_info, Simplifier(NoTransposeRules()))
-            cps = Compress(impo, mps, mps_thermal, bond_dims=bdims, contractor=ctr, noise=1E-4)
-            norm = cps.solve(10, 1E-6)
-            assert abs(norm - 1) <= 1E-6
-            # Time Evolution
-            mps0 = MPS.from_tensor_network(cps._b, mps_info, center=cps.center, dot=cps.dot)
-            mps0.set_contractor(None)
-            mps0_form = cps.bra_canonical_form
             ctr = DMRGContractor(mps_info, mpo_info, Simplifier(AllRules()))
+            ctr.page.activate({'_BASE'})
+            mpo = MPO(hamil)
+
+            pmpo_info = Ancilla.NPDM(PDM1MPOInfo)(hamil)
+            pctr = DMRGContractor(mps_info, pmpo_info, Simplifier(PDM1Rules()))
+            pctr.page.activate({'_BASE'})
+            pmpo = Ancilla.NPDM(PDM1MPO)(hamil)
+
+            impo_info = AIMPOInfo(hamil)
+            ictr = DMRGContractor(mps_info_d, impo_info, Simplifier(NoTransposeRules()))
+            ictr.page.activate({'_BASE'})
+            impo = AIMPO(hamil)
+
+            # Compression
+            cps = Compress(impo, mps, mps_thermal, bond_dims=bdims, contractor=ictr, noise=1E-4)
+            norm = cps.solve(10, 1E-6)
+            mps0 = cps.mps
+            assert abs(norm - 1) <= 1E-6
+
+            # Time Evolution
             tto = dot_scheme if dot_scheme >= 3 else -1
-            te = ExpoApply(mpo, mps0, bond_dims=bdims, beta=beta, contractor=ctr, canonical_form=mps0_form)
+            te = ExpoApply(mpo, mps0, canonical_form=mps0.form, bond_dims=bdims, beta=beta, contractor=ctr)
             ener = te.solve(10, forward=cps.forward, two_dot_to_one_dot=tto)
             assert abs(ener - (-8.30251649)) <= 8E-3
+
             # Expectation
             mps0 = te.mps
             normsq = te.normsqs[-1]
             fener = Expect(mpo, mps0, mps0, mps0.form, None, contractor=ctr).solve() / normsq
             assert abs(ener - fener) <= 1E-6
+
+            # 1-PDM
+            pctr.mps_info = copy.deepcopy(mps_info)
+            mps0p = copy.deepcopy(mps0)
+            ex = Expect(pmpo, mps0p, mps0p, mps0p.form, None, contractor=pctr)
+            ex.solve(forward=te.forward, bond_dim=bdims)
+            dm = ex.get_1pdm(normsq=normsq)
+
+            dm_std = np.array([
+                [ 0.99917239,  0.09663464,  0.14507410, -0.00166227, -0.00134697, -0.00202504, -0.00095471,  0.00003930],
+                [ 0.09663464,  0.99834462,  0.09566393,  0.14416750, -0.00233483, -0.00131371, -0.00203368, -0.00095530],
+                [ 0.14507410,  0.09566393,  0.99753901,  0.09430095,  0.14315198, -0.00231163, -0.00131514, -0.00202803],
+                [-0.00166227,  0.14416750,  0.09430095,  0.99757270,  0.09431342,  0.14315278, -0.00233495, -0.00134784],
+                [-0.00134697, -0.00233483,  0.14315198,  0.09431342,  0.99757291,  0.09430054,  0.14416787, -0.00166256],
+                [-0.00202504, -0.00131371, -0.00231163,  0.14315278,  0.09430054,  0.99753883,  0.09566390,  0.14507305],
+                [-0.00095471, -0.00203368, -0.00131514, -0.00233495,  0.14416787,  0.09566390,  0.99834417,  0.09663385],
+                [ 0.00003930, -0.00095530, -0.00202803, -0.00134784, -0.00166256,  0.14507305,  0.09663385,  0.99917258]
+            ])
+
+            assert np.allclose(dm, dm_std, atol=1E-3)
+
         page.clean()

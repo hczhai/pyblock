@@ -752,3 +752,138 @@ Check whether the list is nonempty"""
         """__len__(self: block.VectorVectorInt) -> int"""
         pass
 
+
+class VectorVectorMatrix:
+
+    def __init__(self, *args, **kwargs):
+        """__init__(*args, **kwargs)
+Overloaded function.
+
+1. __init__(self: block.VectorVectorMatrix) -> None
+
+2. __init__(self: block.VectorVectorMatrix, arg0: block.VectorVectorMatrix) -> None
+
+Copy constructor
+
+3. __init__(self: block.VectorVectorMatrix, arg0: iterable) -> None"""
+        pass
+
+    def __eq__(self, *args, **kwargs):
+        """__eq__(self: block.VectorVectorMatrix, arg0: block.VectorVectorMatrix) -> bool"""
+        pass
+
+    def __ne__(self, *args, **kwargs):
+        """__ne__(self: block.VectorVectorMatrix, arg0: block.VectorVectorMatrix) -> bool"""
+        pass
+
+    def count(self, *args, **kwargs):
+        """count(self: block.VectorVectorMatrix, x: block.VectorMatrix) -> int
+
+Return the number of times ``x`` appears in the list"""
+        pass
+
+    def remove(self, *args, **kwargs):
+        """remove(self: block.VectorVectorMatrix, x: block.VectorMatrix) -> None
+
+Remove the first item from the list whose value is x. It is an error if there is no such item."""
+        pass
+
+    def __contains__(self, *args, **kwargs):
+        """__contains__(self: block.VectorVectorMatrix, x: block.VectorMatrix) -> bool
+
+Return true the container contains ``x``"""
+        pass
+
+    def __repr__(self, *args, **kwargs):
+        """__repr__(self: block.VectorVectorMatrix) -> str
+
+Return the canonical string representation of this list."""
+        pass
+
+    def append(self, *args, **kwargs):
+        """append(self: block.VectorVectorMatrix, x: block.VectorMatrix) -> None
+
+Add an item to the end of the list"""
+        pass
+
+    def extend(self, *args, **kwargs):
+        """extend(*args, **kwargs)
+Overloaded function.
+
+1. extend(self: block.VectorVectorMatrix, L: block.VectorVectorMatrix) -> None
+
+Extend the list by appending all the items in the given list
+
+2. extend(self: block.VectorVectorMatrix, L: iterable) -> None
+
+Extend the list by appending all the items in the given list"""
+        pass
+
+    def insert(self, *args, **kwargs):
+        """insert(self: block.VectorVectorMatrix, i: int, x: block.VectorMatrix) -> None
+
+Insert an item at a given position."""
+        pass
+
+    def pop(self, *args, **kwargs):
+        """pop(*args, **kwargs)
+Overloaded function.
+
+1. pop(self: block.VectorVectorMatrix) -> block.VectorMatrix
+
+Remove and return the last item
+
+2. pop(self: block.VectorVectorMatrix, i: int) -> block.VectorMatrix
+
+Remove and return the item at index ``i``"""
+        pass
+
+    def __setitem__(self, *args, **kwargs):
+        """__setitem__(*args, **kwargs)
+Overloaded function.
+
+1. __setitem__(self: block.VectorVectorMatrix, arg0: int, arg1: block.VectorMatrix) -> None
+
+2. __setitem__(self: block.VectorVectorMatrix, arg0: slice, arg1: block.VectorVectorMatrix) -> None
+
+Assign list elements using a slice object"""
+        pass
+
+    def __getitem__(self, *args, **kwargs):
+        """__getitem__(*args, **kwargs)
+Overloaded function.
+
+1. __getitem__(self: block.VectorVectorMatrix, s: slice) -> block.VectorVectorMatrix
+
+Retrieve list elements using a slice object
+
+2. __getitem__(self: block.VectorVectorMatrix, arg0: int) -> block.VectorMatrix"""
+        pass
+
+    def __delitem__(self, *args, **kwargs):
+        """__delitem__(*args, **kwargs)
+Overloaded function.
+
+1. __delitem__(self: block.VectorVectorMatrix, arg0: int) -> None
+
+Delete the list elements at index ``i``
+
+2. __delitem__(self: block.VectorVectorMatrix, arg0: slice) -> None
+
+Delete list elements using a slice object"""
+        pass
+
+    def __iter__(self, *args, **kwargs):
+        """__iter__(self: block.VectorVectorMatrix) -> iterator"""
+        pass
+
+    def __bool__(self, *args, **kwargs):
+        """__bool__(self: block.VectorVectorMatrix) -> bool
+
+Check whether the list is nonempty"""
+        pass
+
+    def __len__(self, *args, **kwargs):
+        """__len__(self: block.VectorVectorMatrix) -> int"""
+        pass
+

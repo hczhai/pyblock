@@ -1,6 +1,6 @@
 
 from pyblock.qchem import BlockHamiltonian, DMRGContractor
-from pyblock.qchem import DMRGDataPage, Simplifier, AllRules, RDM1Rules
+from pyblock.qchem import DMRGDataPage, Simplifier, AllRules, PDM1Rules
 from pyblock.qchem import LineCoupling, MPSInfo, MPOInfo, MPS, MPO
 from pyblock.qchem.npdm import PDM1MPOInfo, PDM1MPO
 from pyblock.qchem.operator import OpNames
@@ -21,14 +21,13 @@ def data_dir(request):
 def dot_scheme(request):
     return request.param
 
-class TestExpect:
+
+class TestNPDM:
     
-    def test_n2_sto3g_expect(self, data_dir, tmp_path, dot_scheme):
+    def test_n2_sto3g_npdm(self, data_dir, tmp_path, dot_scheme):
         fcidump = 'N2.STO3G.FCIDUMP'
         pg = 'd2h'
         page = DMRGDataPage(tmp_path / 'node0', n_frames=2)
-        simpl = Simplifier(AllRules())
-        simpl_pdm1 = Simplifier(RDM1Rules())
         bdims = 200
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
                                   memory=2000, page=page) as hamil:
@@ -49,7 +48,7 @@ class TestExpect:
             mpo = MPO(hamil)
 
             pmpo_info = PDM1MPOInfo(hamil)
-            pctr = DMRGContractor(mps_info, pmpo_info, Simplifier(RDM1Rules()))
+            pctr = DMRGContractor(mps_info, pmpo_info, Simplifier(PDM1Rules()))
             pctr.page.activate({'_BASE'})
             pmpo = PDM1MPO(hamil)
             
