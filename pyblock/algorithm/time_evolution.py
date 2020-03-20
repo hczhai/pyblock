@@ -160,15 +160,10 @@ class ExpoApply:
             self.set_mps({i}, bra)
             ctr.fuse_right(i, bra, self.canonical_form[i])
         
-        if forward:
-            limit = ctr.bond_upper_limit_left()[i]
-        else:
-            limit = ctr.bond_upper_limit_right()[i]
-        
         dm = bra.get_diag_density_matrix(trace_right=forward)
         
         l_fused, r_fused, error = \
-            bra.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
+            bra.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=None)
         
         if forward:
             ctr.update_local_left_mps_info(i, l_fused)
@@ -178,9 +173,11 @@ class ExpoApply:
             bra_new = ctr.unfuse_right(i, r_fused)
         
         if forward and i == self.n_sites - 1:
-            bra_new *= r_fused.to_scalar()
+            bra_new.right_multiply(r_fused.to_dict(0))
+            ctr.update_local_left_mps_info(i, bra_new.add_tags({'_BRA'}))
         elif not forward and i == 0:
-            bra_new *= l_fused.to_scalar()
+            bra_new.left_multiply(l_fused.to_dict(1))
+            ctr.update_local_right_mps_info(i, bra_new.add_tags({'_BRA'}))
         
         self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
         self._k[{i, '_KET'}].modify(bra_new)
@@ -272,15 +269,10 @@ class ExpoApply:
         
         self.set_mps({i, i + 1}, bra)
         
-        if forward:
-            limit = ctr.bond_upper_limit_left()[i]
-        else:
-            limit = ctr.bond_upper_limit_right()[i + 1]
-        
         dm = bra.get_diag_density_matrix(trace_right=forward)
         
         l_fused, r_fused, error = \
-            bra.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
+            bra.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=None)
         
         if forward:
             ctr.update_local_left_mps_info(i, l_fused)

@@ -729,9 +729,9 @@ class Tensor:
             r += (b.reduced * b.reduced).sum()
         return np.sqrt(r)
     
-    def to_scalar(self):
-        assert len(self.blocks) == 1 and self.blocks[0].reduced.size == 1
-        return self.blocks[0].reduced.reshape((1, ))[0]
+    def to_dict(self, idx):
+        assert len(self.blocks) == 1
+        return { (self.blocks[0].q_labels[idx], ): self.blocks[0].reduced }
 
     # split rank-2 block-diagonal Tensor to two tensors
     # using svd

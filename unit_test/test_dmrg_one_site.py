@@ -18,13 +18,17 @@ def data_dir(request):
 def dot_scheme(request):
     return request.param
 
+@pytest.fixture(scope="module", params=[True, False])
+def use_su2(request):
+    return request.param
+
 class TestDMRGOneSite:
-    def test_n2_sto3g_simpl_dot(self, data_dir, tmp_path, dot_scheme):
+    def test_n2_sto3g_simpl_dot(self, data_dir, tmp_path, dot_scheme, use_su2):
         fcidump = 'N2.STO3G.FCIDUMP'
         pg = 'd2h'
         page = DMRGDataPage(tmp_path / 'node0')
-        simpl = Simplifier(AllRules())
-        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
+        simpl = Simplifier(AllRules(su2=use_su2))
+        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=use_su2, output_level=-1,
                                   memory=2000, page=page) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(60)
@@ -35,9 +39,12 @@ class TestDMRGOneSite:
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
             tto = dot_scheme if dot_scheme >= 3 else -1
             dmrg = DMRG(mpo, mps, bond_dims=[60, 100],
-                        noise=[1E-3, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
+                        noise=[1E-5, 1E-5, 1E-6, 1E-7, 1E-7, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=tto)
-            assert abs(ener - (-107.648250974014)) < 5E-6
+            if use_su2:
+                assert abs(ener - (-107.648250974014)) < 5E-5
+            else:
+                assert abs(ener - (-107.648250974014)) < 5E-4
         page.clean()
     
     def test_n2_sto3g_simpl_exact(self, data_dir, tmp_path):
@@ -55,19 +62,19 @@ class TestDMRGOneSite:
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
             dmrg = DMRG(mpo, mps, bond_dims=[60, 100],
-                        noise=[1E-2, 1E-4, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
+                        noise=[5E-4, 1E-4, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=-1)
             assert abs(ener - (-107.648250974014)) < 5E-6
         page.clean()
     
-    def test_n2_sto3g_simpl_occ(self, data_dir, tmp_path):
+    def test_n2_sto3g_simpl_occ(self, data_dir, tmp_path, use_su2):
         fcidump = 'N2.STO3G-OCC.FCIDUMP'
         occfile = 'N2.STO3G-OCC.OCC'
         occ = [float(x) for x in open(os.path.join(data_dir, occfile), 'r').read().split()]
         pg = 'd2h'
         page = DMRGDataPage(tmp_path / 'node0')
-        simpl = Simplifier(AllRules())
-        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
+        simpl = Simplifier(AllRules(su2=use_su2))
+        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=use_su2, output_level=-1,
                                   memory=2000, page=page) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension_using_occ(50, occ=occ, bias=10000)

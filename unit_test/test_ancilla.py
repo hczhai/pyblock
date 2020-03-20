@@ -23,14 +23,17 @@ def data_dir(request):
 def dot_scheme(request):
     return request.param
 
+@pytest.fixture(scope="module", params=[True, False])
+def use_su2(request):
+    return request.param
 
 class TestAncilla:
-    def test_hubbard_ancilla(self, data_dir, tmp_path):
+    def test_hubbard_ancilla(self, data_dir, tmp_path, use_su2):
         fcidump = 'HUBBARD-L8-U2.FCIDUMP'
         pg = 'c1'
         page = DMRGDataPage(tmp_path / 'node0')
-        simpl = Simplifier(AllRules())
-        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
+        simpl = Simplifier(AllRules(su2=use_su2))
+        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=use_su2, output_level=-1,
                                   memory=2000, page=page, nelec=16) as hamil:
             assert hamil.n_electrons == hamil.n_sites * 2
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
@@ -47,14 +50,13 @@ class TestAncilla:
             assert abs(ener - (-5.76826262)) < 1E-3
         page.clean()
     
-    def test_hubbard_nnn_ancilla(self, data_dir, tmp_path, dot_scheme):
+    def test_hubbard_nnn_ancilla(self, data_dir, tmp_path, dot_scheme, use_su2):
         fcidump = 'HUBBARD-L8-U2-NNN.FCIDUMP'
         pg = 'c1'
         page = DMRGDataPage(tmp_path / 'node0', n_frames=3)
-        simpl = Simplifier(AllRules())
-        bdims = 50
+        bdims = 100
         beta = 0.02
-        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
+        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=use_su2, output_level=-1,
                                   memory=2000, page=page, nelec=16) as hamil:
             assert hamil.n_electrons == hamil.n_sites * 2
 
@@ -80,22 +82,22 @@ class TestAncilla:
 
             fe_hamil.set_free_energy(mu=1.0)
             mpo_info = MPOInfo(hamil)
-            ctr = DMRGContractor(mps_info, mpo_info, Simplifier(AllRules()))
+            ctr = DMRGContractor(mps_info, mpo_info, Simplifier(AllRules(su2=use_su2)))
             ctr.page.activate({'_BASE'})
             mpo = MPO(hamil)
 
             pmpo_info = Ancilla.NPDM(PDM1MPOInfo)(hamil)
-            pctr = DMRGContractor(mps_info, pmpo_info, Simplifier(PDM1Rules()))
+            pctr = DMRGContractor(mps_info, pmpo_info, Simplifier(PDM1Rules(su2=use_su2)))
             pctr.page.activate({'_BASE'})
             pmpo = Ancilla.NPDM(PDM1MPO)(hamil)
 
             impo_info = AIMPOInfo(hamil)
-            ictr = DMRGContractor(mps_info_d, impo_info, Simplifier(NoTransposeRules()))
+            ictr = DMRGContractor(mps_info_d, impo_info, Simplifier(NoTransposeRules(su2=use_su2)))
             ictr.page.activate({'_BASE'})
             impo = AIMPO(hamil)
 
             # Compression
-            cps = Compress(impo, mps, mps_thermal, bond_dims=bdims, contractor=ictr, noise=1E-4)
+            cps = Compress(impo, mps, mps_thermal, bond_dims=bdims, ket_bond_dim=10, contractor=ictr, noise=1E-4)
             norm = cps.solve(10, 1E-6)
             mps0 = cps.mps
             assert abs(norm - 1) <= 1E-6
@@ -104,7 +106,10 @@ class TestAncilla:
             tto = dot_scheme if dot_scheme >= 3 else -1
             te = ExpoApply(mpo, mps0, canonical_form=mps0.form, bond_dims=bdims, beta=beta, contractor=ctr)
             ener = te.solve(10, forward=cps.forward, two_dot_to_one_dot=tto)
-            assert abs(ener - (-8.30251649)) <= 8E-3
+            if use_su2:
+                assert abs(ener - (-8.30251649)) <= 8E-3
+            else:
+                assert abs(ener - (-8.30251649)) <= 0.05 # bond dimension is worse for sz
 
             # Expectation
             mps0 = te.mps
@@ -117,7 +122,15 @@ class TestAncilla:
             mps0p = copy.deepcopy(mps0)
             ex = Expect(pmpo, mps0p, mps0p, mps0p.form, None, contractor=pctr)
             ex.solve(forward=te.forward, bond_dim=bdims)
-            dm = ex.get_1pdm(normsq=normsq)
+
+            if use_su2:
+                dm = ex.get_1pdm_spatial(normsq=normsq)
+            else:
+                dm_spin = ex.get_1pdm(normsq=normsq)
+                dm = dm_spin[:, :, 0, 0] + dm_spin[:, :, 1, 1]
+                assert np.allclose(dm_spin[:, :, 0, 0], dm_spin[:, :, 1, 1], atol=1E-3)
+                assert np.allclose(dm_spin[:, :, 0, 1], 0.0, atol=1E-3)
+                assert np.allclose(dm_spin[:, :, 1, 0], 0.0, atol=1E-3)
 
             dm_std = np.array([
                 [ 0.99917239,  0.09663464,  0.14507410, -0.00166227, -0.00134697, -0.00202504, -0.00095471,  0.00003930],

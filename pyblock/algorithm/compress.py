@@ -51,13 +51,15 @@ class Compress:
         bond_dims : list(int) or int
             Bond dimension for each sweep.
     """
-    def __init__(self, mpo, mps, ket_mps, bond_dims, noise, bra_canonical_form=None, ket_canonical_form=None, contractor=None):
+    def __init__(self, mpo, mps, ket_mps, bond_dims, noise, ket_bond_dim=-1,
+        bra_canonical_form=None, ket_canonical_form=None, contractor=None):
         self.n_sites = len(mpo)
         self.dot = mps.dot
         self.center = mps.center
         assert mps.dot == ket_mps.dot
         assert mps.center == ket_mps.center
         self.bond_dims = bond_dims if isinstance(bond_dims, list) else [bond_dims]
+        self.ket_bond_dim = ket_bond_dim
         self.noise = noise if isinstance(noise, list) else [noise]
         
         self.mps = mps.deep_copy()
@@ -101,7 +103,7 @@ class Compress:
         self.mps.form = self.bra_canonical_form.copy()
         self.mps.set_contractor(None)
     
-    def update_one_dot(self, i, forward, bond_dim, noise, beta):
+    def update_one_dot(self, i, forward, bond_dim, ket_bond_dim, noise, beta):
         """
         Update local sites in one-dot scheme.
         
@@ -111,7 +113,9 @@ class Compress:
             forward : bool
                 Direction of current sweep. If True, sweep is performed from left to right.
             bond_dim : int
-                Bond dimension of current sweep.
+                Bra bond dimension of current sweep.
+            ket_bond_dim : int
+                Ket bond dimension of current sweep.
             beta : float
                 Not used.
         
@@ -157,21 +161,22 @@ class Compress:
             psi_ket = ctr.unfuse_left(i, psi_ket.add_tags({'_KET'})).add_tags({'_KET'})
             ctr.fuse_right(i, psi_ket, self.ket_canonical_form[i])
         
-        if forward:
-            ket_limit = ctr.bond_left({'_KET'})[i]
-            bra_limit = ctr.bond_upper_limit_left({'_BRA'})[i]
+        if ket_bond_dim == -1:
+            if forward:
+                ket_limit = ctr.bond_left({'_KET'})[i]
+            else:
+                ket_limit = ctr.bond_right({'_KET'})[i]
         else:
-            ket_limit = ctr.bond_right({'_KET'})[i]
-            bra_limit = ctr.bond_upper_limit_right({'_BRA'})[i]
+            ket_limit = None
         
         dm_ket = psi_ket.get_diag_density_matrix(trace_right=forward)
         l_fused_ket, r_fused_ket, error_ket = \
-            psi_ket.split_using_density_matrix(dm_ket, absorb_right=forward, k=-1, limit=ket_limit)
+            psi_ket.split_using_density_matrix(dm_ket, absorb_right=forward, k=ket_bond_dim, limit=ket_limit)
         assert np.isclose(error_ket, 0.0)
         
         dm_bra = psi_bra.get_diag_density_matrix(trace_right=forward, noise=noise)
         l_fused_bra, r_fused_bra, error_bra = \
-            psi_bra.split_using_density_matrix(dm_bra, absorb_right=forward, k=bond_dim, limit=bra_limit)
+            psi_bra.split_using_density_matrix(dm_bra, absorb_right=forward, k=bond_dim, limit=None)
         
         TensorNetwork(tensors=[l_fused_bra, r_fused_bra]).add_tags({'_BRA'})
         TensorNetwork(tensors=[l_fused_ket, r_fused_ket]).add_tags({'_KET'})
@@ -195,8 +200,10 @@ class Compress:
                 self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_BRA'}].modify(adj_bra)
                 self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_KET'}].modify(adj_ket)
             else:
-                l_bra *= r_fused_bra.to_scalar()
-                l_ket *= r_fused_ket.to_scalar()
+                l_bra.right_multiply(r_fused_bra.to_dict(0))
+                l_ket.right_multiply(r_fused_ket.to_dict(0))
+                ctr.update_local_left_mps_info(i, l_bra.add_tags({'_BRA'}))
+                ctr.update_local_left_mps_info(i, l_ket.add_tags({'_KET'}))
                 self.bra_canonical_form[i] = self.ket_canonical_form[i] = 'K'
         else:
             r_bra = ctr.unfuse_right(i, r_fused_bra)
@@ -210,8 +217,10 @@ class Compress:
                 self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_BRA'}].modify(adj_bra)
                 self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_KET'}].modify(adj_ket)
             else:
-                r_bra *= l_fused_bra.to_scalar()
-                r_ket *= l_fused_ket.to_scalar()
+                r_bra.left_multiply(l_fused_bra.to_dict(1))
+                r_ket.left_multiply(l_fused_ket.to_dict(1))
+                ctr.update_local_right_mps_info(i, r_bra.add_tags({'_BRA'}))
+                ctr.update_local_right_mps_info(i, r_ket.add_tags({'_KET'}))
                 self.bra_canonical_form[i] = self.ket_canonical_form[i] = 'S'
         
         self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
@@ -222,7 +231,7 @@ class Compress:
         
         return energy, error_bra, nexpo
     
-    def update_two_dot(self, i, forward, bond_dim, noise, beta):
+    def update_two_dot(self, i, forward, bond_dim, ket_bond_dim, noise, beta):
         """
         Update local sites in two-dot scheme.
         
@@ -232,7 +241,9 @@ class Compress:
             forward : bool
                 Direction of current sweep. If True, sweep is performed from left to right.
             bond_dim : int
-                Bond dimension of current sweep.
+                Bra bond dimension of current sweep.
+            ket_bond_dim : int
+                Ket bond dimension of current sweep.
             beta : float
                 Not used.
         
@@ -266,21 +277,22 @@ class Compress:
         
         self.set_mps({i, i + 1}, psi_bra)
         
-        if forward:
-            ket_limit = ctr.bond_left({'_KET'})[i]
-            bra_limit = ctr.bond_upper_limit_left({'_BRA'})[i]
+        if ket_bond_dim == -1:
+            if forward:
+                ket_limit = ctr.bond_left({'_KET'})[i]
+            else:
+                ket_limit = ctr.bond_right({'_KET'})[i + 1]
         else:
-            ket_limit = ctr.bond_right({'_KET'})[i + 1]
-            bra_limit = ctr.bond_upper_limit_right({'_BRA'})[i + 1]
+            ket_limit = None
         
         dm_ket = psi_ket.get_diag_density_matrix(trace_right=forward)
         l_fused_ket, r_fused_ket, error_ket = \
-            psi_ket.split_using_density_matrix(dm_ket, absorb_right=forward, k=-1, limit=ket_limit)
+            psi_ket.split_using_density_matrix(dm_ket, absorb_right=forward, k=ket_bond_dim, limit=ket_limit)
         assert np.isclose(error_ket, 0.0)
         
         dm_bra = psi_bra.get_diag_density_matrix(trace_right=forward, noise=noise)
         l_fused_bra, r_fused_bra, error_bra = \
-            psi_bra.split_using_density_matrix(dm_bra, absorb_right=forward, k=bond_dim, limit=bra_limit)
+            psi_bra.split_using_density_matrix(dm_bra, absorb_right=forward, k=bond_dim, limit=None)
         
         TensorNetwork(tensors=[l_fused_bra, r_fused_bra]).add_tags({'_BRA'})
         TensorNetwork(tensors=[l_fused_ket, r_fused_ket]).add_tags({'_KET'})
@@ -317,7 +329,7 @@ class Compress:
         self.eff_ham = MovingEnvironment(self.n_sites, self.center, self.dot, self._b | self._h | self._k)
         pprint("T = %4.2f" % (time.perf_counter() - t))
 
-    def blocking(self, i, forward, bond_dim, noise, beta):
+    def blocking(self, i, forward, bond_dim, ket_bond_dim, noise, beta):
         """
         Perform one blocking iteration.
         
@@ -327,7 +339,9 @@ class Compress:
             forward : bool
                 Direction of current sweep. If True, sweep is performed from left to right.
             bond_dim : int
-                Bond dimension of current sweep.
+                Bra bond dimension of current sweep.
+            ket_bond_dim : int
+                Ket bond dimension of current sweep.
             noise : float
                 Noise prefactor of current sweep.
             beta : float
@@ -345,19 +359,21 @@ class Compress:
         self.center = i
 
         if self.dot == 1:
-            return self.update_one_dot(i, forward, bond_dim, noise, beta)
+            return self.update_one_dot(i, forward, bond_dim, ket_bond_dim, noise, beta)
         else:
-            return self.update_two_dot(i, forward, bond_dim, noise, beta)
+            return self.update_two_dot(i, forward, bond_dim, ket_bond_dim, noise, beta)
 
-    def sweep(self, forward, bond_dim, noise, beta):
+    def sweep(self, forward, bond_dim, ket_bond_dim, noise, beta):
         """
         Perform one sweep iteration.
         
         Args:
             forward : bool
                 Direction of current sweep. If True, sweep is performed from left to right.
-            bond_dims : int
-                Bond dimension of current sweep.
+            bond_dim : int
+                Bra bond dimension of current sweep.
+            ket_bond_dim : int
+                Ket bond dimension of current sweep.
             noise : float
                 Noise prefactor of current sweep.
             beta : float
@@ -389,7 +405,7 @@ class Compress:
             else:
                 pprint(" %3s Site = %4d .. " % ('-->' if forward else '<--', i), end='', flush=True)
             t = time.perf_counter()
-            result, error, nmult = self.blocking(i, forward=forward, bond_dim=bond_dim, noise=noise, beta=beta)
+            result, error, nmult = self.blocking(i, forward=forward, bond_dim=bond_dim, ket_bond_dim=ket_bond_dim, noise=noise, beta=beta)
             pprint("Nmult = %4d N = %15.8f Error = %15.8f T = %4.2f" % (nmult, result, error, time.perf_counter() - t))
             sweep_results.append(result)
         
@@ -436,7 +452,8 @@ class Compress:
                 if self.center != 0 and self.center == self.n_sites - 2:
                     self.center = self.n_sites - 1
 
-            energy = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], noise=self.noise[iw], beta=self.beta)
+            energy = self.sweep(forward=forward, bond_dim=self.bond_dims[iw], ket_bond_dim=self.ket_bond_dim,
+                noise=self.noise[iw], beta=self.beta)
             self.energies.append(energy)
 
             converged = (len(self.energies) >= 2 and tol is not None

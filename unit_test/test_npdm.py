@@ -86,7 +86,7 @@ class TestNPDM:
             mps0 = copy.deepcopy(mps00)
             ex = Expect(pmpo, mps0, mps0, mps0.form, None, contractor=pctr)
             ex.solve(forward=dmrg.forward, bond_dim=bdims)
-            dm = ex.get_1pdm()
+            dm = ex.get_1pdm_spatial()
             
             for i in range(hamil.n_sites):
                 for j in range(hamil.n_sites):

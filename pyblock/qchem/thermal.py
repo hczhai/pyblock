@@ -26,28 +26,54 @@ Setting up integral for calculating thermal quantities.
 class FreeEnergy:
     def __init__(self, hamil):
         self.hamil = hamil
-        self.v = hamil.v
-        self.t = hamil.t
-        self.e = hamil.e
-        self.zv = hamil.v.__class__(hamil.v.n)
-        self.zt = hamil.t.__class__(hamil.t.n)
+        if hamil.spin_adapted:
+            self.v = hamil.v
+            self.t = hamil.t
+            self.e = hamil.e
+            self.zv = hamil.v.__class__(hamil.v.n)
+            self.zt = hamil.t.__class__(hamil.t.n)
+        else:
+            self.vs = hamil.vaa, hamil.vab, hamil.vba, hamil.vbb
+            self.ts = hamil.ta, hamil.tb
+            self.e = hamil.e
+            self.zv = hamil.vaa.__class__(hamil.vaa.n)
+            self.zt = hamil.ta.__class__(hamil.ta.n)
     
     def set_energy(self):
-        self.hamil.v = self.v
-        self.hamil.t = self.t
-        self.hamil.e = self.e
+        if self.hamil.spin_adapted:
+            self.hamil.v = self.v
+            self.hamil.t = self.t
+            self.hamil.e = self.e
+        else:
+            self.hamil.vaa, self.hamil.vab, self.hamil.vba, self.hamil.vbb = self.vs
+            self.hamil.ta, self.hamil.tb = self.ts
+            self.hamil.e = self.e
     
     def set_free_energy(self, mu):
         self.set_energy()
-        self.hamil.t = self.hamil.t.copy()
-        
-        for i in range(self.hamil.n_sites):
-            self.hamil.t[i, i] -= mu
+        if self.hamil.spin_adapted:
+            self.hamil.t = self.hamil.t.copy()
+            for i in range(self.hamil.n_sites):
+                self.hamil.t[i, i] -= mu
+        else:
+            self.hamil.ta = self.hamil.ta.copy()
+            self.hamil.tb = self.hamil.tb.copy()
+            for t in [self.hamil.ta, self.hamil.tb]:
+                for i in range(self.hamil.n_sites):
+                    t[i, i] -= mu
 
     def set_particle_number(self):
-        self.hamil.t = self.t.__class__(self.hamil.t.n)
-        self.hamil.v = self.zv
-        self.hamil.e = 0.0
-        
-        for i in range(self.hamil.n_sites):
-            self.hamil.t[i, i] = 1
+        if self.hamil.spin_adapted:
+            self.hamil.t = self.zt.copy()
+            self.hamil.v = self.zv
+            self.hamil.e = 0.0
+            for i in range(self.hamil.n_sites):
+                self.hamil.t[i, i] = 1
+        else:
+            self.hamil.ta = self.zt.copy()
+            self.hamil.tb = self.zt.copy()
+            self.hamil.vaa, self.hamil.vab, self.hamil.vba, self.hamil.vbb = [self.zv] * 4
+            self.hamil.e = 0.0
+            for t in [self.hamil.ta, self.hamil.tb]:
+                for i in range(self.hamil.n_sites):
+                    t[i, i] = 1

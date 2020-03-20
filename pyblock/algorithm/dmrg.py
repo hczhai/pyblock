@@ -271,15 +271,10 @@ class DMRG:
             self.set_mps({i}, gs)
             ctr.fuse_right(i, gs, self.canonical_form[i])
         
-        if forward:
-            limit = ctr.bond_upper_limit_left()[i]
-        else:
-            limit = ctr.bond_upper_limit_right()[i]
-        
         dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
         
         l_fused, r_fused, error = \
-            gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
+            gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=None)
         
         if forward:
             ctr.update_local_left_mps_info(i, l_fused)
@@ -292,7 +287,8 @@ class DMRG:
                 self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_KET'}].modify(adj_new)
                 self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_BRA'}].modify(adj_new)
             else:
-                gs_new *= r_fused.to_scalar()
+                gs_new.right_multiply(r_fused.to_dict(0))
+                ctr.update_local_left_mps_info(i, gs_new)
                 self.canonical_form[i] = 'K'
         else:
             ctr.update_local_right_mps_info(i, r_fused)
@@ -305,7 +301,8 @@ class DMRG:
                 self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_KET'}].modify(adj_new)
                 self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_BRA'}].modify(adj_new)
             else:
-                gs_new *= l_fused.to_scalar()
+                gs_new.left_multiply(l_fused.to_dict(1))
+                ctr.update_local_right_mps_info(i, gs_new)
                 self.canonical_form[i] = 'S'
         
         self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
@@ -362,15 +359,10 @@ class DMRG:
         
         self.set_mps({i, i + 1}, gs)
         
-        if forward:
-            limit = ctr.bond_upper_limit_left()[i]
-        else:
-            limit = ctr.bond_upper_limit_right()[i + 1]
-        
         dm = gs.get_diag_density_matrix(trace_right=forward, noise=noise)
         
         l_fused, r_fused, error = \
-            gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=limit)
+            gs.split_using_density_matrix(dm, absorb_right=forward, k=bond_dim, limit=None)
         
         if forward:
             ctr.update_local_left_mps_info(i, l_fused)

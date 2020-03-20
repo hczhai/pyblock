@@ -30,6 +30,9 @@ class OpNames(Enum):
     """Operator Names."""
     H = auto()
     I = auto()
+    N = auto()
+    NN = auto()
+
     C = auto()
     D = auto()
     S = auto()
@@ -42,8 +45,7 @@ class OpNames(Enum):
     PD = auto()
     B = auto()
     Q = auto()
-    N = auto()
-    NN = auto()
+
     PDM1 = auto()
     
     def __repr__(self):
@@ -75,13 +77,13 @@ class OpElement(OpExpression):
             Quantum label of the operator.
     """
     __slots__ = ['name', 'site_index', 'factor', 'q_label']
-    Cashed = {}
+    Cached = {}
     def __init__(self, name, site_index, factor=1, q_label=None):
         assert isinstance(site_index, tuple)
         factor = float(factor)
-        if (name, site_index, factor, q_label) in self.__class__.Cashed:
+        if (name, site_index, factor, q_label) in self.__class__.Cached:
             return
-        self.__class__.Cashed[(name, site_index, factor, q_label)] = self
+        self.__class__.Cached[(name, site_index, factor, q_label)] = self
         self.name = name
         self.site_index = site_index
         self.factor = factor
@@ -89,8 +91,8 @@ class OpElement(OpExpression):
     
     def __new__(cls, name, site_index, factor=1, q_label=None, *args, **kwargs):
         factor = float(factor)
-        if (name, site_index, factor, q_label) in cls.Cashed:
-            return cls.Cashed[(name, site_index, factor, q_label)]
+        if (name, site_index, factor, q_label) in cls.Cached:
+            return cls.Cached[(name, site_index, factor, q_label)]
         else:
             return super().__new__(cls)
     

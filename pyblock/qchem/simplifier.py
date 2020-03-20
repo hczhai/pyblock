@@ -79,6 +79,7 @@ class OpLink:
                 mat.symm_scale *= self.scale
                 return mat
 
+
 class Rule:
     def __init__(self, f=lambda op: None):
         self.f = f
@@ -92,104 +93,189 @@ class Rule:
             return x if x is not None else other(op)
         return Rule(f)
 
-class RuleD(Rule):
-    def __call__(self, op):
-        if op.name == OpNames.D:
-            return OpLink(OpElement(OpNames.C, op.site_index), True, 1)
-        else:
-            return None
 
-class RuleR(Rule):
-    def __call__(self, op):
-        if op.name == OpNames.RD:
-            return OpLink(OpElement(OpNames.R, op.site_index), True, -1)
-        else:
-            return None
+class RuleSZ:
 
-class RuleA(Rule):
-    def __call__(self, op):
-        if op.name == OpNames.A:
-            i, j, s = op.site_index
-            if i >= j:
+    class D(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.D:
+                return OpLink(OpElement(OpNames.C, op.site_index), True, 1)
+            else:
                 return None
-            else:
-                return OpLink(OpElement(OpNames.A, (j, i, s)), False, -1 if s == 1 else 1)
-        elif op.name == OpNames.AD:
-            i, j, s = op.site_index
-            if i >= j:
-                return OpLink(OpElement(OpNames.A, (i, j, s)), True, -1 if s == 0 else 1)
-            else:
-                return OpLink(OpElement(OpNames.A, (j, i, s)), True, -1)
-        else:
-            return None
 
-
-class RuleP(Rule):
-    def __call__(self, op):
-        if op.name == OpNames.P:
-            i, j, s = op.site_index
-            if i >= j:
+    class R(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.RD:
+                return OpLink(OpElement(OpNames.R, op.site_index), True, 1)
+            else:
                 return None
-            else:
-                return OpLink(OpElement(OpNames.P, (j, i, s)), False, -1 if s == 1 else 1)
-        elif op.name == OpNames.PD:
-            i, j, s = op.site_index
-            if i >= j:
-                return OpLink(OpElement(OpNames.P, (i, j, s)), True, -1 if s == 0 else 1)
-            else:
-                return OpLink(OpElement(OpNames.P, (j, i, s)), True, -1)
-        else:
-            return None
 
-
-class RuleB(Rule):
-    def __call__(self, op):
-        if op.name == OpNames.B:
-            i, j, s = op.site_index
-            if i >= j:
+    class A(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.A:
+                i, j, si, sj = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.A, (j, i, sj, si)), False, -1)
+            elif op.name == OpNames.AD:
+                return OpLink(OpElement(OpNames.A, op.site_index), True, 1)
+            else:
                 return None
+
+    class P(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.P:
+                i, j, si, sj = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.P, (j, i, sj, si)), False, -1)
+            elif op.name == OpNames.PD:
+                OpLink(OpElement(OpNames.P, op.site_index), True, 1)
             else:
-                return OpLink(OpElement(OpNames.B, (j, i, s)), True, -1 if s == 1 else 1)
-        else:
-            return None
-
-
-class RulePDM1(Rule):
-    def __call__(self, op):
-        if op.name == OpNames.PDM1:
-            i, j = op.site_index
-            if i >= j:
                 return None
+    
+    class B(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.B:
+                i, j, si, sj = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.B, (j, i, sj, si)), True, 1)
             else:
-                return OpLink(OpElement(OpNames.PDM1, (j, i)), None, 1)
-        else:
-            return None
-
-
-class RuleQ(Rule):
-    def __call__(self, op):
-        if op.name == OpNames.Q:
-            i, j, s = op.site_index
-            if i >= j:
                 return None
+
+    class Q(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.Q:
+                i, j, si, sj = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.Q, (j, i, sj, si)), True, 1)
             else:
-                return OpLink(OpElement(OpNames.Q, (j, i, s)), True, -1 if s == 1 else 1)
-        else:
-            return None
+                return None
+
+    class PDM1(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.PDM1:
+                i, j, si, sj = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.PDM1, (j, i, sj, si)), None, 1)
+            else:
+                return None
+
+class RuleSU2:
+
+    class D(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.D:
+                return OpLink(OpElement(OpNames.C, op.site_index), True, 1)
+            else:
+                return None
+
+    class R(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.RD:
+                return OpLink(OpElement(OpNames.R, op.site_index), True, -1)
+            else:
+                return None
+
+    class A(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.A:
+                i, j, s = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.A, (j, i, s)), False, -1 if s == 1 else 1)
+            elif op.name == OpNames.AD:
+                i, j, s = op.site_index
+                if i >= j:
+                    return OpLink(OpElement(OpNames.A, (i, j, s)), True, -1 if s == 0 else 1)
+                else:
+                    return OpLink(OpElement(OpNames.A, (j, i, s)), True, -1)
+            else:
+                return None
+
+    class P(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.P:
+                i, j, s = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.P, (j, i, s)), False, -1 if s == 1 else 1)
+            elif op.name == OpNames.PD:
+                i, j, s = op.site_index
+                if i >= j:
+                    return OpLink(OpElement(OpNames.P, (i, j, s)), True, -1 if s == 0 else 1)
+                else:
+                    return OpLink(OpElement(OpNames.P, (j, i, s)), True, -1)
+            else:
+                return None
+
+    class B(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.B:
+                i, j, s = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.B, (j, i, s)), True, -1 if s == 1 else 1)
+            else:
+                return None
+
+    class Q(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.Q:
+                i, j, s = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.Q, (j, i, s)), True, -1 if s == 1 else 1)
+            else:
+                return None
+
+    class PDM1(Rule):
+        def __call__(self, op):
+            if op.name == OpNames.PDM1:
+                i, j = op.site_index
+                if i >= j:
+                    return None
+                else:
+                    return OpLink(OpElement(OpNames.PDM1, (j, i)), None, 1)
+            else:
+                return None
 
 
 class AllRules(Rule):
-    def __init__(self):
-        self.f = (RuleA() | RuleP() |  RuleB() | RuleQ() | RuleR() | RuleD()).__call__
+    def __init__(self, su2=True):
+        self.su2 = su2
+        if su2:
+            self.f = (RuleSU2.A() | RuleSU2.P() | RuleSU2.B() | RuleSU2.Q() | RuleSU2.R() | RuleSU2.D()).__call__
+        else:
+            self.f = (RuleSZ.A() | RuleSZ.P() | RuleSZ.B() | RuleSZ.Q() | RuleSZ.R() | RuleSZ.D()).__call__
 
 
 class PDM1Rules(Rule):
-    def __init__(self):
-        self.f = (RuleB() | RuleD() | RulePDM1()).__call__
+    def __init__(self, su2=True):
+        self.su2 = su2
+        if su2:
+            self.f = (RuleSU2.B() | RuleSU2.D() | RuleSU2.PDM1()).__call__
+        else:
+            self.f = (RuleSZ.B() | RuleSZ.D() | RuleSZ.PDM1()).__call__
 
 
 class NoTransposeRules(Rule):
-    def __init__(self, rule=AllRules()):
+    def __init__(self, su2=True, rule=None):
+        self.su2 = su2
+        if rule is None:
+            rule = AllRules(su2=su2)
         self.f = rule.__call__
     
     def __call__(self, op):

@@ -684,7 +684,9 @@ class BlockHamiltonian:
         if Global.dmrginp.algorithm_type == AlgorithmTypes.TwoDotToOneDot:
             raise BlockError('Currently two dot to one dot is not supported.')
         self.dot = 1 if Global.dmrginp.algorithm_type == AlgorithmTypes.OneDot else 2
-
+        
+        OpElement.Cached = {}
+        
         if self.page is None:
             init_stack_memory()
             MPS.site_blocks = VectorBlock([])
@@ -703,6 +705,13 @@ class BlockHamiltonian:
                 ParticleN(2) * SU2(0) * self.PG(0): 1
             } for sp in self.spatial]
             self.target = ParticleN(self.n_electrons) * SU2(self.target_s) * self.PG(self.target_spatial_sym)
+
+            self.one_site_q = np.array([ParticleN(1) * SU2(Fraction(1, 2)) * self.PG(sp)
+                                        for sp in self.spatial], dtype=object)
+            self.two_site_plus_q = np.array([[self.one_site_q[i] + self.one_site_q[j] for i in range(self.n_sites)]
+                                        for j in range(self.n_sites)], dtype=object)
+            self.two_site_minus_q = np.array([[self.one_site_q[i] - self.one_site_q[j] for i in range(self.n_sites)]
+                                        for j in range(self.n_sites)], dtype=object)
         else:
             self.empty = ParticleN(0) * SZ(0) * self.PG(0)
             self.site_basis = [{
@@ -712,15 +721,20 @@ class BlockHamiltonian:
                 ParticleN(2) * SZ(0) * self.PG(0): 1
             } for sp in self.spatial]
             self.target = ParticleN(self.n_electrons) * SZ(self.target_s) * self.PG(self.target_spatial_sym)
+
+            self.one_site_qa = np.array([ParticleN(1) * SZ( Fraction(1, 2)) * self.PG(sp) for sp in self.spatial], dtype=object)
+            self.one_site_qb = np.array([ParticleN(1) * SZ(-Fraction(1, 2)) * self.PG(sp) for sp in self.spatial], dtype=object)
+            self.two_site_plus_qaa, self.two_site_plus_qab, self.two_site_plus_qba, self.two_site_plus_qbb, \
+                self.two_site_minus_qaa, self.two_site_minus_qab, self.two_site_minus_qba, self.two_site_minus_qbb = [
+                np.array([[l[i] + r[j] if plus else l[i] - r[j] for i in range(self.n_sites)] for j in range(self.n_sites)], dtype=object)
+                for plus in [True, False] for l in [self.one_site_qa, self.one_site_qb] for r in [self.one_site_qa, self.one_site_qb]
+            ]
+
+            self.ta = self.tb = self.t
+            self.vaa = self.vab = self.vba = self.vbb = self.v
+            del self.t, self.v
         
-        self.one_site_q = np.array([ParticleN(1) * SU2(Fraction(1, 2)) * self.PG(sp)
-                                    for sp in self.spatial], dtype=object)
-        self.two_site_plus_q = np.array([[self.one_site_q[i] + self.one_site_q[j] for i in range(self.n_sites)]
-                                    for j in range(self.n_sites)], dtype=object)
-        self.two_site_minus_q = np.array([[self.one_site_q[i] - self.one_site_q[j] for i in range(self.n_sites)]
-                                    for j in range(self.n_sites)], dtype=object)
-        
-        self.site_state_info = [VectorStateInfo([BlockSymmetry.to_state_info(b.items())]) for b in self.site_basis]
+        self.site_state_info = [VectorStateInfo([BlockSymmetry.to_state_info(sorted(b.items()))]) for b in self.site_basis]
     
     def get_site_operators(self, m, op_set):
         """Return operator representations dict(OpElement -> StackSparseMatrix) at site m."""
@@ -789,158 +803,401 @@ class BlockHamiltonian:
             mat.operator_element(0, 1).ref[0, 0] = np.sqrt(2)
             mat.operator_element(1, 2).ref[0, 0] = 1.0
             ops[OpElement(OpNames.D, (m, ))] = mat
+
+            for s in [0, 1]:
+                
+                mat = StackSparseMatrix()
+                mat.fermion = False
+                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_plus_q[m, m][s])])
+                mat.allocate(self.site_state_info[m])
+                mat.initialized = True
+                product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.C, (m, ))],
+                        mat, self.site_state_info[m][0], 1.0)
+                ops[OpElement(OpNames.A, (m, m, s))] = mat
+
+                mat = StackSparseMatrix()
+                mat.fermion = False
+                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.two_site_plus_q[m, m][s])])
+                mat.allocate(self.site_state_info[m])
+                mat.initialized = True
+                product(ops[OpElement(OpNames.D, (m, ))], ops[OpElement(OpNames.D, (m, ))],
+                        mat, self.site_state_info[m][0], 1.0)
+                ops[OpElement(OpNames.AD, (m, m, s))] = mat
+            
+                mat = StackSparseMatrix()
+                mat.fermion = False
+                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[m, m][s])])
+                mat.allocate(self.site_state_info[m])
+                mat.initialized = True
+                product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.D, (m, ))],
+                        mat, self.site_state_info[m][0], 1.0)
+                ops[OpElement(OpNames.B, (m, m, s))] = mat
+            
+            for i in range(0, self.n_sites):
+                
+                if i == m:
+                    continue
+                
+                if np.isclose(self.t[i, m], 0) and np.isclose(self.v[i, m, m, m], 0):
+                    
+                    if OpElement(OpNames.R, (i, )) in op_set:
+                        ops[OpElement(OpNames.R, (i, ))] = 0
+                    
+                    if OpElement(OpNames.RD, (i, )) in op_set:
+                        ops[OpElement(OpNames.RD, (i, ))] = 0
+                    
+                else:
+                    
+                    if OpElement(OpNames.R, (i, )) in op_set:
+                    
+                        mat = StackSparseMatrix()
+                        mat.deep_copy(ops[OpElement(OpNames.D, (m, ))])
+                        assert mat.fermion
+                        tensor_scale(self.t[i, m] * np.sqrt(2) * 0.25, mat)
+                        mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.one_site_q[m])])
+
+                        mat2 = StackSparseMatrix()
+                        mat2.deep_clear_copy(ops[OpElement(OpNames.D, (m, ))])
+                        product(ops[OpElement(OpNames.B, (m, m, 0))], ops[OpElement(OpNames.D, (m, ))],
+                                mat2, self.site_state_info[m][0], 1.0)
+                        tensor_scale_add_no_trans(self.v[i, m, m, m], mat2, mat)
+                        mat2.deallocate()
+                        ops[OpElement(OpNames.R, (i, ))] = mat
+                    
+                    if OpElement(OpNames.RD, (i, )) in op_set:
+                
+                        mat = StackSparseMatrix()
+                        mat.deep_copy(ops[OpElement(OpNames.C, (m, ))])
+                        assert mat.fermion
+                        tensor_scale(self.t[i, m] * np.sqrt(2) * 0.25, mat)
+                        mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.one_site_q[m])])
+
+                        mat2 = StackSparseMatrix()
+                        mat2.deep_clear_copy(ops[OpElement(OpNames.C, (m, ))])
+                        product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.B, (m, m, 0))],
+                                mat2, self.site_state_info[m][0], 1.0)
+                        tensor_scale_add_no_trans(self.v[i, m, m, m], mat2, mat)
+                        mat2.deallocate()
+                        ops[OpElement(OpNames.RD, (i, ))] = mat
+                
+                if self.spatial_syms[m] != self.spatial_syms[i]:
+                    assert np.isclose(self.t[m, i], 0.0)
+            
+            for s in [0, 1]:
+                for i in range(0, self.n_sites):
+                    for k in range(0, self.n_sites):
+                        if i != m and k != m:
+                            
+                            if OpElement(OpNames.P, (i, k, s)) not in op_set:
+                                continue
+                            
+                            if np.isclose(self.v[i, m, k, m], 0):
+                                ops[OpElement(OpNames.P, (i, k, s))] = 0
+                            else:
+                                mat = StackSparseMatrix()
+                                mat.deep_copy(ops[OpElement(OpNames.AD, (m, m, s))])
+                                assert not mat.fermion
+                                tensor_scale(self.v[i, m, k, m], mat)
+                                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.two_site_plus_q[i, k][s])])
+                                ops[OpElement(OpNames.P, (i, k, s))] = mat
+            
+            for s in [0, 1]:
+                for i in range(0, self.n_sites):
+                    for k in range(0, self.n_sites):
+                        if i != m and k != m:
+                            
+                            if OpElement(OpNames.PD, (i, k, s)) not in op_set:
+                                continue
+                            
+                            if np.isclose(self.v[i, m, k, m], 0):
+                                ops[OpElement(OpNames.PD, (i, k, s))] = 0
+                            else:
+                                mat = StackSparseMatrix()
+                                mat.deep_copy(ops[OpElement(OpNames.A, (m, m, s))])
+                                assert not mat.fermion
+                                tensor_scale(self.v[i, m, k, m], mat)
+                                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_plus_q[i, k][s])])
+                                ops[OpElement(OpNames.PD, (i, k, s))] = mat
+            
+            for i in range(0, self.n_sites):
+                for j in range(0, self.n_sites):
+                    if i != m and j != m:
+                        
+                        if OpElement(OpNames.Q, (i, j, 0)) not in op_set:
+                            continue
+                        
+                        if np.isclose(2 * self.v[i, j, m, m] -  self.v[i, m, m, j], 0):
+                            ops[OpElement(OpNames.Q, (i, j, 0))] = 0
+                        else:
+                            mat = StackSparseMatrix()
+                            mat.deep_copy(ops[OpElement(OpNames.B, (m, m, 0))])
+                            assert not mat.fermion
+                            tensor_scale(2 * self.v[i, j, m, m] -  self.v[i, m, m, j], mat)
+                            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[i, j][0])])
+                            ops[OpElement(OpNames.Q, (i, j, 0))] = mat
+                    
+            for i in range(0, self.n_sites):
+                for j in range(0, self.n_sites):
+                    if i != m and j != m:
+                        
+                        if OpElement(OpNames.Q, (i, j, 1)) not in op_set:
+                            continue
+                        
+                        if np.isclose(self.v[i, m, m, j], 0):
+                            ops[OpElement(OpNames.Q, (i, j, 1))] = 0
+                        else:
+                            mat = StackSparseMatrix()
+                            mat.deep_copy(ops[OpElement(OpNames.B, (m, m, 1))])
+                            assert not mat.fermion
+                            tensor_scale(self.v[i, m, m, j], mat)
+                            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[i, j][1])])
+                            ops[OpElement(OpNames.Q, (i, j, 1))] = mat
         
         else:
-            raise BlockError('non spin-adapted case not implemented.')
-        
-        for s in [0, 1]:
-            
-            mat = StackSparseMatrix()
-            mat.fermion = False
-            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_plus_q[m, m][s])])
-            mat.allocate(self.site_state_info[m])
-            mat.initialized = True
-            product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.C, (m, ))],
-                    mat, self.site_state_info[m][0], 1.0)
-            ops[OpElement(OpNames.A, (m, m, s))] = mat
 
             mat = StackSparseMatrix()
             mat.fermion = False
-            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.two_site_plus_q[m, m][s])])
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
             mat.allocate(self.site_state_info[m])
             mat.initialized = True
-            product(ops[OpElement(OpNames.D, (m, ))], ops[OpElement(OpNames.D, (m, ))],
-                    mat, self.site_state_info[m][0], 1.0)
-            ops[OpElement(OpNames.AD, (m, m, s))] = mat
-        
-            mat = StackSparseMatrix()
-            mat.fermion = False
-            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[m, m][s])])
-            mat.allocate(self.site_state_info[m])
-            mat.initialized = True
-            product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.D, (m, ))],
-                    mat, self.site_state_info[m][0], 1.0)
-            ops[OpElement(OpNames.B, (m, m, s))] = mat
-        
-        for i in range(0, self.n_sites):
-            
-            if i == m:
-                continue
-            
-            if np.isclose(self.t[i, m], 0) and np.isclose(self.v[i, m, m, m], 0):
-                
-                if OpElement(OpNames.R, (i, )) in op_set:
-                    ops[OpElement(OpNames.R, (i, ))] = 0
-                
-                if OpElement(OpNames.RD, (i, )) in op_set:
-                    ops[OpElement(OpNames.RD, (i, ))] = 0
-                
-            else:
-                
-                if OpElement(OpNames.R, (i, )) in op_set:
-                
-                    mat = StackSparseMatrix()
-                    mat.deep_copy(ops[OpElement(OpNames.D, (m, ))])
-                    assert mat.fermion
-                    tensor_scale(self.t[i, m] * np.sqrt(2) * 0.25, mat)
-                    mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.one_site_q[m])])
+            mat.operator_element(0, 0).ref[0, 0] = 1.0
+            mat.operator_element(1, 1).ref[0, 0] = 1.0
+            mat.operator_element(2, 2).ref[0, 0] = 1.0
+            mat.operator_element(3, 3).ref[0, 0] = 1.0
+            ops[OpElement(OpNames.I, ())] = mat
 
-                    mat2 = StackSparseMatrix()
-                    mat2.deep_clear_copy(ops[OpElement(OpNames.D, (m, ))])
-                    product(ops[OpElement(OpNames.B, (m, m, 0))], ops[OpElement(OpNames.D, (m, ))],
-                            mat2, self.site_state_info[m][0], 1.0)
-                    tensor_scale_add_no_trans(self.v[i, m, m, m], mat2, mat)
-                    mat2.deallocate()
-                    ops[OpElement(OpNames.R, (i, ))] = mat
+            if op_set == { OpElement(OpNames.I, ()) }:
+                return ops
+            
+            if OpElement(OpNames.N, ()) in op_set or OpElement(OpNames.NN, ()) in op_set:
                 
-                if OpElement(OpNames.RD, (i, )) in op_set:
-            
-                    mat = StackSparseMatrix()
-                    mat.deep_copy(ops[OpElement(OpNames.C, (m, ))])
-                    assert mat.fermion
-                    tensor_scale(self.t[i, m] * np.sqrt(2) * 0.25, mat)
-                    mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.one_site_q[m])])
-
-                    mat2 = StackSparseMatrix()
-                    mat2.deep_clear_copy(ops[OpElement(OpNames.C, (m, ))])
-                    product(ops[OpElement(OpNames.C, (m, ))], ops[OpElement(OpNames.B, (m, m, 0))],
-                            mat2, self.site_state_info[m][0], 1.0)
-                    tensor_scale_add_no_trans(self.v[i, m, m, m], mat2, mat)
-                    mat2.deallocate()
-                    ops[OpElement(OpNames.RD, (i, ))] = mat
-            
-            if self.spatial_syms[m] != self.spatial_syms[i]:
-                assert np.isclose(self.t[m, i], 0.0)
-        
-        for s in [0, 1]:
-            for i in range(0, self.n_sites):
-                for k in range(0, self.n_sites):
-                    if i != m and k != m:
-                        
-                        if OpElement(OpNames.P, (i, k, s)) not in op_set:
-                            continue
-                        
-                        if np.isclose(self.v[i, m, k, m], 0):
-                            ops[OpElement(OpNames.P, (i, k, s))] = 0
-                        else:
-                            mat = StackSparseMatrix()
-                            mat.deep_copy(ops[OpElement(OpNames.AD, (m, m, s))])
-                            assert not mat.fermion
-                            tensor_scale(self.v[i, m, k, m], mat)
-                            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.two_site_plus_q[i, k][s])])
-                            ops[OpElement(OpNames.P, (i, k, s))] = mat
-        
-        for s in [0, 1]:
-            for i in range(0, self.n_sites):
-                for k in range(0, self.n_sites):
-                    if i != m and k != m:
-                        
-                        if OpElement(OpNames.PD, (i, k, s)) not in op_set:
-                            continue
-                        
-                        if np.isclose(self.v[i, m, k, m], 0):
-                            ops[OpElement(OpNames.PD, (i, k, s))] = 0
-                        else:
-                            mat = StackSparseMatrix()
-                            mat.deep_copy(ops[OpElement(OpNames.A, (m, m, s))])
-                            assert not mat.fermion
-                            tensor_scale(self.v[i, m, k, m], mat)
-                            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_plus_q[i, k][s])])
-                            ops[OpElement(OpNames.PD, (i, k, s))] = mat
-        
-        for i in range(0, self.n_sites):
-            for j in range(0, self.n_sites):
-                if i != m and j != m:
+                mat = StackSparseMatrix()
+                mat.fermion = False
+                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
+                mat.allocate(self.site_state_info[m])
+                mat.initialized = True
+                mat.operator_element(0, 0).ref[0, 0] = 0.0
+                mat.operator_element(1, 1).ref[0, 0] = 1.0
+                mat.operator_element(2, 2).ref[0, 0] = 1.0
+                mat.operator_element(3, 3).ref[0, 0] = 2.0
+                ops[OpElement(OpNames.N, ())] = mat
+                
+                if OpElement(OpNames.NN, ()) in op_set:
                     
-                    if OpElement(OpNames.Q, (i, j, 0)) not in op_set:
+                    mat2 = StackSparseMatrix()
+                    mat2.deep_clear_copy(mat)
+                    product(mat, mat, mat2, self.site_state_info[m][0], 1.0)
+                    ops[OpElement(OpNames.NN, ())] = mat2
+                
+                return ops
+
+            mat = StackSparseMatrix()
+            mat.fermion = False
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
+            mat.allocate(self.site_state_info[m])
+            mat.initialized = True
+            mat.operator_element(0, 0).ref[0, 0] = 0.0
+            mat.operator_element(1, 1).ref[0, 0] = self.tb[m, m]
+            mat.operator_element(2, 2).ref[0, 0] = self.ta[m, m]
+            mat.operator_element(3, 3).ref[0, 0] = self.ta[m, m] + self.tb[m, m] + 0.5 * (self.vab[m, m, m, m] + self.vba[m, m, m, m])
+            ops[OpElement(OpNames.H, ())] = mat
+            
+            mat = StackSparseMatrix()
+            mat.fermion = True
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.one_site_qa[m])])
+            mat.allocate(self.site_state_info[m])
+            mat.initialized = True
+            mat.operator_element(2, 0).ref[0, 0] = 1.0
+            mat.operator_element(3, 1).ref[0, 0] = 1.0
+            ops[OpElement(OpNames.C, (m, 0))] = mat
+
+            mat = StackSparseMatrix()
+            mat.fermion = True
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.one_site_qb[m])])
+            mat.allocate(self.site_state_info[m])
+            mat.initialized = True
+            mat.operator_element(1, 0).ref[0, 0] = 1.0
+            mat.operator_element(3, 2).ref[0, 0] = -1.0
+            ops[OpElement(OpNames.C, (m, 1))] = mat
+
+            mat = StackSparseMatrix()
+            mat.fermion = True
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.one_site_qa[m])])
+            mat.allocate(self.site_state_info[m])
+            mat.initialized = True
+            mat.operator_element(0, 2).ref[0, 0] = 1.0
+            mat.operator_element(1, 3).ref[0, 0] = 1.0
+            ops[OpElement(OpNames.D, (m, 0))] = mat
+
+            mat = StackSparseMatrix()
+            mat.fermion = True
+            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-self.one_site_qb[m])])
+            mat.allocate(self.site_state_info[m])
+            mat.initialized = True
+            mat.operator_element(0, 1).ref[0, 0] = 1.0
+            mat.operator_element(2, 3).ref[0, 0] = -1.0
+            ops[OpElement(OpNames.D, (m, 1))] = mat
+
+            pqs = [self.two_site_plus_qaa, self.two_site_plus_qab, self.two_site_plus_qba, self.two_site_plus_qbb]
+            mqs = [self.two_site_minus_qaa, self.two_site_minus_qab, self.two_site_minus_qba, self.two_site_minus_qbb]
+            vss = [self.vaa, self.vab, self.vba, self.vbb]
+            ss = [(0, 0), (0, 1), (1, 0), (1, 1)]
+
+            for (sl, sr), pq, mq in zip(ss, pqs, mqs):
+                
+                mat = StackSparseMatrix()
+                mat.fermion = False
+                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(pq[m, m])])
+                mat.allocate(self.site_state_info[m])
+                mat.initialized = True
+                product(ops[OpElement(OpNames.C, (m, sl))], ops[OpElement(OpNames.C, (m, sr))],
+                        mat, self.site_state_info[m][0], 1.0)
+                ops[OpElement(OpNames.A, (m, m, sl, sr))] = mat
+
+                mat = StackSparseMatrix()
+                mat.fermion = False
+                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-pq[m, m])])
+                mat.allocate(self.site_state_info[m])
+                mat.initialized = True
+                product(ops[OpElement(OpNames.D, (m, sr))], ops[OpElement(OpNames.D, (m, sl))],
+                        mat, self.site_state_info[m][0], 1.0)
+                ops[OpElement(OpNames.AD, (m, m, sl, sr))] = mat
+            
+                mat = StackSparseMatrix()
+                mat.fermion = False
+                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(mq[m, m])])
+                mat.allocate(self.site_state_info[m])
+                mat.initialized = True
+                product(ops[OpElement(OpNames.C, (m, sl))], ops[OpElement(OpNames.D, (m, sr))],
+                        mat, self.site_state_info[m][0], 1.0)
+                ops[OpElement(OpNames.B, (m, m, sl, sr))] = mat
+            
+            for s, tx, (vxa, vxb) in zip([0, 1], [self.ta, self.tb], [(self.vaa, self.vab), (self.vba, self.vbb)]):
+
+                cq = [self.one_site_qa[m], self.one_site_qb[m]][s]
+                dq = [-self.one_site_qa[m], -self.one_site_qb[m]][s]
+
+                for i in range(0, self.n_sites):
+                    
+                    if i == m:
                         continue
                     
-                    if np.isclose(2 * self.v[i, j, m, m] -  self.v[i, m, m, j], 0):
-                        ops[OpElement(OpNames.Q, (i, j, 0))] = 0
+                    if np.isclose(tx[i, m], 0) and np.isclose(vxa[i, m, m, m], 0) and np.isclose(vxb[i, m, m, m], 0):
+                        
+                        if OpElement(OpNames.R, (i, s)) in op_set:
+                            ops[OpElement(OpNames.R, (i, s))] = 0
+                        
+                        if OpElement(OpNames.RD, (i, s)) in op_set:
+                            ops[OpElement(OpNames.RD, (i, s))] = 0
+                        
                     else:
-                        mat = StackSparseMatrix()
-                        mat.deep_copy(ops[OpElement(OpNames.B, (m, m, 0))])
-                        assert not mat.fermion
-                        tensor_scale(2 * self.v[i, j, m, m] -  self.v[i, m, m, j], mat)
-                        mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[i, j][0])])
-                        ops[OpElement(OpNames.Q, (i, j, 0))] = mat
-                
-        for i in range(0, self.n_sites):
-            for j in range(0, self.n_sites):
-                if i != m and j != m:
+                        
+                        if OpElement(OpNames.R, (i, s)) in op_set:
+                        
+                            mat = StackSparseMatrix()
+                            mat.deep_copy(ops[OpElement(OpNames.D, (m, s))])
+                            assert mat.fermion
+                            tensor_scale(tx[i, m] * 0.5, mat)
+                            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(dq)])
+
+                            mat2 = StackSparseMatrix()
+                            for sp, vxx in zip([0, 1], [vxa, vxb]):
+                                mat2.deep_clear_copy(ops[OpElement(OpNames.D, (m, s))])
+                                product(ops[OpElement(OpNames.B, (m, m, sp, sp))], ops[OpElement(OpNames.D, (m, s))],
+                                        mat2, self.site_state_info[m][0], 1.0)
+                                tensor_scale_add_no_trans(vxx[i, m, m, m], mat2, mat)
+                            mat2.deallocate()
+                            ops[OpElement(OpNames.R, (i, s))] = mat
+                        
+                        if OpElement(OpNames.RD, (i, s)) in op_set:
                     
-                    if OpElement(OpNames.Q, (i, j, 1)) not in op_set:
-                        continue
+                            mat = StackSparseMatrix()
+                            mat.deep_copy(ops[OpElement(OpNames.C, (m, s))])
+                            assert mat.fermion
+                            tensor_scale(tx[i, m] * 0.5, mat)
+                            mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(cq)])
+
+                            mat2 = StackSparseMatrix()
+                            for sp, vxx in zip([0, 1], [vxa, vxb]):
+                                mat2.deep_clear_copy(ops[OpElement(OpNames.C, (m, s))])
+                                product(ops[OpElement(OpNames.C, (m, s))], ops[OpElement(OpNames.B, (m, m, sp, sp))],
+                                        mat2, self.site_state_info[m][0], 1.0)
+                                tensor_scale_add_no_trans(vxx[i, m, m, m], mat2, mat)
+                            mat2.deallocate()
+                            ops[OpElement(OpNames.RD, (i, s))] = mat
                     
-                    if np.isclose(self.v[i, m, m, j], 0):
-                        ops[OpElement(OpNames.Q, (i, j, 1))] = 0
-                    else:
-                        mat = StackSparseMatrix()
-                        mat.deep_copy(ops[OpElement(OpNames.B, (m, m, 1))])
-                        assert not mat.fermion
-                        tensor_scale(self.v[i, m, m, j], mat)
-                        mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.two_site_minus_q[i, j][1])])
-                        ops[OpElement(OpNames.Q, (i, j, 1))] = mat
+                    if self.spatial_syms[m] != self.spatial_syms[i]:
+                        assert np.isclose(tx[m, i], 0.0)
+            
+            for (sl, sr), pq, vxx in zip(ss, pqs, vss):
+                for i in range(0, self.n_sites):
+                    for k in range(0, self.n_sites):
+                        if i != m and k != m:
+                            
+                            if OpElement(OpNames.P, (i, k, sl, sr)) not in op_set:
+                                continue
+                            
+                            if np.isclose(vxx[i, m, k, m], 0):
+                                ops[OpElement(OpNames.P, (i, k, sl, sr))] = 0
+                            else:
+                                mat = StackSparseMatrix()
+                                mat.deep_copy(ops[OpElement(OpNames.AD, (m, m, sl, sr))])
+                                assert not mat.fermion
+                                tensor_scale(vxx[i, m, k, m], mat)
+                                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-pq[i, k])])
+                                ops[OpElement(OpNames.P, (i, k, sl, sr))] = mat
+            
+            for (sl, sr), pq, vxx in zip(ss, pqs, vss):
+                for i in range(0, self.n_sites):
+                    for k in range(0, self.n_sites):
+                        if i != m and k != m:
+                            
+                            if OpElement(OpNames.PD, (i, k, sl, sr)) not in op_set:
+                                continue
+                            
+                            if np.isclose(vxx[i, m, k, m], 0):
+                                ops[OpElement(OpNames.PD, (i, k, sl, sr))] = 0
+                            else:
+                                mat = StackSparseMatrix()
+                                mat.deep_copy(ops[OpElement(OpNames.A, (m, m, sl, sr))])
+                                assert not mat.fermion
+                                tensor_scale(vxx[i, m, k, m], mat)
+                                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(pq[i, k])])
+                                ops[OpElement(OpNames.PD, (i, k, sl, sr))] = mat
+
+            for (sl, sr), mq, vxx in zip(ss, mqs, vss):
+                for i in range(0, self.n_sites):
+                    for j in range(0, self.n_sites):
+                        if i != m and j != m:
+                            
+                            if OpElement(OpNames.Q, (i, j, sl, sr)) not in op_set:
+                                continue
+                            
+                            if sl == sr:
+                                vxa, vxb = [(self.vaa, self.vab), (self.vba, self.vbb)][sl]
+                            
+                            if np.isclose(vxx[i, m, m, j], 0) and (sl != sr or (np.isclose(vxa[i, j, m, m], 0) and np.isclose(vxb[i, j, m, m], 0))):
+                                ops[OpElement(OpNames.Q, (i, j, sl, sr))] = 0
+                            else:
+                                mat = StackSparseMatrix()
+                                mat.deep_copy(ops[OpElement(OpNames.B, (m, m, sr, sl))])
+                                assert not mat.fermion
+                                tensor_scale(-vxx[i, m, m, j], mat)
+                                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(-mq[i, j])])
+
+                                if sl == sr:
+                                    mat2 = StackSparseMatrix()
+                                    mat2.deep_copy(ops[OpElement(OpNames.B, (m, m, 0, 0))])
+                                    assert not mat2.fermion
+                                    tensor_scale_add_no_trans(vxa[i, j, m, m], mat2, mat)
+                                    mat2.deallocate()
+                                    mat2 = StackSparseMatrix()
+                                    mat2.deep_copy(ops[OpElement(OpNames.B, (m, m, 1, 1))])
+                                    assert not mat2.fermion
+                                    tensor_scale_add_no_trans(vxb[i, j, m, m], mat2, mat)
+                                    mat2.deallocate()
+                                
+                                ops[OpElement(OpNames.Q, (i, j, sl, sr))] = mat
         
         return ops
     

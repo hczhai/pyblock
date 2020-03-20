@@ -18,13 +18,17 @@ def data_dir(request):
 def starting(request):
     return request.param
 
+@pytest.fixture(scope="module", params=[True, False])
+def use_su2(request):
+    return request.param
+
 class TestDMRGMID:
-    def test_n2_sto3g_simpl_mid_tto(self, data_dir, tmp_path, starting):
+    def test_n2_sto3g_simpl_mid_tto(self, data_dir, tmp_path, starting, use_su2):
         fcidump = 'N2.STO3G.FCIDUMP'
         pg = 'd2h'
         page = DMRGDataPage(tmp_path / 'node0')
-        simpl = Simplifier(AllRules())
-        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
+        simpl = Simplifier(AllRules(use_su2))
+        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=use_su2, output_level=-1,
                                   memory=3000, page=page, omp_threads=1) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(100)

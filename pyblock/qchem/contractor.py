@@ -174,6 +174,9 @@ class DMRGContractor:
             self.page = self.mpo_info.hamil.page.get()
         if simplifier is not None:
             BlockEvaluation.simplifier = simplifier
+            if hasattr(simplifier, 'su2'):
+                if simplifier.su2 != self.mpo_info.hamil.spin_adapted:
+                    raise ContractionError('SU(2) for simplifier and Hamiltonian does not match!')
         if parallelizer is not None:
             BlockEvaluation.parallelizer = parallelizer
         self.is_parallel = parallelizer is not None
@@ -409,7 +412,7 @@ class DMRGContractor:
     
     def update_local_left_mps_info(self, i, l_fused):
         """Update :attr:`info` for site i using the left tensor from SVD."""
-        block_basis = [(b.q_labels[1], b.reduced.shape[1]) for b in l_fused.blocks]
+        block_basis = [(b.q_labels[-1], b.reduced.shape[-1]) for b in l_fused.blocks]
         self._get_mps_info(l_fused.tags).update_local_left_block_basis(i, block_basis)
         
     def update_local_right_mps_info(self, i, r_fused):

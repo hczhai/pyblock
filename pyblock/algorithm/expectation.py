@@ -158,12 +158,7 @@ class Expect:
                 bra_limit = ctr.bond_right({'_BRA'})[i]
                 ket_limit = ctr.bond_right({'_KET'})[i]
         else:
-            if forward:
-                bra_limit = ctr.bond_upper_limit_left({'_BRA'})[i]
-                ket_limit = ctr.bond_upper_limit_left({'_KET'})[i]
-            else:
-                bra_limit = ctr.bond_upper_limit_right({'_BRA'})[i]
-                ket_limit = ctr.bond_upper_limit_right({'_KET'})[i]
+            bra_limit, ket_limit = None, None
 
         dm_ket = psi_ket.get_diag_density_matrix(trace_right=forward)
         l_fused_ket, r_fused_ket, error_ket = \
@@ -195,8 +190,10 @@ class Expect:
                 self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_BRA'}].modify(adj_bra)
                 self.eff_ham.envs[self.eff_ham.pos + 1][{i + 1, '_KET'}].modify(adj_ket)
             else:
-                l_bra *= r_fused_bra.to_scalar()
-                l_ket *= r_fused_ket.to_scalar()
+                l_bra.right_multiply(r_fused_bra.to_dict(0))
+                l_ket.right_multiply(r_fused_ket.to_dict(0))
+                ctr.update_local_left_mps_info(i, l_bra.add_tags({'_BRA'}))
+                ctr.update_local_left_mps_info(i, l_ket.add_tags({'_KET'}))
                 self.bra_canonical_form[i] = self.ket_canonical_form[i] = 'K'
         else:
             r_bra = ctr.unfuse_right(i, r_fused_bra)
@@ -210,8 +207,10 @@ class Expect:
                 self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_BRA'}].modify(adj_bra)
                 self.eff_ham.envs[self.eff_ham.pos - 1][{i - 1, '_KET'}].modify(adj_ket)
             else:
-                r_bra *= l_fused_bra.to_scalar()
-                r_ket *= l_fused_ket.to_scalar()
+                r_bra.left_multiply(l_fused_bra.to_dict(1))
+                r_ket.left_multiply(l_fused_ket.to_dict(1))
+                ctr.update_local_right_mps_info(i, r_bra.add_tags({'_BRA'}))
+                ctr.update_local_right_mps_info(i, r_ket.add_tags({'_KET'}))
                 self.bra_canonical_form[i] = self.ket_canonical_form[i] = 'S'
 
         self.eff_ham()[{i, '_HAM'} | fuse_tags].tags -= fuse_tags
@@ -395,7 +394,7 @@ class Expect:
 
         return result
     
-    def get_1pdm(self, normsq=1):
+    def get_1pdm_spatial(self, normsq=1):
         """
         Spatial 1-particle density matrix.
         """
@@ -404,4 +403,15 @@ class Expect:
         for r in self.results:
             for k, v in r.items():
                 pdmat[k.site_index[0], k.site_index[1]] = v / normsq
+        return pdmat
+    
+    def get_1pdm(self, normsq=1):
+        """
+        1-particle density matrix.
+        """
+        pdmat = np.zeros((self.n_physical_sites, self.n_physical_sites, 2, 2))
+        assert hasattr(self, "results")
+        for r in self.results:
+            for k, v in r.items():
+                pdmat[k.site_index[0], k.site_index[1], k.site_index[2], k.site_index[3]] = v / normsq
         return pdmat

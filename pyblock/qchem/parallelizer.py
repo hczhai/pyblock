@@ -160,7 +160,7 @@ class ParaRule:
         self.size = mpi_size
     
     def __call__(self, op):
-        if op.name in [OpNames.C, OpNames.D]:
+        if op.name in [OpNames.C, OpNames.D, OpNames.N, OpNames.NN]:
             return ParaProperty(0, True, False, False)
         elif op.name in [OpNames.R, OpNames.RD]:
             return ParaProperty(op.site_index[0] % self.size, False, False, True)

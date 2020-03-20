@@ -24,7 +24,8 @@ with BlockHamiltonian.get(fcidump='HUBBARD-L8.FCIDUMP', pg='c1', su2=True, outpu
     print('final energy = ', ener)
     mps0 = MPS.from_tensor_network(dmrg._k, mps_info, center=dmrg.center, dot=dmrg.dot)
     mps0_form = dmrg.canonical_form
-
+    
+    ket_bond_dim = bond_dim
     bond_dim = 150
 
     lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
@@ -41,7 +42,7 @@ with BlockHamiltonian.get(fcidump='HUBBARD-L8.FCIDUMP', pg='c1', su2=True, outpu
     impo_info = IdentityMPOInfo(hamil)
     ctr = DMRGContractor(mps_info, impo_info, Simplifier(NoTransposeRules()))
     mps0.set_contractor(ctr)
-    cps = Compress(impo, mps, mps0, bond_dims=bond_dim, contractor=ctr, noise=1E-4, ket_canonical_form=mps0_form)
+    cps = Compress(impo, mps, mps0, bond_dims=bond_dim, ket_bond_dim=ket_bond_dim, contractor=ctr, noise=[1E-4, 0], ket_canonical_form=mps0_form)
     ener = cps.solve(10, 1E-6)
     print('final energy = ', ener)
 
