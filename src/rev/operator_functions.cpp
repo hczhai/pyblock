@@ -556,12 +556,12 @@ void TensorProductMultiply(const StackSparseMatrix &a, const StackSparseMatrix &
     }
 
     long long maxlen = 0;
-    for (int lQ = 0; lQ < leftBraOpSz; lQ++)
-        for (int rQPrime = 0; rQPrime < rightKetOpSz; rQPrime++)
+    for (int lQPrime = 0; lQPrime < leftKetOpSz; lQPrime++)
+        for (int rQ = 0; rQ < rightBraOpSz; rQ++)
             if (maxlen <
-                (long long) lbraS->getquantastates(lQ) * rketS->getquantastates(rQPrime))
-                maxlen = (long long) lbraS->getquantastates(lQ) *
-                         rketS->getquantastates(rQPrime);
+                (long long) lketS->getquantastates(lQPrime) * rbraS->getquantastates(rQ))
+                maxlen = (long long) lketS->getquantastates(lQPrime) *
+                         rbraS->getquantastates(rQ);
     
     int quanta_thrds = dmrginp.quanta_thrds();
 

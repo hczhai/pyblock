@@ -31,20 +31,19 @@ class TestDMRGOneSite:
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=use_su2, output_level=-1,
                                   memory=2000, page=page) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
-            lcp.set_bond_dimension(60)
+            lcp.set_bond_dimension(100 if use_su2 else 200)
             mps = MPS(lcp, center=0, dot=1 if dot_scheme == 1 else 2)
-            mps.randomize()
-            mps.canonicalize()
+            mps.canonicalize(random=True)
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
             tto = dot_scheme if dot_scheme >= 3 else -1
-            dmrg = DMRG(mpo, mps, bond_dims=[60, 100],
-                        noise=[1E-5, 1E-5, 1E-6, 1E-7, 1E-7, 0], contractor=ctr)
+            dmrg = DMRG(mpo, mps, bond_dims=[100 if use_su2 else 200, 200, 250, 300, 500],
+                        noise=[1E-5, 1E-6, 1E-6, 1E-7, 1E-7, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=tto)
-            if use_su2:
+            if use_su2 or dot_scheme == 2:
                 assert abs(ener - (-107.648250974014)) < 5E-5
             else:
-                assert abs(ener - (-107.648250974014)) < 5E-4
+                assert abs(ener - (-107.648250974014)) < 5E-3
         page.clean()
     
     def test_n2_sto3g_simpl_exact(self, data_dir, tmp_path):
@@ -62,7 +61,7 @@ class TestDMRGOneSite:
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
             dmrg = DMRG(mpo, mps, bond_dims=[60, 100],
-                        noise=[5E-4, 1E-4, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
+                        noise=[5E-3, 1E-3, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=-1)
             assert abs(ener - (-107.648250974014)) < 5E-6
         page.clean()
@@ -79,8 +78,7 @@ class TestDMRGOneSite:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension_using_occ(50, occ=occ, bias=10000)
             mps = MPS(lcp, center=0, dot=2)
-            mps.randomize()
-            mps.canonicalize()
+            mps.canonicalize(random=True)
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
             dmrg = DMRG(mpo, mps, bond_dims=[50, 100],

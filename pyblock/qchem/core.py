@@ -712,6 +712,8 @@ class BlockHamiltonian:
                                         for j in range(self.n_sites)], dtype=object)
             self.two_site_minus_q = np.array([[self.one_site_q[i] - self.one_site_q[j] for i in range(self.n_sites)]
                                         for j in range(self.n_sites)], dtype=object)
+            
+            assert not isinstance(self.t, tuple)
         else:
             self.empty = ParticleN(0) * SZ(0) * self.PG(0)
             self.site_basis = [{
@@ -729,9 +731,13 @@ class BlockHamiltonian:
                 np.array([[l[i] + r[j] if plus else l[i] - r[j] for i in range(self.n_sites)] for j in range(self.n_sites)], dtype=object)
                 for plus in [True, False] for l in [self.one_site_qa, self.one_site_qb] for r in [self.one_site_qa, self.one_site_qb]
             ]
-
-            self.ta = self.tb = self.t
-            self.vaa = self.vab = self.vba = self.vbb = self.v
+            
+            if isinstance(self.t, tuple):
+                self.ta, self.tb = self.t
+                self.vaa, self.vab, self.vba, self.vbb = self.v
+            else:
+                self.ta = self.tb = self.t
+                self.vaa = self.vab = self.vba = self.vbb = self.v
             del self.t, self.v
         
         self.site_state_info = [VectorStateInfo([BlockSymmetry.to_state_info(sorted(b.items()))]) for b in self.site_basis]
@@ -988,6 +994,43 @@ class BlockHamiltonian:
                     mat2.deep_clear_copy(mat)
                     product(mat, mat, mat2, self.site_state_info[m][0], 1.0)
                     ops[OpElement(OpNames.NN, ())] = mat2
+                
+                return ops
+            
+            
+            for s in [0, 1]:
+                if OpElement(OpNames.N, (s, )) in op_set or OpElement(OpNames.NN, (s, )) in op_set or OpElement(OpNames.NUD, ()) in op_set:
+
+                    mat = StackSparseMatrix()
+                    mat.fermion = False
+                    mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
+                    mat.allocate(self.site_state_info[m])
+                    mat.initialized = True
+                    if s == 0:
+                        mat.operator_element(0, 0).ref[0, 0] = 0.0
+                        mat.operator_element(1, 1).ref[0, 0] = 0.0
+                        mat.operator_element(2, 2).ref[0, 0] = 1.0
+                        mat.operator_element(3, 3).ref[0, 0] = 1.0
+                    else:
+                        mat.operator_element(0, 0).ref[0, 0] = 0.0
+                        mat.operator_element(1, 1).ref[0, 0] = 1.0
+                        mat.operator_element(2, 2).ref[0, 0] = 0.0
+                        mat.operator_element(3, 3).ref[0, 0] = 1.0
+                    ops[OpElement(OpNames.N, (s, ))] = mat
+
+                    if OpElement(OpNames.NN, (s, )) in op_set:
+
+                        mat2 = StackSparseMatrix()
+                        mat2.deep_clear_copy(mat)
+                        product(mat, mat, mat2, self.site_state_info[m][0], 1.0)
+                        ops[OpElement(OpNames.NN, (s, ))] = mat2
+            
+            if OpElement(OpNames.NUD, ()) in op_set:
+
+                mat2 = StackSparseMatrix()
+                mat2.deep_clear_copy(ops[OpElement(OpNames.N, (0, ))])
+                product(ops[OpElement(OpNames.N, (0, ))], ops[OpElement(OpNames.N, (1, ))], mat2, self.site_state_info[m][0], 1.0)
+                ops[OpElement(OpNames.NUD, ())] = mat2
                 
                 return ops
 

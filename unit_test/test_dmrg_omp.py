@@ -31,8 +31,7 @@ class TestDMRGOMP:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(100)
             mps = MPS(lcp, center=0, dot=1)
-            mps.randomize()
-            mps.canonicalize()
+            mps.canonicalize(random=True)
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
             dmrg = DMRG(mpo, mps, bond_dims=[100, 150, 200, 400, 500],

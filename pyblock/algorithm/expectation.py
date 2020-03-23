@@ -372,6 +372,9 @@ class Expect:
             sweep_range = range(self.center, self.n_sites - self.dot + 1)
         else:
             sweep_range = range(self.center, -1, -1)
+        
+        if isinstance(bond_dim, list):
+            bond_dim = bond_dim[-1]
 
         self.results = []
 

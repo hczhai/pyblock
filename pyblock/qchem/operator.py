@@ -32,7 +32,7 @@ class OpNames(Enum):
     I = auto()
     N = auto()
     NN = auto()
-
+    NUD = auto()
     C = auto()
     D = auto()
     S = auto()

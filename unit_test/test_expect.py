@@ -7,6 +7,7 @@ from pyblock.qchem.ancilla import LineCoupling as ALineCoupling, MPOInfo as AMPO
 from pyblock.qchem.ancilla import IdentityMPOInfo as AIMPOInfo, IdentityMPO as AIMPO
 from pyblock.qchem.ancilla import LocalMPOInfo as ALMPOInfo, LocalMPO as ALMPO
 from pyblock.qchem.ancilla import SquareMPOInfo as ASMPOInfo, SquareMPO as ASMPO
+from pyblock.qchem.ancilla import ProdMPOInfo as APMPOInfo, ProdMPO as APMPO
 from pyblock.qchem.thermal import FreeEnergy
 from pyblock.qchem.operator import OpNames
 from pyblock.algorithm import ExpoApply, Compress, Expect, DMRG
@@ -164,7 +165,7 @@ class TestExpect:
             nnmpo = ASMPO(hamil, OpNames.N, OpNames.NN)
             
             # Compression
-            cps = Compress(impo, mps, mps_thermal, bond_dims=bdims, contractor=ictr, noise=1E-4)
+            cps = Compress(impo, mps, mps_thermal, bond_dims=bdims, contractor=ictr, noise=[1E-4] * 3 + [0])
             norm = cps.solve(10, 1E-6)
             mps00 = cps.mps
             assert abs(norm - 1) <= 1E-6
@@ -180,6 +181,110 @@ class TestExpect:
             ctrs = [ ctr, ectr, nctr, lnctr, nnctr ]
             mpos = [ mpo, empo, nmpo, lnmpo, nnmpo ]
             ress = [ -4.0, 4.0, 8.0, 8.0, 68.0 ]
+            for xctr, xmpo, xstd in zip(ctrs, mpos, ress):
+                xctr.mps_info = copy.deepcopy(mps_info)
+                mps0 = copy.deepcopy(mps00)
+                xr = Expect(xmpo, mps0, mps0, mps0.form, None, contractor=xctr).solve() / normsq
+                assert abs(xr - xstd) <= 1E-6
+                ex = Expect(xmpo, mps0, mps0, mps0.form, None, contractor=xctr)
+                ex.solve(forward=cps.forward, bond_dim=bdims)
+                assert np.allclose(ex.results, xstd * normsq, atol=1E-6)
+
+        page.clean()
+
+    def test_n2_sto3g_ancilla_expect_uhf(self, data_dir, tmp_path):
+        fcidump = 'N2.STO3G-UHF.FCIDUMP'
+        pg = 'd2h'
+        page = DMRGDataPage(tmp_path / 'node0', n_frames=8)
+        simpl = Simplifier(AllRules())
+        bdims = 80
+        with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=False, output_level=-1,
+                                  memory=5000, page=page, nelec=20) as hamil:
+            assert hamil.n_electrons == hamil.n_sites * 2
+            
+            # Line coupling
+            lcp_thermal = ALineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
+            lcp_thermal.set_thermal_limit()
+            lcp = ALineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
+            lcp.set_bond_dimension(bdims)
+            
+            # MPS
+            mps_thermal = AMPS(lcp_thermal, center=0, dot=2, iprint=True)
+            mps_thermal.fill_thermal_limit()
+            mps_thermal.canonicalize()
+            mps = AMPS(lcp, center=0, dot=2, iprint=True)
+            mps.canonicalize(random=True)
+            mps_info_thermal = MPSInfo(lcp_thermal)
+            mps_info = MPSInfo(lcp)
+            mps_info_d = { '_BRA': mps_info, '_KET': mps_info_thermal }
+            
+            # MPOInfo
+            mpo_info = AMPOInfo(hamil)
+            impo_info = AIMPOInfo(hamil)
+            empo_info = AMPOInfo(hamil)
+            nampo_info = ALMPOInfo(hamil, OpNames.N, site_index=(0, ))
+            nbmpo_info = ALMPOInfo(hamil, OpNames.N, site_index=(1, ))
+            nnampo_info = ASMPOInfo(hamil, OpNames.N, OpNames.NN, site_index=(0, ))
+            nnbmpo_info = ASMPOInfo(hamil, OpNames.N, OpNames.NN, site_index=(1, ))
+            nabmpo_info = APMPOInfo(hamil, OpNames.N, OpNames.N, OpNames.NUD, site_index_a=(0, ), site_index_b=(1, ))
+            
+            # MPO
+            fe_hamil = FreeEnergy(hamil)
+            
+            fe_hamil.set_free_energy(mu=1.0)
+            ctr = DMRGContractor(mps_info, mpo_info, Simplifier(AllRules(su2=False)))
+            ctr.page.activate({'_BASE'})
+            mpo = AMPO(hamil)
+
+            ictr = DMRGContractor(mps_info_d, impo_info, Simplifier(NoTransposeRules(su2=False)))
+            ictr.page.activate({'_BASE'})
+            impo = AIMPO(hamil)
+
+            fe_hamil.set_energy()
+            ectr = DMRGContractor(mps_info, empo_info, Simplifier(AllRules(su2=False)))
+            ectr.page.activate({'_BASE'})
+            empo = AMPO(hamil)
+
+            nactr = DMRGContractor(mps_info, nampo_info, Simplifier(AllRules(su2=False)))
+            nactr.page.activate({'_BASE'})
+            nampo = ALMPO(hamil, OpNames.N, site_index=(0, ))
+
+            nbctr = DMRGContractor(mps_info, nbmpo_info, Simplifier(AllRules(su2=False)))
+            nbctr.page.activate({'_BASE'})
+            nbmpo = ALMPO(hamil, OpNames.N, site_index=(1, ))
+
+            nnactr = DMRGContractor(mps_info, nnampo_info, Simplifier(AllRules(su2=False)))
+            nnactr.page.activate({'_BASE'})
+            nnampo = ASMPO(hamil, OpNames.N, OpNames.NN, site_index=(0, ))
+
+            nnbctr = DMRGContractor(mps_info, nnbmpo_info, Simplifier(AllRules(su2=False)))
+            nnbctr.page.activate({'_BASE'})
+            nnbmpo = ASMPO(hamil, OpNames.N, OpNames.NN, site_index=(0, ))
+
+            nabctr = DMRGContractor(mps_info, nabmpo_info, Simplifier(AllRules(su2=False)))
+            nabctr.page.activate({'_BASE'})
+            nabmpo = APMPO(hamil, OpNames.N, OpNames.N, OpNames.NUD, site_index_a=(0, ), site_index_b=(1, ))
+            
+            # Compression
+            cps = Compress(impo, mps, mps_thermal, bond_dims=bdims, contractor=ictr, noise=[1E-4] * 3 + [0])
+            norm = cps.solve(10, 1E-6)
+            mps00 = cps.mps
+            assert abs(norm - 1) <= 1E-6
+
+            ictr.mps_info = copy.deepcopy(ictr.mps_info)
+            mps0 = copy.deepcopy(mps00)
+            normsq = Expect(impo, mps0, mps_thermal, mps0.form, None, contractor=ictr).solve()
+            assert abs(normsq - 1) <= 1E-6
+            ex = Expect(impo, mps0, mps_thermal, mps0.form, None, contractor=ictr)
+            ex.solve(forward=cps.forward, bond_dim=bdims)
+            assert np.allclose(ex.results, 1, atol=1E-6)
+
+            fe_hamil.set_energy()
+            e_std = -89.78210301621097
+
+            ctrs = [ ctr, ectr, nactr, nbctr, nnactr, nnbctr, nabctr ]
+            mpos = [ mpo, empo, nampo, nbmpo, nnampo, nnbmpo, nabmpo ]
+            ress = [ e_std - 10, e_std, 5.0, 5.0, 27.5, 27.5, 25.0 ]
             for xctr, xmpo, xstd in zip(ctrs, mpos, ress):
                 xctr.mps_info = copy.deepcopy(mps_info)
                 mps0 = copy.deepcopy(mps00)

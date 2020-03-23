@@ -1,5 +1,5 @@
 
-from pyblock.qchem.fcidump import TInt, VInt, read_fcidump
+from pyblock.qchem.fcidump import TInt, VInt, read_fcidump, write_fcidump
 
 import numpy as np
 import pytest
@@ -40,6 +40,40 @@ class TestInt:
 
 class TestFCIDUMP:
     
+    def test_write_fcidump_uhf(self, data_dir, tmp_path):
+        filename = 'N2.STO3G-UHF.FCIDUMP'
+        cont_dict, (t, v, e) = read_fcidump(os.path.join(data_dir, filename))
+        assert isinstance(t, tuple) and isinstance(v, tuple)
+        assert len(t) == 2 and len(v) == 4
+        nmo = int(cont_dict['norb'])
+        nelec = int(cont_dict['nelec'])
+        orbsym = list(map(int, cont_dict['orbsym']))
+        ms2 = int(cont_dict['ms2'])
+        ta = np.array([[t[0][i, j] for j in range(t[0].n)] for i in range(t[0].n)])
+        tb = np.array([[t[1][i, j] for j in range(t[1].n)] for i in range(t[1].n)])
+        vaa = v[0].data
+        vbb = v[3].data
+        vab = v[1].data.reshape((v[1].m, v[1].m))
+        write_fcidump(os.path.join(tmp_path, filename), (ta, tb), (vaa, vab, vbb), nmo, nelec, e, ms2, orbsym=orbsym)
+        cont_dict2, (t2, v2, e2) = read_fcidump(os.path.join(data_dir, filename))
+        assert cont_dict == cont_dict2
+        assert t == t2 and v == v2 and e == e2
+
+    def test_write_fcidump_rhf(self, data_dir, tmp_path):
+        filename = 'N2.STO3G.FCIDUMP'
+        cont_dict, (t, v, e) = read_fcidump(os.path.join(data_dir, filename))
+        assert not isinstance(t, tuple) and not isinstance(v, tuple)
+        nmo = int(cont_dict['norb'])
+        nelec = int(cont_dict['nelec'])
+        orbsym = list(map(int, cont_dict['orbsym']))
+        ms2 = int(cont_dict['ms2'])
+        tx = np.array([[t[i, j] for j in range(t.n)] for i in range(t.n)])
+        vx = v.data
+        write_fcidump(os.path.join(tmp_path, filename), tx, vx, nmo, nelec, e, ms2, orbsym=orbsym)
+        cont_dict2, (t2, v2, e2) = read_fcidump(os.path.join(data_dir, filename))
+        assert cont_dict == cont_dict2
+        assert t == t2 and v == v2 and e == e2
+
     def test_read_fcidump(self, data_dir):
         
         for filename in ['N2.STO3G.FCIDUMP', 'HUBBARD-L8.FCIDUMP']:

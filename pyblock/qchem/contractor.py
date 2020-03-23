@@ -143,7 +143,7 @@ class DMRGDataPage(DataPage):
     
     def release(self):
         """Deallocate memory for all pages."""
-        if self.i_frame == 0:
+        if self.i_frame == 0 or self.i_frame == self.n_frames:
             release_data_pages()
     
     def clean(self):
@@ -160,12 +160,13 @@ class ContractionError(Exception):
 
 class DMRGContractor:
     """bra_mps_info is MPSInfo of some constant MPS."""
-    def __init__(self, mps_info, mpo_info, simplifier=None, parallelizer=None):
+    def __init__(self, mps_info, mpo_info, simplifier=None, parallelizer=None, davidson_tol=5e-6):
         self.mps_info = mps_info
         self.mpo_info = mpo_info
         self.n_sites = mpo_info.n_sites
         self.mem_ptr = 0
         self.rebuild = self.mpo_info.hamil.page is None
+        self.davidson_tol = davidson_tol
         if mps_info is None:
             self.rebuild = False
         if self.rebuild or mps_info is None:
@@ -379,7 +380,7 @@ class DMRGContractor:
         a = BlockMultiplyH(opt, super_sts)
         b = [BlockWavefunction(wfn)]
         
-        es, vs, ndav = davidson(a, b, 1, mpi=self.is_parallel)
+        es, vs, ndav = davidson(a, b, 1, mpi=self.is_parallel, conv_thold=self.davidson_tol)
         
         if dot == 2 or '_FUSE_L' in opt.tags:
             self.page.unload({i, '_LEFT'})

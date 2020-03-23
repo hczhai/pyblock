@@ -1,6 +1,6 @@
 
 from ..mpo import MPOInfo, MPO, OperatorTensor, DualOperatorTensor
-from ..mpo import LocalMPOInfo, LocalMPO
+from ..mpo import LocalMPOInfo, LocalMPO, ProdMPOInfo, ProdMPO
 from ..mpo import SquareMPOInfo, SquareMPO, IdentityMPOInfo, IdentityMPO
 from ..npdm.mpo import PDM1MPOInfo, PDM1MPO
 from ..operator import OpElement, OpNames
@@ -113,6 +113,16 @@ class AncillaSquareMPOInfo(SquareMPOInfo):
 
 @Ancilla
 class AncillaSquareMPO(SquareMPO):
+    pass
+
+
+@Ancilla
+class AncillaProdMPOInfo(ProdMPOInfo):
+    pass
+
+
+@Ancilla
+class AncillaProdMPO(ProdMPO):
     pass
 
 

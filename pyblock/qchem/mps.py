@@ -77,7 +77,7 @@ class LineCoupling:
             self._filter()
         self.left_dims_fci = [d.copy() for d in self.left_dims]
         self.right_dims_fci = [d.copy() for d in self.right_dims]
-    
+
     def _post_check_left(self):
         for d in range(0, self.n_sites):
             if d == 0:

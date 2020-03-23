@@ -31,13 +31,12 @@ class TestDMRGMID:
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=use_su2, output_level=-1,
                                   memory=3000, page=page, omp_threads=1) as hamil:
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
-            lcp.set_bond_dimension(100)
+            lcp.set_bond_dimension(100 if use_su2 else 200)
             mps = MPS(lcp, center=starting, dot=2)
-            mps.randomize()
-            mps.canonicalize()
+            mps.canonicalize(random=True)
             mpo = MPO(hamil)
             ctr = DMRGContractor(MPSInfo(lcp), MPOInfo(hamil), simpl)
-            dmrg = DMRG(mpo, mps, bond_dims=[100, 150, 200, 400, 500],
+            dmrg = DMRG(mpo, mps, bond_dims=[200, 200, 200, 400, 500],
                         noise=[1E-3, 1E-4, 1E-4, 1E-5, 0], contractor=ctr)
             ener = dmrg.solve(10, 1E-6, two_dot_to_one_dot=3)
             assert abs(ener - (-107.648250974014)) < 5E-6
