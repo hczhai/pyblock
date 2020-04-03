@@ -372,6 +372,50 @@ class BlockEvaluation:
         else:
             assert False
     
+    def expr_perturbative_density_eval(self, expr, a, b, c, d, forward, sts):
+        if isinstance(expr, OpString):
+            assert len(expr.ops) == 2
+            if a[expr.ops[0]] == 0 or b[expr.ops[1]] == 0:
+                return
+            factor = float(expr.factor) * a[expr.ops[0]].symm_scale * b[expr.ops[1]].symm_scale
+            op_q_label = expr.ops[0].q_label if forward else expr.ops[1].q_label
+            q_labels = op_q_label + BlockSymmetry.from_spin_quantum(c.delta_quantum[0])
+            q_labels = q_labels if isinstance(q_labels, list) else [q_labels]
+            st_l = sts[0].left_state_info
+            st_r = sts[0].right_state_info
+            for q_label in q_labels:
+                cq = BlockSymmetry.to_spin_quantum(q_label)
+                nwave = Wavefunction()
+                nwave.initialize(VectorSpinQuantum([cq]), sts[0].left_sta, sts[1], c.dot == 1)
+                nwave.clear()
+                if forward:
+                    tensor_trace_multiply(a[expr.ops[0]], c, nwave, sts[0], True, factor)
+                else:
+                    tensor_trace_multiply(b[expr.ops[1]], c, nwave, sts[0], False, factor)
+                cq = BlockSymmetry.to_spin_quantum(q_label)
+                nmat.delta_quantum = VectorSpinQuantum([cq])
+                nmat.fermion = a[expr.ops[0]].fermion ^ b[expr.ops[1]].fermion
+                nmat.allocate(sts)
+                nmat.initialized = True
+            if expr.ops[0] == OpElement(OpNames.I, ()) and len(sts) == 1:
+                tensor_trace_multiply(b[expr.ops[1]], c, nwave, sts[0], False, factor)
+            elif expr.ops[1] == OpElement(OpNames.I, ()) and len(sts) == 1:
+                tensor_trace_multiply(a[expr.ops[0]], c, nwave, sts[0], True, factor)
+            else:
+                aq, bq = a[expr.ops[0]].delta_quantum[0], b[expr.ops[1]].delta_quantum[0]
+                op_q = (aq + bq)[0]
+                tensor_product_multiply(a[expr.ops[0]], b[expr.ops[1]], c, nwave, sts, op_q, factor)
+        elif isinstance(expr, OpCollection):
+            with expr() as (zipped, new_ops):
+                (op, expr), = zipped
+                assert op == OpElement(OpNames.H, ())
+                if expr != 0:
+                    for x in expr.strings if isinstance(expr, OpSum) else [expr]:
+                        self.expr_multiply_eval(x, a, b, c, nwave, sts)
+                new_ops[op] = nwave
+        else:
+            assert False
+
     @classmethod
     def expr_multiply_eval(self, expr, a, b, c, nwave, sts):
         """

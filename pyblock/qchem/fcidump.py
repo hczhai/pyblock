@@ -99,6 +99,30 @@ class VInt(TInt):
         return [(i, j, k, l, self[i, j, k, l]) for i in ri for j in rj(i)
                 for k in rk(i) for l in rl(i, j, k)].__repr__()
 
+class GVInt(TInt):
+    """
+    General rank-4 array for two-electron integral storage.
+    
+    Attributes:
+        n : int
+            Number of orbitals.
+        data : numpy.ndarray
+            1D flat array of size :math:`n^4`.
+    """
+    def __init__(self, n):
+        self.n = n
+        self.data = np.zeros((n, n, n, n))
+
+    def __getitem__(self, *args):
+        return self.data.__getitem__(*args)
+
+    def __setitem__(self, *args):
+        return self.data.__setitem__(*args)
+
+    def __repr__(self):
+        ri = range(self.n)
+        return [(i, j, k, l, self[i, j, k, l]) for i in ri for j in ri
+                for k in ri for l in ri].__repr__()
 
 # two-electron integrals
 class UVInt(TInt):
@@ -109,7 +133,7 @@ class UVInt(TInt):
         n : int
             Number of orbitals.
         data : numpy.ndarray
-            1D flat array of size :math:`m(m+1)/2` where :math:`m=n(n+1)/2`.
+            1D flat array of size :math:`m^2` where :math:`m=n(n+1)/2`.
     """
     def __init__(self, n):
         self.n = n
@@ -183,7 +207,7 @@ def read_fcidump(filename):
         data.append((i, j, k, l, d))
     if int(cont_dict.get('iuhf', 0)) == 0:
         t = TInt(n)
-        v = VInt(n)
+        v = VInt(n) if int(cont_dict.get('igeneral', 0)) == 0 else GVInt(n)
         e = 0.0
         for i, j, k, l, d in data:
             if i + j + k + l == 0:
@@ -229,13 +253,24 @@ def write_fcidump(filename, h1e, h2e, nmo, nelec, nuc, ms, isym=1, orbsym=None, 
         fout.write('  ISYM=%d,\n' % isym)
         if isinstance(h1e, tuple) and len(h1e) == 2:
             fout.write('  IUHF=1,\n')
+        elif h2e.ndim == 4:
+            fout.write('  IGENERAL=1,\n')
         fout.write(' &END\n')
         output_format = '%20.16f%4d%4d%4d%4d\n'
         npair = nmo * (nmo + 1) // 2
 
         def write_eri(fout, eri):
-            assert eri.ndim in [1, 2]
-            if eri.ndim == 2:
+            assert eri.ndim in [1, 2, 4]
+            if eri.ndim == 4:
+                # general
+                assert(eri.size == nmo ** 4)
+                for i in range(nmo):
+                    for j in range(nmo):
+                        for k in range(nmo):
+                            for l in range(nmo):
+                                if abs(eri[i, j, k, l]) > tol:
+                                    fout.write(output_format % (eri[i, j, k, l], i + 1, j + 1, k + 1, l + 1))
+            elif eri.ndim == 2:
                 # 4-fold symmetry
                 assert(eri.size == npair ** 2)
                 ij = 0

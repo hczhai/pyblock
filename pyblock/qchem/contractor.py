@@ -343,7 +343,22 @@ class DMRGContractor:
         vs.deallocate()
 
         return energy, normsq, v, nexpo
-    
+
+    def perturbative_noise(self, opt, mpst):
+        assert not isinstance(self.mps_info, dict)
+        dot = len(mpst.tags - {'_KET'})
+            
+        mpst = mpst.copy()
+        i = self._tag_site(mpst)
+        
+        assert dot == 2 or '_FUSE_L' in opt.tags or '_FUSE_R' in opt.tags
+
+        st_l, st_r, sts = self._get_state_info(dot, i, self.n_sites, opt, self._get_mps_info({'_KET'}))
+
+        wfn = self.mps_info.get_wavefunction_fused(i, mpst, dot=dot, sts=sts)
+
+        
+
     def eigs(self, opt, mpst):
         """
         Davidson diagonalization.
@@ -391,7 +406,7 @@ class DMRGContractor:
             
         if len(es) == 0:
             raise ContractionError('Davidson not converged!!')
-            
+
         e = es[0]
         v = self.mps_info.from_wavefunction_fused(i, vs[0].data, sts=sts)
         

@@ -701,7 +701,7 @@ class Tensor:
             blocks.append(SubTensor(q_labels=(q, q), reduced=mat))
         
         dm = Tensor(blocks=blocks)
-        
+
         if noise != 0.0:
             noise_tensor = self.zero_copy()
             noise_tensor.add_noise(noise)
