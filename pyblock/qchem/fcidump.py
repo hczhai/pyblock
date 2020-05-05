@@ -219,7 +219,10 @@ def read_fcidump(filename):
         return cont_dict, (t, v, e)
     else:
         ts = (TInt(n), TInt(n))
-        vs = (VInt(n), UVInt(n), UVInt(n), VInt(n))
+        if int(cont_dict.get('igeneral', 0)) == 0:
+            vs = (VInt(n), UVInt(n), UVInt(n), VInt(n))
+        else:
+            vs = (GVInt(n), GVInt(n), GVInt(n), GVInt(n))
         e = 0.0
         ip = 0
         for i, j, k, l, d in data:
@@ -253,6 +256,9 @@ def write_fcidump(filename, h1e, h2e, nmo, nelec, nuc, ms, isym=1, orbsym=None, 
         fout.write('  ISYM=%d,\n' % isym)
         if isinstance(h1e, tuple) and len(h1e) == 2:
             fout.write('  IUHF=1,\n')
+            assert isinstance(h2e, tuple)
+            if h2e[0].ndim == 4:
+                fout.write('  IGENERAL=1,\n')
         elif h2e.ndim == 4:
             fout.write('  IGENERAL=1,\n')
         fout.write(' &END\n')
@@ -310,7 +316,7 @@ def write_fcidump(filename, h1e, h2e, nmo, nelec, nuc, ms, isym=1, orbsym=None, 
         if isinstance(h2e, tuple):
             assert len(h2e) == 3
             vaa, vab, vbb = h2e
-            assert vaa.ndim == vbb.ndim == 1 and vab.ndim == 2
+            assert (vaa.ndim == vbb.ndim == 1 and vab.ndim == 2) or (vaa.ndim == 4 and vbb.ndim == 4 and vab.ndim == 4)
             for eri in [vaa, vbb, vab]:
                 write_eri(fout, eri)
                 fout.write(output_format % (0, 0, 0, 0, 0))
