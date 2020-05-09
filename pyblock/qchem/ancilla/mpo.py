@@ -2,7 +2,7 @@
 from ..mpo import MPOInfo, MPO, OperatorTensor, DualOperatorTensor
 from ..mpo import LocalMPOInfo, LocalMPO, ProdMPOInfo, ProdMPO
 from ..mpo import SquareMPOInfo, SquareMPO, IdentityMPOInfo, IdentityMPO
-from ..npdm.mpo import PDM1MPOInfo, PDM1MPO
+from ..npdm.mpo import PDM1MPOInfo, PDM1MPO, NRMMPOInfo, NRMMPO
 from ..operator import OpElement, OpNames
 import numpy as np
 
@@ -143,4 +143,14 @@ class AncillaPDM1MPOInfo(PDM1MPOInfo):
 
 @Ancilla.NPDM
 class AncillaPDM1MPO(PDM1MPO):
+    pass
+
+
+@Ancilla.NPDM
+class AncillaNRMMPOInfo(NRMMPOInfo):
+    pass
+
+
+@Ancilla.NPDM
+class AncillaNRMMPO(NRMMPO):
     pass

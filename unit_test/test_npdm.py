@@ -24,14 +24,14 @@ def dot_scheme(request):
 
 class TestNPDM:
     
-    def test_n2_sto3g_npdm(self, data_dir, tmp_path, dot_scheme):
+    def test_n2_sto3g_1pdm(self, data_dir, tmp_path, dot_scheme):
         fcidump = 'N2.STO3G.FCIDUMP'
         pg = 'd2h'
         page = DMRGDataPage(tmp_path / 'node0', n_frames=2)
         bdims = 200
         with BlockHamiltonian.get(os.path.join(data_dir, fcidump), pg, su2=True, output_level=-1,
                                   memory=2000, page=page) as hamil:
-            
+
             # Line coupling
             lcp = LineCoupling(hamil.n_sites, hamil.site_basis, hamil.empty, hamil.target)
             lcp.set_bond_dimension(bdims)

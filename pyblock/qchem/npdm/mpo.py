@@ -193,3 +193,169 @@ class PDM1MPO(MPO):
             tensors.append(DualOperatorTensor(lmat=lmat, rmat=rmat, tags={m}, ops=ops))
 
         return tensors
+
+
+class NRMMPOInfo(MPOInfo):
+    def _init_operator_names_su2(self):
+        self.left_operator_names = [None] * self.n_sites
+        self.right_operator_names = [None] * self.n_sites
+        self.middle_operators = [None] * self.n_sites
+        for i in range(self.n_sites):
+            lshape = 1 + 2 * (i + 1) if i != self.n_sites - 1 else 1
+            rshape = 1 if i != self.n_sites - 1 else 3
+            lop = np.zeros((lshape, ), dtype=object)
+            rop = np.zeros((rshape, ), dtype=object)
+            lop[0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            if i != self.n_sites - 1:
+                for j in range(0, i + 1):
+                    lop[1 + j] = OpElement(OpNames.N, (j, ), q_label=self.hamil.empty)
+                    lop[1 + (i + 1) + j] = OpElement(OpNames.NN, (j, i), q_label=self.hamil.empty)
+            rop[0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            if i == self.n_sites - 1:
+                rop[1] = OpElement(OpNames.NN, (i, i), q_label=self.hamil.empty)
+                rop[2] = OpElement(OpNames.N, (i, ), q_label=self.hamil.empty)
+            self.left_operator_names[i] = lop
+            self.right_operator_names[i] = rop
+            ops = []
+            if i != self.n_sites - 1:
+                for j in range(0, i + 1):
+                    expr = OpElement(OpNames.NN, (j, i)) * OpElement(OpNames.I, ())
+                    ops.append((OpElement(OpNames.PDM1, (i, j), q_label=self.hamil.empty), expr))
+                    if i != j:
+                        ops.append((OpElement(OpNames.PDM1, (j, i), q_label=self.hamil.empty), expr))
+                if i == self.n_sites - 2:
+                    for j in range(0, i + 1):
+                        expr = OpElement(OpNames.N, (j, )) * OpElement(OpNames.N, (i + 1, ))
+                        ops.append((OpElement(OpNames.PDM1, (j, i + 1), q_label=self.hamil.empty), expr))
+                        ops.append((OpElement(OpNames.PDM1, (i + 1, j), q_label=self.hamil.empty), expr))
+                    expr = OpElement(OpNames.I, ()) * OpElement(OpNames.NN, (i + 1, i + 1))
+                    ops.append((OpElement(OpNames.PDM1, (i + 1, i + 1), q_label=self.hamil.empty), expr))
+            self.middle_operators[i] = ops
+
+    def _init_operator_names_sz(self):
+        self.left_operator_names = [None] * self.n_sites
+        self.right_operator_names = [None] * self.n_sites
+        self.middle_operators = [None] * self.n_sites
+        ss = [(0, 0), (0, 1), (1, 0), (1, 1)]
+        for i in range(self.n_sites):
+            lshape = 1 + 6 * (i + 1) if i != self.n_sites - 1 else 1
+            rshape = 1 if i != self.n_sites - 1 else 7
+            lop = np.zeros((lshape, ), dtype=object)
+            rop = np.zeros((rshape, ), dtype=object)
+            lop[0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            if i != self.n_sites - 1:
+                for j in range(0, i + 1):
+                    lop[1 + j] = OpElement(OpNames.N, (j, 0), q_label=self.hamil.empty)
+                    lop[1 + (i + 1) + j] = OpElement(OpNames.N, (j, 1), q_label=self.hamil.empty)
+                    for (sl, sr), p in zip(ss, range(2, 6)):
+                        lop[1 + (i + 1) * p + j] = OpElement(OpNames.NN, (j, i, sl, sr), q_label=self.hamil.empty)
+            rop[0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            if i == self.n_sites - 1:
+                for (sl, sr), p in zip(ss, range(1, 5)):
+                    rop[p] = OpElement(OpNames.NN, (i, i, sl, sr), q_label=self.hamil.empty)
+                rop[5] = OpElement(OpNames.N, (i, 0), q_label=self.hamil.empty)
+                rop[6] = OpElement(OpNames.N, (i, 1), q_label=self.hamil.empty)
+            self.left_operator_names[i] = lop
+            self.right_operator_names[i] = rop
+            ops = []
+            if i != self.n_sites - 1:
+                for sl, sr in ss:
+                    for j in range(0, i + 1):
+                        expr = OpElement(OpNames.NN, (j, i, sl, sr)) * OpElement(OpNames.I, ())
+                        ops.append((OpElement(OpNames.PDM1, (i, j, sl, sr), q_label=self.hamil.empty), expr))
+                        if i != j:
+                            ops.append((OpElement(OpNames.PDM1, (j, i, sr, sl), q_label=self.hamil.empty), expr))
+                if i == self.n_sites - 2:
+                    for sl, sr in ss:
+                        for j in range(0, i + 1):
+                            expr = OpElement(OpNames.N, (j, sl)) * OpElement(OpNames.N, (i + 1, sr))
+                            ops.append((OpElement(OpNames.PDM1, (j, i + 1, sl, sr), q_label=self.hamil.empty), expr))
+                            ops.append((OpElement(OpNames.PDM1, (i + 1, j, sr, sl), q_label=self.hamil.empty), expr))
+                        expr = OpElement(OpNames.I, ()) * OpElement(OpNames.NN, (i + 1, i + 1, sl, sr))
+                        ops.append((OpElement(OpNames.PDM1, (i + 1, i + 1, sl, sr), q_label=self.hamil.empty), expr))
+            self.middle_operators[i] = ops
+
+
+class NRMMPO(MPO):
+    def _init_mpo_tensors_su2(self, iprint):
+        tensors = []
+        for m in range(self.n_sites):
+            lrshape = 1 + 2 * (m + 1) if m != self.n_sites - 1 else 1
+            llshape = 1 + 2 * m
+            lmat = np.zeros((llshape, lrshape), dtype=object)
+            lmat[0, 0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            if m != self.n_sites - 1:
+                pi = 0
+                pc = 1
+                p = 1
+                for i in range(0, m):
+                    lmat[pc + i, p + i] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                lmat[pi, p + m] = OpElement(OpNames.N, (m, ), q_label=self.hamil.empty)
+                p += m + 1
+                for i in range(0, m):
+                    lmat[pc + i, p + i] = OpElement(OpNames.N, (m, ), q_label=self.hamil.empty)
+                lmat[pi, p + m] = OpElement(OpNames.NN, (m, m), q_label=self.hamil.empty)
+                p += m + 1
+                assert p == lrshape
+            if m == self.n_sites - 1:
+                rmat = np.array([
+                    [OpElement(OpNames.I, (), q_label=self.hamil.empty)],
+                    [OpElement(OpNames.NN, (m, m), q_label=self.hamil.empty)],
+                    [OpElement(OpNames.N, (m, ), q_label=self.hamil.empty)]
+                ])
+            elif m == self.n_sites - 2:
+                rmat = np.array([[OpElement(OpNames.I, (), q_label=self.hamil.empty), 0, 0]])
+            else:
+                rmat = np.array([[OpElement(OpNames.I, (), q_label=self.hamil.empty)]])
+
+            [lmat, rmat], ops = self._post_check_mpo_operators([lmat, rmat], m)
+
+            tensors.append(DualOperatorTensor(lmat=lmat, rmat=rmat, tags={m}, ops=ops))
+
+        return tensors
+
+    def _init_mpo_tensors_sz(self, iprint):
+        tensors = []
+        ss = [(0, 0), (0, 1), (1, 0), (1, 1)]
+        for m in range(self.n_sites):
+            lrshape = 1 + 6 * (m + 1) if m != self.n_sites - 1 else 1
+            llshape = 1 + 6 * m
+            lmat = np.zeros((llshape, lrshape), dtype=object)
+            lmat[0, 0] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+            if m != self.n_sites - 1:
+                pi = 0
+                pca = 1
+                pcb = 1 + m
+                p = 1
+                for s, pc in zip([0, 1], [pca, pcb]):
+                    for i in range(0, m):
+                        lmat[pc + i, p + i] = OpElement(OpNames.I, (), q_label=self.hamil.empty)
+                    lmat[pi, p + m] = OpElement(OpNames.N, (m, s), q_label=self.hamil.empty)
+                    p += m + 1
+                for s, pc in zip([0, 1], [pca, pcb]):
+                    for sp in [0, 1]:
+                        for i in range(0, m):
+                            lmat[pc + i, p + i] = OpElement(OpNames.N, (m, sp), q_label=self.hamil.empty)
+                        lmat[pi, p + m] = OpElement(OpNames.NN, (m, m, s, sp), q_label=self.hamil.empty)
+                        p += m + 1
+                assert p == lrshape
+            if m == self.n_sites - 1:
+                rmat = np.array([
+                    [OpElement(OpNames.I, (), q_label=self.hamil.empty)],
+                    [OpElement(OpNames.NN, (m, m, 0, 0), q_label=self.hamil.empty)],
+                    [OpElement(OpNames.NN, (m, m, 0, 1), q_label=self.hamil.empty)],
+                    [OpElement(OpNames.NN, (m, m, 1, 0), q_label=self.hamil.empty)],
+                    [OpElement(OpNames.NN, (m, m, 1, 1), q_label=self.hamil.empty)],
+                    [OpElement(OpNames.N, (m, 0), q_label=self.hamil.empty)],
+                    [OpElement(OpNames.N, (m, 1), q_label=self.hamil.empty)]
+                ])
+            elif m == self.n_sites - 2:
+                rmat = np.array([[OpElement(OpNames.I, (), q_label=self.hamil.empty), *([0] * 6)]])
+            else:
+                rmat = np.array([[OpElement(OpNames.I, (), q_label=self.hamil.empty)]])
+
+            [lmat, rmat], ops = self._post_check_mpo_operators([lmat, rmat], m)
+
+            tensors.append(DualOperatorTensor(lmat=lmat, rmat=rmat, tags={m}, ops=ops))
+
+        return tensors

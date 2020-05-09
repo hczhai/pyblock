@@ -826,6 +826,27 @@ class BlockHamiltonian:
                 
                 return ops
             
+            if OpElement(OpNames.N, (m, )) in op_set or OpElement(OpNames.NN, (m, m)) in op_set:
+                
+                mat = StackSparseMatrix()
+                mat.fermion = False
+                mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
+                mat.allocate(self.site_state_info[m])
+                mat.initialized = True
+                mat.operator_element(0, 0).ref[0, 0] = 0.0
+                mat.operator_element(1, 1).ref[0, 0] = 1.0
+                mat.operator_element(2, 2).ref[0, 0] = 2.0
+                ops[OpElement(OpNames.N, (m, ))] = mat
+                
+                if OpElement(OpNames.NN, (m, m)) in op_set:
+                    
+                    mat2 = StackSparseMatrix()
+                    mat2.deep_clear_copy(mat)
+                    product(mat, mat, mat2, self.site_state_info[m][0], 1.0)
+                    ops[OpElement(OpNames.NN, (m, m))] = mat2
+                
+                return ops
+            
             mat = StackSparseMatrix()
             mat.fermion = False
             mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
@@ -1068,6 +1089,32 @@ class BlockHamiltonian:
                         mat2.deep_clear_copy(mat)
                         product(mat, mat, mat2, self.site_state_info[m][0], 1.0)
                         ops[OpElement(OpNames.NN, (s, ))] = mat2
+
+                if OpElement(OpNames.N, (m, s)) in op_set or OpElement(OpNames.NN, (m, m, s, s)) in op_set:
+
+                    mat = StackSparseMatrix()
+                    mat.fermion = False
+                    mat.delta_quantum = VectorSpinQuantum([BlockSymmetry.to_spin_quantum(self.empty)])
+                    mat.allocate(self.site_state_info[m])
+                    mat.initialized = True
+                    if s == 0:
+                        mat.operator_element(0, 0).ref[0, 0] = 0.0
+                        mat.operator_element(1, 1).ref[0, 0] = 0.0
+                        mat.operator_element(2, 2).ref[0, 0] = 1.0
+                        mat.operator_element(3, 3).ref[0, 0] = 1.0
+                    else:
+                        mat.operator_element(0, 0).ref[0, 0] = 0.0
+                        mat.operator_element(1, 1).ref[0, 0] = 1.0
+                        mat.operator_element(2, 2).ref[0, 0] = 0.0
+                        mat.operator_element(3, 3).ref[0, 0] = 1.0
+                    ops[OpElement(OpNames.N, (m, s))] = mat
+
+                    if OpElement(OpNames.NN, (m, m, s, s)) in op_set:
+
+                        mat2 = StackSparseMatrix()
+                        mat2.deep_clear_copy(mat)
+                        product(mat, mat, mat2, self.site_state_info[m][0], 1.0)
+                        ops[OpElement(OpNames.NN, (m, m, s, s))] = mat2
             
             if OpElement(OpNames.NUD, ()) in op_set:
 
@@ -1075,6 +1122,22 @@ class BlockHamiltonian:
                 mat2.deep_clear_copy(ops[OpElement(OpNames.N, (0, ))])
                 product(ops[OpElement(OpNames.N, (0, ))], ops[OpElement(OpNames.N, (1, ))], mat2, self.site_state_info[m][0], 1.0)
                 ops[OpElement(OpNames.NUD, ())] = mat2
+                
+                return ops
+            
+            if OpElement(OpNames.NN, (m, m, 0, 1)) in op_set or OpElement(OpNames.NN, (m, m, 1, 0)) in op_set:
+
+                if OpElement(OpNames.NN, (m, m, 0, 1)) in op_set:
+                    mat2 = StackSparseMatrix()
+                    mat2.deep_clear_copy(ops[OpElement(OpNames.N, (m, 0))])
+                    product(ops[OpElement(OpNames.N, (m, 0))], ops[OpElement(OpNames.N, (m, 1))], mat2, self.site_state_info[m][0], 1.0)
+                    ops[OpElement(OpNames.NN, (m, m, 0, 1))] = mat2
+                
+                if OpElement(OpNames.NN, (m, m, 1, 0)) in op_set:
+                    mat2 = StackSparseMatrix()
+                    mat2.deep_clear_copy(ops[OpElement(OpNames.N, (m, 1))])
+                    product(ops[OpElement(OpNames.N, (m, 1))], ops[OpElement(OpNames.N, (m, 0))], mat2, self.site_state_info[m][0], 1.0)
+                    ops[OpElement(OpNames.NN, (m, m, 1, 0))] = mat2
                 
                 return ops
 
