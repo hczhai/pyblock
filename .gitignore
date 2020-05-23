@@ -1,6 +1,7 @@
 build/
 build-exe/
 build-cmake/
+build55/
 docs/build/
 my_test/
 node0/

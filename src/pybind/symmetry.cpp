@@ -120,16 +120,18 @@ void pybind_symmetry(py::module &m) {
         .def_readwrite("right_state_info", &StateInfo::rightStateInfo)
         .def_readwrite("uncollected_state_info",
                        &StateInfo::unCollectedStateInfo)
-        .def("set_left_state_info",
-             [](StateInfo *self, StateInfo *other) {
-                 self->leftStateInfo = other;
-             },
-             py::keep_alive<1, 2>())
-        .def("set_right_state_info",
-             [](StateInfo *self, StateInfo *other) {
-                 self->rightStateInfo = other;
-             },
-             py::keep_alive<1, 2>())
+        .def(
+            "set_left_state_info",
+            [](StateInfo *self, StateInfo *other) {
+                self->leftStateInfo = other;
+            },
+            py::keep_alive<1, 2>())
+        .def(
+            "set_right_state_info",
+            [](StateInfo *self, StateInfo *other) {
+                self->rightStateInfo = other;
+            },
+            py::keep_alive<1, 2>())
         .def("set_uncollected_state_info",
              [](StateInfo *self, StateInfo *other) {
                  self->AllocateUnCollectedStateInfo();
@@ -138,19 +140,24 @@ void pybind_symmetry(py::module &m) {
         .def_static(
             "transform_state", &StateInfo::transform_state,
             "Truncate state space based on dimension of rotation matrix.")
+        .def("load", [](StateInfo *self, bool forward, const vector<int> &sites, int left) {
+            StateInfo::restore(forward, sites, *self, left);
+        })
+        .def("save", [](StateInfo *self, bool forward, const vector<int> &sites, int left) {
+            StateInfo::store(forward, sites, *self, left);
+        })
         .def("collect_quanta", &StateInfo::CollectQuanta)
         .def_readwrite("n_total_states", &StateInfo::totalStates)
-        .def("copy",
-             [](StateInfo *self) {
-                 StateInfo x = *self;
-                 return x;
-             })
+        .def("copy", [](StateInfo *self) {
+            StateInfo x = *self;
+            return x;
+        })
         .def("__repr__", [](StateInfo *self) {
             stringstream ss;
             ss << *self;
             return ss.str();
         });
-    
+
     py::bind_vector<vector<boost::shared_ptr<StateInfo>>>(m, "VectorStateInfo");
 
     m.def("state_tensor_product", [](StateInfo &a, StateInfo &b) {
