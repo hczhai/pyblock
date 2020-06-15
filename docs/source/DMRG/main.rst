@@ -6,4 +6,6 @@ DMRG Theoretical Aspects
    :maxdepth: 2
    
    spatial
+   unrestricted
    su2
+   correlation

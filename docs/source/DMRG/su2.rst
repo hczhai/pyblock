@@ -831,6 +831,12 @@ we have
         &\ + \frac{1}{2} \sum_{j\in *} \big( {\hat{Q}}_{ij}^{\prime \prime L} \big)^{[0]} \otimes_{[1/2]} \big(a_j\big)^{[1/2]}
         -\frac{\sqrt{3}}{2} \sum_{l\in *} \big( {\hat{Q}}_{il}^{ \prime L} \big)^{[1]} \otimes_{[1/2]} \big(a_l\big)^{[1/2]}
 
+To generate symmetrized :math:`P`, we need to change the :math:`A` line to the following
+
+.. math::
+    - \frac{1}{4} \sum_{k \in *,jl\in L} (v_{ijkl} + v_{ilkj}) \big( \hat{A}_{jl}^\dagger \big)^{[0]} \otimes_{[1/2]}  \big(a_k^\dagger\big)^{[1/2]}
+        -\frac{\sqrt{3}}{4} \sum_{k \in *,jl\in L} (v_{ijkl} - v_{ilkj}) \big( \hat{A}_{jl}^\dagger \big)^{[1]} \otimes_{[1/2]} \big(a_k^\dagger\big)^{[1/2]}
+
 Similarly,
 
 .. math::
