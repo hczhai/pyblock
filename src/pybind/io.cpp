@@ -20,7 +20,8 @@ void ReadInput(char *conf);
 
 double *stackmemory = nullptr;
 
-void pybind_io(py::module &m) {
+void pybind_io(py::module &m)
+{
 
     m.def("read_input",
           [](const string &conf) { ReadInput((char *)conf.c_str()); });
@@ -29,8 +30,8 @@ void pybind_io(py::module &m) {
         dmrginp.matmultFlops.resize(max(numthrds, dmrginp.quanta_thrds()), 0.);
 
 #ifdef _HAS_INTEL_MKL
-    mkl_set_num_threads(dmrginp.mkl_thrds());
-    mkl_set_dynamic(0);
+        mkl_set_num_threads(dmrginp.mkl_thrds());
+        mkl_set_dynamic(0);
 #endif
 
         cout.precision(12);
@@ -44,12 +45,12 @@ void pybind_io(py::module &m) {
         Stackmem[0].data = stackmemory;
         Stackmem[0].size = dmrginp.getMemory();
         dmrginp.initCumulTimer();
-        
+
         block2::current_page = &Stackmem[0];
     });
-    
+
     m.def("get_current_stack_memory", []() { return block2::current_page->memused; });
-    
+
     m.def("set_current_stack_memory", [](size_t m) { block2::current_page->memused = m; });
 
     m.def("release_stack_memory", []() {
@@ -72,35 +73,42 @@ void pybind_io(py::module &m) {
                  return input;
              }),
              "Initialize an Input object from the input file name.")
-        .def_static("read_input_contents",
-                    [](const string &contents) {
-                        Input input("", contents);
-                        return input;
-                    },
-                    "Initialize an Input object from the input file contents.")
+        .def_static(
+            "read_input_contents",
+            [](const string &contents) {
+                Input input("", contents);
+                return input;
+            },
+            "Initialize an Input object from the input file contents.")
         .def_property("output_level", &Input::outputlevel,
                       [](Input *self, int output_level) {
                           self->setOutputlevel() = output_level;
                       })
+        .def_property("load_prefix", (const string&(Input::*)() const) & Input::load_prefix,
+                      [](Input *self, const string &x) { self->load_prefix() = x; })
+        .def_property("save_prefix", (const string&(Input::*)() const) & Input::save_prefix,
+                      [](Input *self, const string &x) { self->save_prefix() = x; })
         .def_property_readonly("sweep_tol", &Input::get_sweep_tol)
         .def_property("spin_orbs_symmetry", &Input::spin_orbs_symmetry,
-            &Input::set_spin_orbs_symmetry, 
-        "Spatial symmetry (irrep number) of each spin-orbital.")
-        .def_property("molecule_quantum", &Input::molecule_quantum,
-                      [](Input *self, const SpinQuantum &q) {
-                          self->set_molecule_quantum() = q;
-                      },
-                      "Symmetry of target state.")
+                      &Input::set_spin_orbs_symmetry,
+                      "Spatial symmetry (irrep number) of each spin-orbital.")
+        .def_property(
+            "molecule_quantum", &Input::molecule_quantum,
+            [](Input *self, const SpinQuantum &q) {
+                self->set_molecule_quantum() = q;
+            },
+            "Symmetry of target state.")
         .def("effective_molecule_quantum_vec",
              &Input::effective_molecule_quantum_vec,
              "Often this simply returns a vector containing one "
              "``molecule_quantum``. For non-interacting orbitals or Bogoliubov "
              "algorithm, this may be more than that.")
-        .def_property("algorithm_type", &Input::algorithm_method,
-                      [](Input *self, algorithmTypes t) {
-                          self->set_algorithm_method() = t;
-                      },
-                      "Algorithm type: one-dot or two-dot or other types.")
+        .def_property(
+            "algorithm_type", &Input::algorithm_method,
+            [](Input *self, algorithmTypes t) {
+                self->set_algorithm_method() = t;
+            },
+            "Algorithm type: one-dot or two-dot or other types.")
         .def_property_readonly("twodot_to_onedot_iter",
                                &Input::twodot_to_onedot_iter,
                                "Indicating at which sweep iteration the "
@@ -123,24 +131,27 @@ void pybind_io(py::module &m) {
         .def_readwrite("timer_operrot", &Input::operrotT,
                        "Timer for operator rotation.")
         .def_property(
-            "is_spin_adapted", &Input::spinAdapted, [](Input *self, bool sa) {
-                          self->spinAdapted() = sa; },
+            "is_spin_adapted", &Input::spinAdapted, [](Input *self, bool sa) { self->spinAdapted() = sa; },
             "Indicates whether SU(2) symmetry is utilized. If SU(2) is not "
             "used, The Abelian subgroup of SU(2) (Sz symmetry) is used.")
         .def_property_readonly("hf_occupancy", &Input::hf_occupancy);
 
-    class Global {};
+    class Global
+    {
+    };
 
     py::class_<Global>(m, "Global", "Wrapper for global variables.")
         .def_property_static(
             "dmrginp", [](py::object) -> Input & { return dmrginp; },
             [](py::object, const Input &input) { dmrginp = input; })
-        .def_property_static("non_abelian_sym",
-                             [](py::object) -> bool { return NonabelianSym; },
-                             [](py::object, bool b) { NonabelianSym = b; })
-        .def_property_static("point_group",
-                             [](py::object) -> string { return sym; },
-                             [](py::object, string b) { sym = b; });
+        .def_property_static(
+            "non_abelian_sym",
+            [](py::object) -> bool { return NonabelianSym; },
+            [](py::object, bool b) { NonabelianSym = b; })
+        .def_property_static(
+            "point_group",
+            [](py::object) -> string { return sym; },
+            [](py::object, string b) { sym = b; });
 
     py::class_<Timer>(m, "Timer")
         .def(py::init<>())

@@ -361,7 +361,9 @@ void pybind_operator(py::module &m) {
              &StackWavefunction::initialise)
         .def("copy_data", &StackWavefunction::copyData)
         .def("save_wavefunction_info",
-             &StackWavefunction::SaveWavefunctionInfo);
+             &StackWavefunction::SaveWavefunctionInfo)
+        .def("load_wavefunction_info",
+             &StackWavefunction::LoadWavefunctionInfo);
 
     py::class_<StackDensityMatrix, boost::shared_ptr<StackDensityMatrix>,
                StackSparseMatrix>(m, "DensityMatrix")

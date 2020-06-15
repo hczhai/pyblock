@@ -75,18 +75,20 @@ void pybind_dmrg(py::module &m) {
             [](SweepParams *self, int iter) { self->set_n_iters() = iter; },
             "The number of blocking iterations (inner loops) needed in one "
             "sweep.")
-        .def_property("forward_starting_size",
-                      &SweepParams::get_forward_starting_size,
-                      [](SweepParams *self, int size) {
-                          self->set_forward_starting_size() = size;
-                      },
-                      "Initial size of system block if in forward direction.")
-        .def_property("backward_starting_size",
-                      &SweepParams::get_backward_starting_size,
-                      [](SweepParams *self, int size) {
-                          self->set_backward_starting_size() = size;
-                      },
-                      "Initial size of system block if in backward direction.")
+        .def_property(
+            "forward_starting_size",
+            &SweepParams::get_forward_starting_size,
+            [](SweepParams *self, int size) {
+                self->set_forward_starting_size() = size;
+            },
+            "Initial size of system block if in forward direction.")
+        .def_property(
+            "backward_starting_size",
+            &SweepParams::get_backward_starting_size,
+            [](SweepParams *self, int size) {
+                self->set_backward_starting_size() = size;
+            },
+            "Initial size of system block if in backward direction.")
         .def_property(
             "sys_add", &SweepParams::get_sys_add,
             [](SweepParams *self, int size) { self->set_sys_add() = size; },
@@ -112,10 +114,15 @@ void pybind_dmrg(py::module &m) {
                           self->set_additional_noise() = t;
                       })
         .def("set_sweep_parameters", &SweepParams::set_sweep_parameters)
-        .def("save_state", &SweepParams::savestate,
-             "Save the sweep direction and "
-             "number of sites in system block into the disk file "
-             "'statefile.*.tmp'.",
+        .def("restorestate", [](SweepParams *self) {
+            bool forward;
+            int size;
+            self->restorestate(forward, size);
+            return make_pair(forward, size);
+        })
+        .def("save_state", &SweepParams::savestate, "Save the sweep direction and "
+                                                    "number of sites in system block into the disk file "
+                                                    "'statefile.*.tmp'.",
              py::arg("forward"), py::arg("size"));
 
     m.def("block_and_decimate", &Sweep::BlockAndDecimate,
