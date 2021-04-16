@@ -1,6 +1,9 @@
 
 import numpy as np
-from expokitpy import dsexpv
+try:
+    from expokitpy import dsexpv
+except:
+    pass
 import os
 import sys
 from contextlib import contextmanager
