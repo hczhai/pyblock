@@ -30,15 +30,16 @@ from .cg import SU2CG
 
 class HashIrrep:
     """Base class for irreducible representation, supporting hashing."""
+
     def __init__(self, ir):
         self.ir = ir
 
     def __getnewargs__(self):
         return (self.ir, )
-        
+
     def __eq__(self, o):
         return self.ir == o.ir
-    
+
     def __lt__(self, o):
         return self.ir < o.ir
 
@@ -54,10 +55,10 @@ class ParticleN(HashIrrep):
     """Irreducible representation for particle number symmetry."""
     CachedP = []
     CachedM = []
-    
+
     def __init__(self, ir):
         pass
-    
+
     def __new__(cls, ir):
         if ir >= 0:
             for irx in range(len(cls.CachedP), ir + 1):
@@ -88,7 +89,7 @@ class ParticleN(HashIrrep):
     @staticmethod
     def clebsch_gordan(a, b, c):
         return np.array([[[1 if a + b == c else 0]]], dtype=float)
-    
+
     @property
     def multiplicity(self):
         return 1
@@ -97,10 +98,10 @@ class ParticleN(HashIrrep):
 class SU2(HashIrrep):
     """Irreducible representation for SU(2) spin symmetry."""
     Cached = []
-    
+
     def __init__(self, s):
         pass
-    
+
     def __new__(cls, s):
         if isinstance(s, Fraction) or isinstance(s, float):
             s = int(s * 2)
@@ -152,7 +153,7 @@ class SU2(HashIrrep):
 
     def to_multi(self):
         return self
-    
+
     @property
     def multiplicity(self):
         return self.ir + 1
@@ -162,10 +163,10 @@ class SZ(HashIrrep):
     """Irreducible representation for projected spin symmetry."""
     CachedP = []
     CachedM = []
-    
+
     def __init__(self, sz):
         pass
-    
+
     def __new__(cls, sz):
         if isinstance(sz, Fraction) or isinstance(sz, float):
             sz = int(sz * 2)
@@ -197,7 +198,7 @@ class SZ(HashIrrep):
     @staticmethod
     def clebsch_gordan(a, b, c):
         return np.array([[[1 if a + b == c else 0]]], dtype=float)
-    
+
     @property
     def multiplicity(self):
         return 1
@@ -207,25 +208,26 @@ class SZ(HashIrrep):
 class SU2Proj(SU2):
     """Irreducible representation for SU(2) spin symmetry with extra projected spin label."""
     Cached = []
-    
+
     def __init__(self, s, sz):
         pass
-    
+
     def __getnewargs__(self):
         return (self.s, self.sz)
-    
+
     def __new__(cls, s, sz):
         if isinstance(s, Fraction) or isinstance(s, float):
             s = int(s * 2)
         if isinstance(sz, Fraction) or isinstance(sz, float):
             sz = int(sz * 2)
         for irx in range(len(cls.Cached), s + 1):
-            cls.Cached.append([HashIrrep.__new__(cls) for _ in range(0, irx + 1)])
+            cls.Cached.append([HashIrrep.__new__(cls)
+                               for _ in range(0, irx + 1)])
             for irz in range(0, irx + 1):
                 cls.Cached[-1][irz].ir = irx
                 cls.Cached[-1][irz].pir = -irx + irz * 2
         return cls.Cached[s][(sz + s) // 2]
-    
+
     def __init__(self, s, sz):
         if isinstance(sz, Fraction) or isinstance(sz, float):
             self.pir = int(sz * 2)
@@ -256,7 +258,7 @@ class SU2Proj(SU2):
 
     def to_multi(self):
         return SU2(s=self.ir)
-    
+
     def copy(self):
         r = HashIrrep.__new__(self.__class__)
         r.ir = self.ir
@@ -283,7 +285,7 @@ class SU2Proj(SU2):
 class PointGroup(HashIrrep):
     """
     Base class for irreducible representation for point group symmetry.
-    
+
     Attributes:
         Table : rank-2 numpy.ndarray
             Mutiplication table of the group.
@@ -303,7 +305,7 @@ class PointGroup(HashIrrep):
             return
         self.__class__.Cached[ir] = self
         self.ir = ir
-    
+
     def __new__(cls, ir):
         if isinstance(ir, str):
             ir = cls.IrrepNames.index(ir)
@@ -327,7 +329,7 @@ class PointGroup(HashIrrep):
     @staticmethod
     def clebsch_gordan(a, b, c):
         return np.array([[[1 if a + b == c else 0]]], dtype=float)
-    
+
     @property
     def multiplicity(self):
         return 1
@@ -349,6 +351,48 @@ class PGD2H(PointGroup):
     Cached = [None] * 8
 
 
+class PGC2V(PointGroup):
+    """:math:`D_{c2v}` point group."""
+    Table = np.array(
+        [[0, 1, 2, 3],
+         [1, 0, 3, 2],
+         [2, 3, 0, 1],
+         [3, 2, 1, 0]], dtype=int)
+    InverseElem = np.array(range(0, 4), dtype=int)
+    IrrepNames = ["A1", "B1", "B2", "A2"]
+    Cached = [None] * 4
+
+
+class PGC2H(PGC2V):
+    """:math:`C_{2h}` point group."""
+    IrrepNames = ["Ag", "Au", "Bu", "Bg"]
+
+
+class PGD2(PGC2V):
+    """:math:`D_2` point group."""
+    IrrepNames = ["A1", "B3", "B2", "B1"]
+
+
+class PGCI(PointGroup):
+    """:math:`C_i` point group."""
+    Table = np.array(
+        [[0, 1],
+         [1, 0]], dtype=int)
+    InverseElem = np.array(range(0, 2), dtype=int)
+    IrrepNames = ["Ag", "Au"]
+    Cached = [None] * 2
+
+
+class PGCS(PGCI):
+    """:math:`C_s` point group."""
+    IrrepNames = ["A'", "A''"]
+
+
+class PGC2(PGCI):
+    """:math:`C_2` point group."""
+    IrrepNames = ["A", "B"]
+
+
 class PGC1(PointGroup):
     """:math:`C_1` point group."""
     Table = np.array([[0]], dtype=int)
@@ -359,19 +403,21 @@ class PGC1(PointGroup):
 
 def point_group(pg_name):
     """Return point group class corresponding to the point group name."""
-    return {'c1': PGC1, 'd2h': PGD2H}[pg_name]
+    return {'c1': PGC1, 'c2': PGC2, 'ci': PGCI, 'cs': PGCS,
+            'd2': PGD2, 'c2v': PGC2V, 'c2h': PGC2H, 'd2h': PGD2H}[pg_name]
 
 
 class DirectProdGroup:
     """
     Irreducible representation for symmetry formed by direct product of sub-symmetries.
-    
+
     Attributes:
         irs : list(Group)
             A list of irreducible representations for sub-symmetries.
         ng : int
             Number of sub-symmetries.
     """
+
     def __init__(self, *args):
         self.irs = args
         self.ng = len(args)
@@ -393,7 +439,7 @@ class DirectProdGroup:
 
     def __neg__(self):
         return self.__class__(*[-ir for ir in self.irs])
-    
+
     def __sub__(self, o):
         return self + (-o)
 
@@ -407,7 +453,7 @@ class DirectProdGroup:
     # not a simple relation
     def __le__(self, o):
         return all(ir <= oir for ir, oir in zip(self.irs, o.irs))
-    
+
     def __lt__(self, o):
         for ir, oir in zip(self.irs, o.irs):
             if ir != oir:
